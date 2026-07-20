@@ -1,0 +1,29 @@
+Sakekeep print preflight report
+Generated: 2026-07-18T14:26:15.285Z
+Project: 11111111-1111-4111-8111-111111111111
+Source fingerprint: 151e0fe7
+
+Specification
+- DIN/ISO A5 landscape
+- Trim: 210 × 148 mm
+- Bleed: 3 mm
+- Media box: 216 × 154 mm
+- Safe margin: 6 mm
+- Print condition: PSO Coated v3 / FOGRA51
+- Printer marks: enabled
+
+Checks
+- [PASS] Generated book is current: The rendered source matches the persisted generation.
+- [PASS] No blocking layout problems: No unresolved blocking problems were found.
+- [PASS] Page boxes and physical dimensions: 216 × 154 mm including 3 mm bleed.
+- [PASS] Page count: 3 individual page(s); no imposed spreads.
+- [PASS] Fonts embedded: Bundled fonts are embedded in the PDF.
+- [PASS] Output intent: An ICC output intent is present.
+- [PASS] Effective image resolution: 0 placed raster asset(s) carry pixel dimensions, placed dimensions, and effective PPI metadata. Images below 300 PPI are reported; images below 150 PPI require an explicit recorded override.
+
+Resolution overrides
+- None
+
+PDF/X-4
+- Structural checks: passed
+- Limitation: The prototype performs structural PDF/X-4 checks but does not run an independent ISO 15930 conformance validator; see docs/PDF_PIPELINE.md.

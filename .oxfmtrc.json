@@ -1,0 +1,11 @@
+{
+  "semi": false,
+  "singleQuote": false,
+  "trailingComma": "es5",
+  "ignorePatterns": [
+    "src/routeTree.gen.ts",
+    "drizzle/**",
+    "test-results/**",
+    "playwright-report/**"
+  ]
+}

@@ -1,0 +1,54 @@
+name: sakekeep
+
+services:
+  postgres:
+    image: postgres:18-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+    environment:
+      POSTGRES_DB: sakekeep
+      POSTGRES_USER: sakekeep
+      POSTGRES_PASSWORD: sakekeep
+    ports:
+      - "54321:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sakekeep -d sakekeep"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  rustfs-permissions:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    user: root
+    volumes:
+      - rustfs-data:/fix/data
+      - rustfs-logs:/fix/logs
+    command: ["sh", "-c", "chown -R 10001:10001 /fix/data /fix/logs"]
+
+  rustfs:
+    image: rustfs/rustfs:latest@sha256:3c2d55977829620284ece8593901bf776bcfc0fc9972784352de4dcffdb92416
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ACCESS_KEY: sakekeep
+      RUSTFS_SECRET_KEY: sakekeep-local-only
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_OBS_LOG_DIRECTORY: /logs
+    command: ["/data"]
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - rustfs-data:/data
+      - rustfs-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres-data:
+  rustfs-data:
+  rustfs-logs:
