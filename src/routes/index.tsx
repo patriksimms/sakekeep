@@ -79,7 +79,7 @@ function Home() {
             </a>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-            {["No sign-in", "Private local data", "Print-ready workflow"].map((label) => (
+            {["Secure accounts", "Private local data", "Print-ready workflow"].map((label) => (
               <span key={label} className="flex items-center gap-1.5">
                 <CheckCircle2Icon aria-hidden="true" />
                 {label}

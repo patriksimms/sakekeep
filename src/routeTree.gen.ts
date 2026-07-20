@@ -15,6 +15,8 @@ import { Route as ApiProjectsRouteImport } from './routes/api.projects'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as STokenRouteImport } from './routes/s.$token'
+import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as ApiAssetsAssetIdRouteImport } from './routes/api.assets.$assetId'
 import { Route as ApiExportsExportIdRouteImport } from './routes/api.exports.$exportId'
 import { Route as ApiProjectsProjectIdRouteImport } from './routes/api.projects.$projectId'
@@ -56,6 +58,16 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 const STokenRoute = STokenRouteImport.update({
   id: '/s/$token',
   path: '/s/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInSplatRoute = SignInSplatRouteImport.update({
+  id: '/sign-in/$',
+  path: '/sign-in/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpSplatRoute = SignUpSplatRouteImport.update({
+  id: '/sign-up/$',
+  path: '/sign-up/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAssetsAssetIdRoute = ApiAssetsAssetIdRouteImport.update({
@@ -133,6 +145,8 @@ export interface FileRoutesByFullPath {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
   '/projects/': typeof ProjectsIndexRoute
   '/api/assets/$assetId': typeof ApiAssetsAssetIdRoute
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
@@ -153,6 +167,8 @@ export interface FileRoutesByTo {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
   '/projects': typeof ProjectsIndexRoute
   '/api/assets/$assetId': typeof ApiAssetsAssetIdRoute
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
@@ -174,6 +190,8 @@ export interface FileRoutesById {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
   '/projects/': typeof ProjectsIndexRoute
   '/api/assets/$assetId': typeof ApiAssetsAssetIdRoute
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
@@ -196,6 +214,8 @@ export interface FileRouteTypes {
     | '/api/projects'
     | '/projects/$projectId'
     | '/s/$token'
+    | '/sign-in/$'
+    | '/sign-up/$'
     | '/projects/'
     | '/api/assets/$assetId'
     | '/api/exports/$exportId'
@@ -216,6 +236,8 @@ export interface FileRouteTypes {
     | '/api/projects'
     | '/projects/$projectId'
     | '/s/$token'
+    | '/sign-in/$'
+    | '/sign-up/$'
     | '/projects'
     | '/api/assets/$assetId'
     | '/api/exports/$exportId'
@@ -236,6 +258,8 @@ export interface FileRouteTypes {
     | '/api/projects'
     | '/projects/$projectId'
     | '/s/$token'
+    | '/sign-in/$'
+    | '/sign-up/$'
     | '/projects/'
     | '/api/assets/$assetId'
     | '/api/exports/$exportId'
@@ -257,6 +281,8 @@ export interface RootRouteChildren {
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
   STokenRoute: typeof STokenRoute
+  SignInSplatRoute: typeof SignInSplatRoute
+  SignUpSplatRoute: typeof SignUpSplatRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   ApiAssetsAssetIdRoute: typeof ApiAssetsAssetIdRoute
   ApiExportsExportIdRoute: typeof ApiExportsExportIdRoute
@@ -305,6 +331,20 @@ declare module '@tanstack/react-router' {
       path: '/s/$token'
       fullPath: '/s/$token'
       preLoaderRoute: typeof STokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in/$': {
+      id: '/sign-in/$'
+      path: '/sign-in/$'
+      fullPath: '/sign-in/$'
+      preLoaderRoute: typeof SignInSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up/$': {
+      id: '/sign-up/$'
+      path: '/sign-up/$'
+      fullPath: '/sign-up/$'
+      preLoaderRoute: typeof SignUpSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/assets/$assetId': {
@@ -451,6 +491,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
   STokenRoute: STokenRoute,
+  SignInSplatRoute: SignInSplatRoute,
+  SignUpSplatRoute: SignUpSplatRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   ApiAssetsAssetIdRoute: ApiAssetsAssetIdRoute,
   ApiExportsExportIdRoute: ApiExportsExportIdRoute,
@@ -461,10 +503,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

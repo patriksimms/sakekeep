@@ -1,3 +1,4 @@
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/tanstack-react-start"
 import { Link } from "@tanstack/react-router"
 import { BookHeartIcon, LaptopIcon, MoonIcon, SunIcon } from "lucide-react"
 
@@ -27,9 +28,22 @@ export function AppHeader() {
           Sakekeep
         </Link>
         <nav aria-label="Primary" className="flex items-center gap-2">
-          <Link to="/projects" className={buttonVariants({ variant: "ghost" })}>
-            Projects
-          </Link>
+          <Show when="signed-in">
+            <Link to="/projects" className={buttonVariants({ variant: "ghost" })}>
+              Projects
+            </Link>
+          </Show>
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <Button variant="ghost">Sign in</Button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <Button>Sign up</Button>
+            </SignUpButton>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button variant="outline" size="icon" aria-label={`Theme: ${theme}`} />}

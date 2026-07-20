@@ -1,3 +1,5 @@
+import { ClerkProvider } from "@clerk/tanstack-react-start"
+import { shadcn } from "@clerk/ui/themes"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import { useState } from "react"
@@ -57,22 +59,24 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <TooltipProvider>
-              <a
-                href="#main-content"
-                className="fixed top-2 left-2 z-50 -translate-y-20 rounded-lg bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
-              >
-                Skip to content
-              </a>
-              <AppHeader />
-              {children}
-              <Toaster closeButton />
-            </TooltipProvider>
-          </ThemeProvider>
-        </QueryClientProvider>
-        <Scripts />
+        <ClerkProvider appearance={{ theme: shadcn }}>
+          <QueryClientProvider client={queryClient}>
+            <ThemeProvider>
+              <TooltipProvider>
+                <a
+                  href="#main-content"
+                  className="fixed top-2 left-2 z-50 -translate-y-20 rounded-lg bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
+                >
+                  Skip to content
+                </a>
+                <AppHeader />
+                {children}
+                <Toaster closeButton />
+              </TooltipProvider>
+            </ThemeProvider>
+          </QueryClientProvider>
+          <Scripts />
+        </ClerkProvider>
       </body>
     </html>
   )
