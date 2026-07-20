@@ -184,8 +184,12 @@ export function LayoutCanvas({
   const element = useRef<HTMLCanvasElement>(null)
   const instance = useRef<Canvas | null>(null)
   const schemaRef = useRef(schema)
+  const onSelectRef = useRef(onSelect)
+  const onChangeRef = useRef(onChange)
   const changing = useRef(false)
   schemaRef.current = schema
+  onSelectRef.current = onSelect
+  onChangeRef.current = onChange
 
   useEffect(() => {
     if (!element.current || width <= 0) return
@@ -201,7 +205,7 @@ export function LayoutCanvas({
 
     const select = () => {
       const object = canvas.getActiveObject() as SakekeepObject | undefined
-      onSelect(object?.sakekeepElementId ?? null)
+      onSelectRef.current(object?.sakekeepElementId ?? null)
     }
     const modified = (event: { target?: FabricObject }) => {
       const object = event.target as SakekeepObject | undefined
@@ -218,7 +222,7 @@ export function LayoutCanvas({
         ),
       }
       changing.current = true
-      onChange(next)
+      onChangeRef.current(next)
       requestAnimationFrame(() => {
         changing.current = false
       })
@@ -233,7 +237,7 @@ export function LayoutCanvas({
       instance.current = null
       canvas.dispose()
     }
-  }, [canvasRef, onChange, onSelect, width])
+  }, [canvasRef, width])
 
   useEffect(() => {
     const canvas = instance.current
