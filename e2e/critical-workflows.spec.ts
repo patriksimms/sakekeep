@@ -161,6 +161,40 @@ test.describe.serial("critical local prototype workflows", () => {
     await expectAccessible(page)
   })
 
+  test("workspace tabs persist in the URL and browser history", async ({ page }) => {
+    await page.goto(`/projects/${closedProjectId}?tab=layouts&source=bookmark`)
+    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+
+    await page.getByRole("tab", { name: "4. Book review" }).click()
+    await expect(page).toHaveURL(/tab=book/)
+    await expect(page).toHaveURL(/source=bookmark/)
+    await page.reload()
+    await expect(page.getByRole("tab", { name: "4. Book review" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+
+    await page.goBack()
+    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+    await page.goForward()
+    await expect(page.getByRole("tab", { name: "4. Book review" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+
+    await page.goto(`/projects/${closedProjectId}?tab=unknown`)
+    await expect(page.getByRole("tab", { name: "5. Export" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+  })
+
   test("organizer reviews a current book and exports a verified PDF", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.goto(`/projects/${closedProjectId}`)
