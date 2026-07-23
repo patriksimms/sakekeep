@@ -980,6 +980,7 @@ function Editor({
             onSelect={setSelectedId}
             onChange={markChanged}
             canvasRef={canvas}
+            questions={project.formSchema.questions}
           />
         </div>
       </div>
