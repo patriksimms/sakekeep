@@ -9,18 +9,39 @@ function elements() {
   let schema = addElement(emptyLayoutSchema(), "rectangle")
   schema = addElement(schema, "circle")
   schema = addElement(schema, "line")
+  schema = addElement(schema, "static-text")
   return schema.elements
 }
 
 describe("layout editor actions", () => {
   it("moves elements one step or to an absolute stack boundary", () => {
     const original = elements()
-    const [back, middle, front] = original
+    const [back, lowerMiddle, upperMiddle, front] = original
 
-    expect(moveElementLayer(original, middle!.id, "backward")).toEqual([middle, back, front])
-    expect(moveElementLayer(original, middle!.id, "forward")).toEqual([back, front, middle])
-    expect(moveElementLayer(original, middle!.id, "back")).toEqual([middle, back, front])
-    expect(moveElementLayer(original, middle!.id, "front")).toEqual([back, front, middle])
+    expect(moveElementLayer(original, upperMiddle!.id, "backward")).toEqual([
+      back,
+      upperMiddle,
+      lowerMiddle,
+      front,
+    ])
+    expect(moveElementLayer(original, lowerMiddle!.id, "forward")).toEqual([
+      back,
+      upperMiddle,
+      lowerMiddle,
+      front,
+    ])
+    expect(moveElementLayer(original, upperMiddle!.id, "back")).toEqual([
+      upperMiddle,
+      back,
+      lowerMiddle,
+      front,
+    ])
+    expect(moveElementLayer(original, lowerMiddle!.id, "front")).toEqual([
+      back,
+      upperMiddle,
+      front,
+      lowerMiddle,
+    ])
   })
 
   it("does not change elements already at the requested boundary", () => {

@@ -92,7 +92,33 @@ import { api, projectApi } from "#/lib/api.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
-function IconAction({ label, children }: { label: string; children: ReactElement }) {
+function IconAction({
+  label,
+  disabled = false,
+  children,
+}: {
+  label: string
+  disabled?: boolean
+  children: ReactElement
+}) {
+  if (disabled) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              className="inline-flex rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              tabIndex={0}
+              aria-label={`${label} unavailable`}
+            />
+          }
+        >
+          {children}
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    )
+  }
   return (
     <Tooltip>
       <TooltipTrigger render={children} />
@@ -902,7 +928,7 @@ function Editor({
               </span>
             </label>
             <Separator orientation="vertical" className="mx-1 h-6" />
-            <IconAction label="Undo">
+            <IconAction label="Undo" disabled={historyIndex.current <= 0}>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -917,7 +943,7 @@ function Editor({
                 <Undo2Icon />
               </Button>
             </IconAction>
-            <IconAction label="Redo">
+            <IconAction label="Redo" disabled={historyIndex.current >= history.current.length - 1}>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -974,7 +1000,7 @@ function Editor({
                   <AlignCenterVerticalIcon />
                 </Button>
               </IconAction>
-              <IconAction label="Send backward one layer">
+              <IconAction label="Send backward one layer" disabled={isBackmost}>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -985,7 +1011,7 @@ function Editor({
                   <ArrowDownIcon />
                 </Button>
               </IconAction>
-              <IconAction label="Bring forward one layer">
+              <IconAction label="Bring forward one layer" disabled={isFrontmost}>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -996,7 +1022,7 @@ function Editor({
                   <ArrowUpIcon />
                 </Button>
               </IconAction>
-              <IconAction label="Send to back">
+              <IconAction label="Send to back" disabled={isBackmost}>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -1007,7 +1033,7 @@ function Editor({
                   <SendToBackIcon />
                 </Button>
               </IconAction>
-              <IconAction label="Bring to front">
+              <IconAction label="Bring to front" disabled={isFrontmost}>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -1213,13 +1239,14 @@ export function LayoutsPanel({
           </Button>
           {selected && (
             <>
-              <IconAction label="Move layout up">
+              <IconAction label="Move layout up" disabled={selected.position === 0}>
                 <Button
                   variant="outline"
                   size="icon"
                   aria-label="Move layout up"
                   disabled={selected.position === 0}
                   onClick={async () => {
+                    if (selected.position === 0) return
                     const ids = project.layouts.map((layout) => layout.id)
                     const index = ids.indexOf(selected.id)
                     ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
@@ -1232,13 +1259,17 @@ export function LayoutsPanel({
                   <ArrowUpIcon />
                 </Button>
               </IconAction>
-              <IconAction label="Move layout down">
+              <IconAction
+                label="Move layout down"
+                disabled={selected.position === project.layouts.length - 1}
+              >
                 <Button
                   variant="outline"
                   size="icon"
                   aria-label="Move layout down"
                   disabled={selected.position === project.layouts.length - 1}
                   onClick={async () => {
+                    if (selected.position === project.layouts.length - 1) return
                     const ids = project.layouts.map((layout) => layout.id)
                     const index = ids.indexOf(selected.id)
                     ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]

@@ -183,9 +183,11 @@ test.describe.serial("critical local prototype workflows", () => {
       await page.setViewportSize({ width: 1365, height: 900 })
       await page.goto(`/projects/${projectId}?tab=layouts`)
       await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+      await page.getByRole("button", { name: "Add line" }).click()
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
 
       const layer = page.getByRole("button", {
-        name: "What should we call you in the book?",
+        name: "Which memory still makes you smile?",
         exact: true,
       })
       await layer.click()
@@ -208,9 +210,21 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
         "Bring forward one layer"
       )
+      await backward.click()
+      await expect(backward).toBeEnabled()
+      await expect(forward).toBeEnabled()
       await back.click()
       await expect(backward).toBeDisabled()
       await expect(back).toBeDisabled()
+      await page.mouse.move(0, 0)
+      await page.getByLabel("Send to back unavailable").hover()
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText("Send to back")
+      await page.mouse.move(0, 0)
+      await page.getByRole("button", { name: "Align vertical centre" }).focus()
+      await page.keyboard.press("Tab")
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
+        "Send backward one layer"
+      )
 
       await front.click()
       await expect(forward).toBeDisabled()
