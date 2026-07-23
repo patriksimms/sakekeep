@@ -1,24 +1,34 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import type { ComponentProps } from "react"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { Select, SelectTrigger, SelectValue } from "./select.tsx"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select.tsx"
 
 afterEach(cleanup)
 
 function renderLayoutSelect({
   items,
+  onValueChange,
   value,
 }: {
   items: Array<{ label: string; value: string }>
+  onValueChange?: ComponentProps<typeof Select>["onValueChange"]
   value: string
 }) {
   render(
-    <Select items={items} value={value}>
+    <Select items={items} value={value} onValueChange={onValueChange}>
       <SelectTrigger aria-label="Layout">
         <SelectValue />
       </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
     </Select>
   )
 
@@ -42,15 +52,29 @@ describe("layout select labels", () => {
   it("maps duplicate and long labels by their distinct values", () => {
     const longName =
       "A deliberately long duplicate layout name that must remain human-readable when truncated"
+    const onValueChange = vi.fn()
     const trigger = renderLayoutSelect({
       items: [
         { label: longName, value: "first-layout-id" },
         { label: longName, value: "second-layout-id" },
       ],
-      value: "second-layout-id",
+      onValueChange,
+      value: "first-layout-id",
     })
 
     expect(trigger.textContent).toContain(longName)
-    expect(trigger.textContent).not.toContain("second-layout-id")
+    expect(trigger.textContent).not.toContain("first-layout-id")
+
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: "ArrowDown" })
+    fireEvent.keyDown(screen.getAllByRole("option", { name: longName })[0], {
+      key: "ArrowDown",
+    })
+    fireEvent.keyDown(screen.getAllByRole("option", { name: longName })[1], {
+      key: "Enter",
+    })
+
+    expect(onValueChange).toHaveBeenCalledOnce()
+    expect(onValueChange.mock.calls[0]?.[0]).toBe("second-layout-id")
   })
 })
