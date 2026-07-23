@@ -20,6 +20,28 @@ async function expectAccessible(page: Page) {
   ).toEqual([])
 }
 
+async function canvasPixelAt(page: Page, xMm: number, yMm: number) {
+  return page.getByLabel("Visual DIN A5 landscape layout canvas").evaluate(
+    (canvas, point) => {
+      const element = canvas as HTMLCanvasElement
+      const bounds = element.getBoundingClientRect()
+      const cssScale = bounds.width / 216
+      const pixelScale = element.width / bounds.width
+      const context = element.getContext("2d")
+      if (!context) throw new Error("Canvas context unavailable.")
+      return Array.from(
+        context.getImageData(
+          Math.round((point.xMm + 3) * cssScale * pixelScale),
+          Math.round((point.yMm + 3) * cssScale * pixelScale),
+          1,
+          1
+        ).data
+      )
+    },
+    { xMm, yMm }
+  )
+}
+
 test.describe.serial("critical local prototype workflows", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" })
@@ -160,7 +182,9 @@ test.describe.serial("critical local prototype workflows", () => {
     ]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
     await page.screenshot({
@@ -168,6 +192,129 @@ test.describe.serial("critical local prototype workflows", () => {
       fullPage: true,
     })
     await expectAccessible(page)
+  })
+
+  test("layer dragging controls canvas order, history, cancellation, and persistence", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000)
+    const created = await request.post(`/api/projects/${closedProjectId}/duplicate`)
+    const projectId = ((await created.json()) as { id: string }).id
+    await request.post(`/api/projects/${projectId}/publish`)
+    await request.post(`/api/projects/${projectId}/close`)
+
+    try {
+      await page.setViewportSize({ width: 1365, height: 900 })
+      await page.goto(`/projects/${projectId}?tab=layouts`)
+      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+
+      await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+      for (const [label, value] of [
+        ["X (mm)", "20"],
+        ["Y (mm)", "20"],
+        ["Width", "50"],
+        ["Height", "50"],
+      ] as const) {
+        await page.getByRole("spinbutton", { name: label, exact: true }).fill(value)
+      }
+      await page.getByLabel("Fill colour").fill("#ef4444")
+
+      await page.getByRole("button", { name: "Add circle" }).click()
+      for (const [label, value] of [
+        ["X (mm)", "20"],
+        ["Y (mm)", "20"],
+        ["Width", "50"],
+        ["Height", "50"],
+      ] as const) {
+        await page.getByRole("spinbutton", { name: label, exact: true }).fill(value)
+      }
+      await page.getByLabel("Fill colour").fill("#3b82f6")
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+      await expect
+        .poll(async () => {
+          const [red, , blue] = await canvasPixelAt(page, 30, 30)
+          return blue! > red!
+        })
+        .toBe(true)
+
+      const rectangleHandle = page.getByRole("button", { name: "Drag Rectangle layer" })
+      const rectangleRow = page.locator('[data-layer-row="Rectangle"]')
+      const circleRow = page.locator('[data-layer-row="Circle"]')
+      const dataTransfer = await page.evaluateHandle(() => new DataTransfer())
+      await rectangleHandle.dispatchEvent("dragstart", { dataTransfer })
+      const circleBounds = await circleRow.boundingBox()
+      if (!circleBounds) throw new Error("Circle layer row is not visible.")
+      await circleRow.dispatchEvent("dragover", {
+        dataTransfer,
+        clientY: circleBounds.y + 1,
+      })
+      await expect(rectangleRow).toHaveAttribute("data-dragging", "true")
+      await expect(circleRow).toHaveAttribute("data-drop-edge", "before")
+      await rectangleHandle.dispatchEvent("dragend", { dataTransfer })
+      await expect(rectangleRow).not.toHaveAttribute("data-dragging")
+      await expect(circleRow).not.toHaveAttribute("data-drop-edge")
+      await expect
+        .poll(async () => {
+          const [red, , blue] = await canvasPixelAt(page, 30, 30)
+          return blue! > red!
+        })
+        .toBe(true)
+
+      await rectangleHandle.dragTo(circleRow, {
+        targetPosition: { x: 30, y: 2 },
+      })
+      await expect(page.locator("[data-layer-row]").first()).toHaveAttribute(
+        "data-layer-row",
+        "Rectangle"
+      )
+      await expect(page.getByText("rectangle", { exact: true })).toBeVisible()
+      await expect
+        .poll(async () => {
+          const [red, , blue] = await canvasPixelAt(page, 30, 30)
+          return red! > blue!
+        })
+        .toBe(true)
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+
+      await page.getByRole("button", { name: "Undo" }).click()
+      await expect
+        .poll(async () => {
+          const [red, , blue] = await canvasPixelAt(page, 30, 30)
+          return blue! > red!
+        })
+        .toBe(true)
+      await page.getByRole("button", { name: "Redo" }).click()
+      await expect
+        .poll(async () => {
+          const [red, , blue] = await canvasPixelAt(page, 30, 30)
+          return red! > blue!
+        })
+        .toBe(true)
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+
+      await page.reload()
+      await expect(page.locator("[data-layer-row]").first()).toHaveAttribute(
+        "data-layer-row",
+        "Rectangle"
+      )
+      await expect
+        .poll(async () => {
+          const [red, , blue] = await canvasPixelAt(page, 30, 30)
+          return red! > blue!
+        })
+        .toBe(true)
+
+      await page
+        .getByRole("button", { name: "What should we call you in the book?", exact: true })
+        .click()
+      const bringForward = page.getByRole("button", { name: "Bring forward" })
+      await bringForward.focus()
+      await page.keyboard.press("Enter")
+      await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled()
+    } finally {
+      await request.delete(`/api/projects/${projectId}`)
+    }
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
