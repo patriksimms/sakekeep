@@ -112,6 +112,7 @@ function PreviewElement({
   project: Project
 }) {
   const style = elementStyle(element)
+  const marker = { "data-layout-element-id": element.id }
   if (element.type === "static-text" || element.type === "bound-text") {
     const answer =
       element.type === "bound-text" ? submission.answers[element.questionId] : element.content
@@ -122,6 +123,7 @@ function PreviewElement({
         : null
     return (
       <div
+        {...marker}
         style={{
           ...style,
           color: element.text.color,
@@ -146,6 +148,7 @@ function PreviewElement({
   if (element.type === "rectangle" || element.type === "circle") {
     return (
       <div
+        {...marker}
         style={{
           ...style,
           borderRadius: element.type === "circle" ? "50%" : undefined,
@@ -157,7 +160,7 @@ function PreviewElement({
   }
   if (element.type === "line") {
     return (
-      <div style={style}>
+      <div {...marker} style={style}>
         <svg width="100%" height="100%" preserveAspectRatio="none">
           <line
             x1="0"
@@ -174,6 +177,7 @@ function PreviewElement({
   if (element.type === "decorative-image") {
     return element.assetId ? (
       <img
+        {...marker}
         src={`/api/assets/${element.assetId}?variant=preview`}
         alt=""
         aria-hidden="true"
@@ -193,6 +197,7 @@ function PreviewElement({
     const image = images[0]
     return image ? (
       <img
+        {...marker}
         src={image.previewUrl}
         alt=""
         aria-hidden="true"
@@ -204,7 +209,7 @@ function PreviewElement({
         }}
       />
     ) : (
-      <div style={style} className="border border-dashed border-foreground/15" />
+      <div {...marker} style={style} className="border border-dashed border-foreground/15" />
     )
   }
   const slots = gallerySlots(
@@ -214,7 +219,7 @@ function PreviewElement({
     element.gap
   )
   return (
-    <div style={style}>
+    <div {...marker} style={style}>
       {slots.map((slot, index) => {
         const image = images[index]
         return image ? (

@@ -137,7 +137,10 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
-  test("layout editor works at tablet size and canonical tools are present", async ({ page }) => {
+  test("layout editor works at tablet size and canonical tools are present", async ({
+    page,
+    request,
+  }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.goto(`/projects/${closedProjectId}`)
     await page.getByRole("tab", { name: "3. Layouts" }).click()
@@ -168,6 +171,86 @@ test.describe.serial("critical local prototype workflows", () => {
       fullPage: true,
     })
     await expectAccessible(page)
+
+    await layoutSelect.click()
+    await page.getByRole("option", { name: "Warm quote" }).click()
+    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    const opacity = page.getByRole("spinbutton", { name: "Opacity" })
+    await expect(opacity).toHaveAttribute("step", "0.05")
+    await expect(opacity).toHaveAttribute("min", "0")
+    await expect(opacity).toHaveAttribute("max", "1")
+
+    await opacity.fill("")
+    await expect(opacity).toHaveValue("")
+    await opacity.blur()
+    await expect(opacity).toHaveValue("1")
+
+    const saveResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/${closedProjectId}/layouts/`) &&
+        response.request().method() === "PATCH"
+    )
+    await opacity.fill("0.35")
+    const savedResponse = await saveResponse
+    expect(savedResponse.status()).toBe(200)
+    const savedLayout = (await savedResponse.json()) as {
+      id: string
+      revision: number
+      schema: {
+        elements: Array<{ id: string; type: string; opacity: number }>
+      }
+    }
+    const changedElement = savedLayout.schema.elements.find(
+      (element) => element.type === "rectangle" && element.opacity === 0.35
+    )
+    expect(changedElement).toBeDefined()
+
+    try {
+      await expect(opacity).toHaveValue("0.35")
+      await expect(page.getByRole("status")).toContainText("Saved")
+      await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toHaveAttribute(
+        "data-selected-element-opacity",
+        "0.35"
+      )
+
+      await page.reload()
+      await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+      await expect(page.getByRole("spinbutton", { name: "Opacity" })).toHaveValue("0.35")
+
+      await page.getByRole("tab", { name: "4. Book review" }).click()
+      await expect(
+        page.locator(`[data-layout-element-id="${changedElement!.id}"]`).first()
+      ).toHaveCSS("opacity", "0.35")
+    } finally {
+      const restoredSchema = {
+        ...savedLayout.schema,
+        elements: savedLayout.schema.elements.map((element) =>
+          element.id === changedElement?.id ? { ...element, opacity: 1 } : element
+        ),
+      }
+      expect(
+        (
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${savedLayout.id}`, {
+            data: {
+              expectedRevision: savedLayout.revision,
+              schema: restoredSchema,
+            },
+          })
+        ).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: {
+              mode: "cycle",
+              seed: "demo-seed",
+              manualAssignments: {},
+              resolutionOverrides: [],
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {

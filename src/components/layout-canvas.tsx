@@ -251,9 +251,18 @@ export function LayoutCanvas({
       canvas.clear()
       canvas.backgroundColor = schema.background
       canvas.add(...objects)
+      const selected = selectedId
+        ? objects.find((object) => object.sakekeepElementId === selectedId)
+        : undefined
       if (selectedId) {
-        const selected = objects.find((object) => object.sakekeepElementId === selectedId)
         if (selected) canvas.setActiveObject(selected)
+      }
+      if (element.current) {
+        if (selected) {
+          element.current.dataset.selectedElementOpacity = String(selected.opacity)
+        } else {
+          delete element.current.dataset.selectedElementOpacity
+        }
       }
       canvas.requestRenderAll()
     }
