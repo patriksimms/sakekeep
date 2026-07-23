@@ -170,17 +170,17 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
 
-    const canvasStage = page.getByTestId("layout-canvas-stage")
+    const renderedCanvas = page.locator("canvas.upper-canvas")
     const clearSelection = async () => {
-      const upperCanvas = page.locator("canvas.upper-canvas")
-      const bounds = await upperCanvas.boundingBox()
+      const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
-      await upperCanvas.click({
+      await renderedCanvas.click({
         position: { x: bounds!.width - 2, y: bounds!.height - 2 },
       })
     }
     const canvasDocumentBounds = async () => {
-      const bounds = await canvasStage.boundingBox()
+      await renderedCanvas.waitFor({ state: "visible" })
+      const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
       const scroll = await page.evaluate(() => ({
         x: window.scrollX,

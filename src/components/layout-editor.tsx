@@ -983,7 +983,6 @@ function Editor({
 
         <div
           ref={container}
-          data-testid="layout-canvas-stage"
           className="print-canvas flex min-h-[420px] items-center justify-center overflow-auto rounded-xl border p-3 sm:p-6"
         >
           <LayoutCanvas
