@@ -1084,6 +1084,10 @@ export function LayoutsPanel({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select
+            items={project.layouts.map((layout) => ({
+              label: layout.name,
+              value: layout.id,
+            }))}
             value={selected?.id}
             onValueChange={(value) => {
               if (value) setSelectedId(value)

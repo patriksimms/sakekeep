@@ -142,6 +142,12 @@ test.describe.serial("critical local prototype workflows", () => {
     await page.goto(`/projects/${closedProjectId}`)
     await page.getByRole("tab", { name: "3. Layouts" }).click()
     await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
+    await expect(layoutSelect).toContainText("Warm quote")
+    await layoutSelect.click()
+    await page.getByRole("option", { name: "Playful note" }).click()
+    await expect(layoutSelect).toContainText("Playful note")
+    await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
       "Answer text",
@@ -203,6 +209,7 @@ test.describe.serial("critical local prototype workflows", () => {
     await page.goto(`/projects/${closedProjectId}`)
     await page.getByRole("tab", { name: "4. Book review" }).click()
     await expect(page.getByText("0 blocking · 0 warnings")).toBeVisible()
+    await expect(page.getByRole("combobox", { name: "Page layout" })).toContainText("Warm quote")
     await page.screenshot({
       path: resolve(screenshots, "generated-book-desktop.png"),
       fullPage: true,
