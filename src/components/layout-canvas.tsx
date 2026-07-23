@@ -215,6 +215,14 @@ export function LayoutCanvas({
       const object = canvas.getActiveObject() as SakekeepObject | undefined
       onSelectRef.current(object?.sakekeepElementId ?? null)
     }
+    const commitChange = (next: LayoutSchema) => {
+      schemaRef.current = next
+      changing.current = true
+      onChangeRef.current(next)
+      requestAnimationFrame(() => {
+        changing.current = false
+      })
+    }
     const modified = (event: { target?: FabricObject }) => {
       const object = event.target as SakekeepObject | undefined
       if (!object?.sakekeepElementId) return
@@ -229,16 +237,27 @@ export function LayoutCanvas({
             : candidate
         ),
       }
-      changing.current = true
-      onChangeRef.current(next)
-      requestAnimationFrame(() => {
-        changing.current = false
+      commitChange(next)
+    }
+    const textEdited = (event: { target?: FabricObject }) => {
+      const object = event.target as SakekeepObject | undefined
+      const elementId = object?.sakekeepElementId
+      if (!elementId || !(object instanceof Textbox)) return
+      const candidate = schemaRef.current.elements.find((item) => item.id === elementId)
+      if (!candidate || candidate.type !== "static-text" || candidate.content === object.text)
+        return
+      commitChange({
+        ...schemaRef.current,
+        elements: schemaRef.current.elements.map((item) =>
+          item.id === elementId ? { ...item, content: object.text } : item
+        ),
       })
     }
     canvas.on("selection:created", select)
     canvas.on("selection:updated", select)
     canvas.on("selection:cleared", select)
     canvas.on("object:modified", modified)
+    canvas.on("text:editing:exited", textEdited)
 
     return () => {
       if (canvasRef) canvasRef.current = null

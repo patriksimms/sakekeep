@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { boundQuestionPlaceholder, layoutQuestionPalette } from "./layout-question-palette.ts"
+import {
+  boundQuestionLabel,
+  boundQuestionPlaceholder,
+  layoutQuestionPalette,
+} from "./layout-question-palette.ts"
 
 describe("layout question palette", () => {
   it("maps text, choice, and image questions to bound element actions", () => {
@@ -63,5 +67,7 @@ describe("layout question palette", () => {
       "{{ Untitled question }}"
     )
     expect(boundQuestionPlaceholder([], "missing")).toBe("{{ Untitled question }}")
+    expect(boundQuestionLabel([{ id: "empty", prompt: " " }], "empty")).toBe("Untitled question")
+    expect(boundQuestionLabel([], "missing")).toBe("Unbound element")
   })
 })

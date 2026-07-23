@@ -22,6 +22,14 @@ export function boundQuestionPlaceholder(
   return `{{ ${questionPrompt(questions.find((question) => question.id === questionId))} }}`
 }
 
+export function boundQuestionLabel(
+  questions: Array<Pick<FormQuestion, "id" | "prompt">>,
+  questionId: string
+): string {
+  const question = questions.find((candidate) => candidate.id === questionId)
+  return question ? questionPrompt(question) : "Unbound element"
+}
+
 export function layoutQuestionPalette(
   questions: Array<Pick<FormQuestion, "id" | "prompt" | "type">>
 ): LayoutQuestionPaletteItem[] {

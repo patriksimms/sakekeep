@@ -195,7 +195,7 @@ test.describe.serial("critical local prototype workflows", () => {
       const project = (await response.json()) as {
         layouts: Array<{
           name: string
-          schema: { elements: Array<{ type: string; questionId?: string }> }
+          schema: { elements: Array<{ type: string; questionId?: string; content?: string }> }
         }>
       }
       return project.layouts.find((layout) => layout.name === "Warm quote")!.schema.elements.at(-1)
@@ -243,6 +243,19 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByLabel("Content")).toBeEditable()
       await page.getByLabel("Content").fill("An editable static note")
       await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+
+      await upperCanvas.dblclick({ position: { x: 100, y: 80 } })
+      await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe("TEXTAREA")
+      await page.keyboard.press("Control+a")
+      await page.keyboard.type("Canvas-edited static note")
+      await page.keyboard.press("Escape")
+      await page.getByLabel("Layout name").click()
+      await expect(page.getByLabel("Content")).toHaveValue("Canvas-edited static note")
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+      expect(await latestElement()).toMatchObject({
+        type: "static-text",
+        content: "Canvas-edited static note",
+      })
     } finally {
       await request.delete(`/api/projects/${projectId}`)
     }

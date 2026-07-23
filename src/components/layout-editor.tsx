@@ -67,7 +67,11 @@ import { Separator } from "#/components/ui/separator.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
-import { layoutQuestionPalette, questionPrompt } from "#/domain/layout-question-palette.ts"
+import {
+  boundQuestionLabel,
+  layoutQuestionPalette,
+  questionPrompt,
+} from "#/domain/layout-question-palette.ts"
 import {
   type FormQuestion,
   type LayoutElement,
@@ -87,9 +91,7 @@ function elementLabel(element: LayoutElement, questions: FormQuestion[]): string
     element.type === "image-frame" ||
     element.type === "gallery-frame"
   ) {
-    return (
-      questions.find((question) => question.id === element.questionId)?.prompt || "Unbound element"
-    )
+    return boundQuestionLabel(questions, element.questionId)
   }
   const labels: Record<LayoutElement["type"], string> = {
     "bound-text": "Question text",
