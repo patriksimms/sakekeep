@@ -77,4 +77,32 @@ describe("NumericField", () => {
     fireEvent.blur(input)
     expect(input.value).toBe("1")
   })
+
+  it("resynchronizes with a value normalized by the parent", () => {
+    const onChange = vi.fn()
+
+    function Harness() {
+      const [value, setValue] = useState(0.1)
+      return (
+        <NumericField
+          label="Width"
+          value={value}
+          onChange={(next) => {
+            onChange(next)
+            setValue(Math.max(0.1, next))
+          }}
+        />
+      )
+    }
+
+    render(<Harness />)
+    const input = screen.getByRole("spinbutton", { name: "Width" }) as HTMLInputElement
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: "-5" } })
+    fireEvent.blur(input)
+
+    expect(onChange).toHaveBeenCalledWith(-5)
+    expect(input.value).toBe("0.1")
+  })
 })

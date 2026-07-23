@@ -71,7 +71,7 @@ export function NumericField({
           }
           const nextBounded = bounded(next)
           if (nextBounded !== value) onChange(nextBounded)
-          setDraft(formatNumericValue(nextBounded))
+          setDraft(formatNumericValue(value))
         }}
       />
     </Field>

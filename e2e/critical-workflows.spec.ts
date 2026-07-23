@@ -3,6 +3,8 @@ import { resolve } from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
+import type { LayoutRecord, Project } from "../src/domain/types.ts"
+
 import { shareTokenForProject } from "../src/server/share-token.ts"
 
 const collectingProjectId = "22222222-2222-4222-8222-222222222222"
@@ -185,27 +187,32 @@ test.describe.serial("critical local prototype workflows", () => {
     await opacity.blur()
     await expect(opacity).toHaveValue("1")
 
-    const saveResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes(`/${closedProjectId}/layouts/`) &&
-        response.request().method() === "PATCH"
-    )
-    await opacity.fill("0.35")
-    const savedResponse = await saveResponse
-    expect(savedResponse.status()).toBe(200)
-    const savedLayout = (await savedResponse.json()) as {
-      id: string
-      revision: number
-      schema: {
-        elements: Array<{ id: string; type: string; opacity: number }>
-      }
-    }
-    const changedElement = savedLayout.schema.elements.find(
-      (element) => element.type === "rectangle" && element.opacity === 0.35
-    )
-    expect(changedElement).toBeDefined()
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")
+    expect(originalLayout).toBeDefined()
 
     try {
+      const saveResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes(`/${closedProjectId}/layouts/`) &&
+          response.request().method() === "PATCH"
+      )
+      await opacity.fill("0.35")
+      await opacity.press("ArrowUp")
+      await expect(opacity).toHaveValue("0.4")
+      await opacity.press("ArrowDown")
+      const savedResponse = await saveResponse
+      expect(savedResponse.status()).toBe(200)
+      const savedLayout = (await savedResponse.json()) as LayoutRecord
+      const changedElement = savedLayout.schema.elements.find(
+        (element) => element.type === "rectangle" && element.opacity === 0.35
+      )
+      if (!changedElement) {
+        throw new Error("Saved layout did not retain the rectangle opacity at 0.35.")
+      }
+
       await expect(opacity).toHaveValue("0.35")
       await expect(page.getByRole("status")).toContainText("Saved")
       await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toHaveAttribute(
@@ -219,21 +226,22 @@ test.describe.serial("critical local prototype workflows", () => {
 
       await page.getByRole("tab", { name: "4. Book review" }).click()
       await expect(
-        page.locator(`[data-layout-element-id="${changedElement!.id}"]`).first()
+        page.locator(`[data-layout-element-id="${changedElement.id}"]`).first()
       ).toHaveCSS("opacity", "0.35")
     } finally {
-      const restoredSchema = {
-        ...savedLayout.schema,
-        elements: savedLayout.schema.elements.map((element) =>
-          element.id === changedElement?.id ? { ...element, opacity: 1 } : element
-        ),
-      }
+      const currentProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const currentLayout = currentProject.layouts.find(
+        (layout) => layout.id === originalLayout?.id
+      )
+      expect(currentLayout).toBeDefined()
       expect(
         (
-          await request.patch(`/api/projects/${closedProjectId}/layouts/${savedLayout.id}`, {
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${currentLayout!.id}`, {
             data: {
-              expectedRevision: savedLayout.revision,
-              schema: restoredSchema,
+              expectedRevision: currentLayout!.revision,
+              schema: originalLayout!.schema,
             },
           })
         ).ok()
