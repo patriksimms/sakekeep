@@ -100,8 +100,23 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
     ])
     expect(editorElementBox, `${id} is rendered in the editor`).not.toBeNull()
     expect(previewElementBox, `${id} is rendered in the preview`).not.toBeNull()
-    for (const key of ["width", "height"] as const) {
-      expect(editorElementBox![key], `${id} ${key}`).toBeCloseTo(previewElementBox![key], 3)
+    const editorRelativeBox = {
+      x: editorElementBox!.x - editorBox!.x,
+      y: editorElementBox!.y - editorBox!.y,
+      width: editorElementBox!.width,
+      height: editorElementBox!.height,
+    }
+    const previewRelativeBox = {
+      x: previewElementBox!.x - previewBox!.x,
+      y: previewElementBox!.y - previewBox!.y,
+      width: previewElementBox!.width,
+      height: previewElementBox!.height,
+    }
+    for (const key of ["x", "y", "width", "height"] as const) {
+      expect(editorRelativeBox[key], `${id} relative ${key}`).toBeCloseTo(
+        previewRelativeBox[key],
+        3
+      )
     }
     expect(await renderedStyles(editor, id), `${id} styles`).toEqual(
       await renderedStyles(preview, id)
