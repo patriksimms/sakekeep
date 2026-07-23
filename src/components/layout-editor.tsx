@@ -744,14 +744,20 @@ function Editor({
   }
 
   return (
-    <div className="grid min-h-[700px] gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]">
-      <Card className="h-fit bg-card/90 xl:sticky xl:top-20">
+    <div
+      aria-label="Layout editor workspace"
+      className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]"
+    >
+      <Card
+        aria-label="Layers"
+        className="h-48 bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+      >
         <CardHeader>
           <CardTitle>Layers</CardTitle>
           <CardDescription>Topmost first</CardDescription>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-72 xl:max-h-[580px]">
+        <CardContent className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
             <div className="flex flex-col gap-1 pr-2">
               {[...schema.elements].reverse().map((element) => (
                 <Button
@@ -877,100 +883,107 @@ function Editor({
           </CardContent>
         </Card>
 
-        {selected && (
-          <Card className="mb-4 bg-card/90">
-            <CardContent className="flex flex-wrap items-center gap-1">
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Align horizontal centre"
-                onClick={() =>
-                  changeSelected({
-                    ...selected,
-                    geometry: {
-                      ...selected.geometry,
-                      x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
-                    },
-                  })
-                }
-              >
-                <AlignCenterHorizontalIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Align vertical centre"
-                onClick={() =>
-                  changeSelected({
-                    ...selected,
-                    geometry: {
-                      ...selected.geometry,
-                      y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
-                    },
-                  })
-                }
-              >
-                <AlignCenterVerticalIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Send backward"
-                onClick={() => moveLayer(-1)}
-              >
-                <SendToBackIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Bring forward"
-                onClick={() => moveLayer(1)}
-              >
-                <BringToFrontIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Duplicate selected element"
-                onClick={() => {
-                  const duplicate = {
-                    ...structuredClone(selected),
-                    id: crypto.randomUUID(),
-                    geometry: {
-                      ...selected.geometry,
-                      x: selected.geometry.x + 4,
-                      y: selected.geometry.y + 4,
-                    },
+        <Card aria-label="Selection tools" className="mb-4 bg-card/90">
+          <CardContent className="flex min-h-8 flex-wrap items-center gap-1">
+            {selected ? (
+              <>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Align horizontal centre"
+                  onClick={() =>
+                    changeSelected({
+                      ...selected,
+                      geometry: {
+                        ...selected.geometry,
+                        x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
+                      },
+                    })
                   }
-                  markChanged({
-                    ...schema,
-                    elements: [...schema.elements, duplicate],
-                  })
-                  setSelectedId(duplicate.id)
-                }}
-              >
-                <CopyIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Delete selected element"
-                onClick={() => {
-                  markChanged({
-                    ...schema,
-                    elements: schema.elements.filter((element) => element.id !== selected.id),
-                  })
-                  setSelectedId(null)
-                }}
-              >
-                <Trash2Icon />
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                >
+                  <AlignCenterHorizontalIcon />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Align vertical centre"
+                  onClick={() =>
+                    changeSelected({
+                      ...selected,
+                      geometry: {
+                        ...selected.geometry,
+                        y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
+                      },
+                    })
+                  }
+                >
+                  <AlignCenterVerticalIcon />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Send backward"
+                  onClick={() => moveLayer(-1)}
+                >
+                  <SendToBackIcon />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Bring forward"
+                  onClick={() => moveLayer(1)}
+                >
+                  <BringToFrontIcon />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Duplicate selected element"
+                  onClick={() => {
+                    const duplicate = {
+                      ...structuredClone(selected),
+                      id: crypto.randomUUID(),
+                      geometry: {
+                        ...selected.geometry,
+                        x: selected.geometry.x + 4,
+                        y: selected.geometry.y + 4,
+                      },
+                    }
+                    markChanged({
+                      ...schema,
+                      elements: [...schema.elements, duplicate],
+                    })
+                    setSelectedId(duplicate.id)
+                  }}
+                >
+                  <CopyIcon />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Delete selected element"
+                  onClick={() => {
+                    markChanged({
+                      ...schema,
+                      elements: schema.elements.filter((element) => element.id !== selected.id),
+                    })
+                    setSelectedId(null)
+                  }}
+                >
+                  <Trash2Icon />
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Select an element to use alignment and layer actions.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         <div
           ref={container}
+          data-testid="layout-canvas-stage"
           className="print-canvas flex min-h-[420px] items-center justify-center overflow-auto rounded-xl border p-3 sm:p-6"
         >
           <LayoutCanvas
@@ -984,15 +997,18 @@ function Editor({
         </div>
       </div>
 
-      <Card className="h-fit bg-card/90 xl:sticky xl:top-20">
+      <Card
+        aria-label="Inspector"
+        className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+      >
         <CardHeader>
           <CardTitle>Inspector</CardTitle>
           <CardAction>
             <SaveIndicator state={saveState} />
           </CardAction>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-[650px] pr-3">
+        <CardContent className="min-h-0 flex-1">
+          <ScrollArea className="h-full pr-3">
             <FieldGroup>
               <Field>
                 <FieldLabel>Layout name</FieldLabel>
