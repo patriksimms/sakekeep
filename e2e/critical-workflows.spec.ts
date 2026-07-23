@@ -3,6 +3,7 @@ import { resolve } from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
+import type { LayoutRecord, Project } from "../src/domain/types.ts"
 import { shareTokenForProject } from "../src/server/share-token.ts"
 
 const collectingProjectId = "22222222-2222-4222-8222-222222222222"
@@ -137,7 +138,11 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
-  test("layout editor works at tablet size and canonical tools are present", async ({ page }) => {
+  test("layout editor persists inline static text and keeps bound text read-only", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000)
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.goto(`/projects/${closedProjectId}`)
     await page.getByRole("tab", { name: "3. Layouts" }).click()
@@ -149,6 +154,19 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(layoutSelect).toContainText("Playful note")
     await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Playful note")
+    expect(originalLayout).toBeDefined()
+    const originalStaticText = originalLayout!.schema.elements.find(
+      (element) => element.type === "static-text"
+    )
+    const originalBoundText = originalLayout!.schema.elements.find(
+      (element) => element.type === "bound-text"
+    )
+    expect(originalStaticText?.type).toBe("static-text")
+    expect(originalBoundText?.type).toBe("bound-text")
     for (const name of [
       "Answer text",
       "Static text",
@@ -160,6 +178,130 @@ test.describe.serial("critical local prototype workflows", () => {
     ]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
+
+    const canvas = page.locator("canvas.upper-canvas")
+    const hiddenTextarea = page.locator('textarea[data-fabric="textarea"]')
+    const waitForCanvasRender = () =>
+      page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      )
+    const enterStaticTextEditing = async () => {
+      await waitForCanvasRender()
+      await canvas.click({ position: { x: 200, y: 100 } })
+      await canvas.dblclick({ position: { x: 200, y: 100 } })
+      await expect(hiddenTextarea).toHaveCount(1)
+    }
+    const editedContent = "You made a lasting difference."
+    const inspectorContent = "The inspector keeps the final word."
+
+    try {
+      await enterStaticTextEditing()
+      await expect(hiddenTextarea).toHaveValue("You made a difference.")
+      await hiddenTextarea.fill(editedContent)
+      const firstSave = page.waitForResponse(
+        (response) =>
+          response.url().includes(`/${closedProjectId}/layouts/`) &&
+          response.request().method() === "PATCH"
+      )
+      await page.getByRole("button", { name: "Circle", exact: true }).click()
+      await expect(page.getByRole("status")).toContainText(/Unsaved|Saving/)
+      expect((await firstSave).status()).toBe(200)
+      await expect(page.getByRole("status")).toContainText("Saved")
+
+      await page.getByRole("button", { name: editedContent }).click()
+      await expect(page.getByLabel("Content")).toHaveValue(editedContent)
+      await page.getByRole("button", { name: "Undo" }).click()
+      await expect(page.getByLabel("Content")).toHaveValue("You made a difference.")
+      const historySave = page.waitForResponse(
+        (response) =>
+          response.url().includes(`/${closedProjectId}/layouts/`) &&
+          response.request().method() === "PATCH"
+      )
+      await page.getByRole("button", { name: "Redo" }).click()
+      await expect(page.getByLabel("Content")).toHaveValue(editedContent)
+      expect((await historySave).status()).toBe(200)
+      await expect(page.getByRole("status")).toContainText("Saved")
+
+      await page.reload()
+      await layoutSelect.click()
+      await page.getByRole("option", { name: "Playful note" }).click()
+      await page.getByRole("button", { name: editedContent }).click()
+      await expect(page.getByLabel("Content")).toHaveValue(editedContent)
+
+      await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+      await waitForCanvasRender()
+      await canvas.click({ position: { x: 200, y: 300 } })
+      await canvas.dblclick({ position: { x: 200, y: 300 } })
+      await expect(hiddenTextarea).toHaveCount(0)
+
+      await page.getByRole("button", { name: editedContent }).click()
+      await enterStaticTextEditing()
+      await hiddenTextarea.fill("Inline edit before inspector")
+      await page.getByRole("button", { name: "Circle", exact: true }).click()
+      await page.getByRole("button", { name: "Inline edit before inspector" }).click()
+      const latestSave = page.waitForResponse(
+        (response) =>
+          response.url().includes(`/${closedProjectId}/layouts/`) &&
+          response.request().method() === "PATCH"
+      )
+      await page.getByLabel("Content").fill(inspectorContent)
+      expect((await latestSave).status()).toBe(200)
+      await expect(page.getByRole("status")).toContainText("Saved")
+
+      await page.reload()
+      await layoutSelect.click()
+      await page.getByRole("option", { name: "Playful note" }).click()
+      await page.getByRole("button", { name: inspectorContent }).click()
+      await expect(page.getByLabel("Content")).toHaveValue(inspectorContent)
+
+      const savedProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const savedLayout = savedProject.layouts.find((layout) => layout.id === originalLayout!.id)
+      const savedStaticText = savedLayout!.schema.elements.find(
+        (element) => element.id === originalStaticText!.id
+      )
+      expect(savedStaticText).toEqual({
+        ...originalStaticText,
+        content: inspectorContent,
+      })
+      expect(
+        savedLayout!.schema.elements.find((element) => element.id === originalBoundText!.id)
+      ).toEqual(originalBoundText)
+    } finally {
+      const currentProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const currentLayout = currentProject.layouts.find(
+        (layout) => layout.id === originalLayout!.id
+      ) as LayoutRecord
+      expect(
+        (
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${currentLayout.id}`, {
+            data: {
+              expectedRevision: currentLayout.revision,
+              schema: originalLayout!.schema,
+            },
+          })
+        ).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: {
+              mode: "cycle",
+              seed: "demo-seed",
+              manualAssignments: {},
+              resolutionOverrides: [],
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
+
+    await page.reload()
+    await layoutSelect.click()
+    await page.getByRole("option", { name: "Playful note" }).click()
     await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()

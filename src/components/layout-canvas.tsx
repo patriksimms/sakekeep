@@ -1,10 +1,27 @@
-import { Canvas, Circle, FabricImage, FabricObject, Line, Rect, Textbox } from "fabric"
+import { Canvas, Circle, FabricImage, FabricObject, IText, Line, Rect, Textbox } from "fabric"
 import { useEffect, useRef, type RefObject } from "react"
 
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { type LayoutElement, type LayoutSchema, type RelativeGeometry } from "#/domain/types.ts"
 
 type SakekeepObject = FabricObject & { sakekeepElementId?: string }
+
+export function applyInlineStaticTextEdit(
+  schema: LayoutSchema,
+  elementId: string,
+  content: string
+): LayoutSchema | null {
+  const element = schema.elements.find((candidate) => candidate.id === elementId)
+  if (element?.type !== "static-text" || element.content === content) return null
+  return {
+    ...schema,
+    elements: schema.elements.map((candidate) =>
+      candidate.id === elementId && candidate.type === "static-text"
+        ? { ...candidate, content }
+        : candidate
+    ),
+  }
+}
 
 export function canonicalToCanvasGeometry(
   geometry: RelativeGeometry,
@@ -77,6 +94,7 @@ async function objectForElement(
     const scale = canvasWidth / PAGE_SPEC.mediaWidthMm
     object = new Textbox(content, {
       ...common,
+      editable: element.type === "static-text",
       width: geometry.width,
       height: geometry.height,
       fontFamily: element.text.fontFamily,
@@ -207,13 +225,15 @@ export function LayoutCanvas({
       const object = canvas.getActiveObject() as SakekeepObject | undefined
       onSelectRef.current(object?.sakekeepElementId ?? null)
     }
-    const modified = (event: { target?: FabricObject }) => {
+    const modified = (event: { target?: FabricObject; transform?: { action?: string } }) => {
       const object = event.target as SakekeepObject | undefined
-      if (!object?.sakekeepElementId) return
+      const elementId = object?.sakekeepElementId
+      if (!object || !elementId) return
+      if (object instanceof IText && !event.transform?.action) return
       const next: LayoutSchema = {
         ...schemaRef.current,
         elements: schemaRef.current.elements.map((candidate) =>
-          candidate.id === object.sakekeepElementId
+          candidate.id === elementId
             ? {
                 ...candidate,
                 geometry: geometryFromObject(object, width),
@@ -221,6 +241,23 @@ export function LayoutCanvas({
             : candidate
         ),
       }
+      schemaRef.current = next
+      changing.current = true
+      onChangeRef.current(next)
+      requestAnimationFrame(() => {
+        changing.current = false
+      })
+    }
+    const textEdited = (event: { target: IText }) => {
+      const object = event.target as IText & SakekeepObject
+      if (!object.sakekeepElementId) return
+      const next = applyInlineStaticTextEdit(
+        schemaRef.current,
+        object.sakekeepElementId,
+        object.text
+      )
+      if (!next) return
+      schemaRef.current = next
       changing.current = true
       onChangeRef.current(next)
       requestAnimationFrame(() => {
@@ -231,6 +268,18 @@ export function LayoutCanvas({
     canvas.on("selection:updated", select)
     canvas.on("selection:cleared", select)
     canvas.on("object:modified", modified)
+    canvas.on("mouse:dblclick", (event) => {
+      const object = event.target as (IText & SakekeepObject) | undefined
+      const element = schemaRef.current.elements.find(
+        (candidate) => candidate.id === object?.sakekeepElementId
+      )
+      if (!object || element?.type !== "static-text" || object.isEditing) return
+      canvas.setActiveObject(object)
+      object.enterEditing(event.e)
+      object.selectAll()
+      canvas.requestRenderAll()
+    })
+    canvas.on("text:editing:exited", textEdited)
 
     return () => {
       if (canvasRef) canvasRef.current = null
