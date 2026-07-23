@@ -3,7 +3,10 @@ import { resolve } from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
-const collectingToken = "oTC0yjSC98MvzGGiZh6x3rxgChqX5IU5"
+import { shareTokenForProject } from "../src/server/share-token.ts"
+
+const collectingProjectId = "22222222-2222-4222-8222-222222222222"
+const collectingToken = shareTokenForProject(collectingProjectId)
 const closedProjectId = "11111111-1111-4111-8111-111111111111"
 const screenshots = resolve("visual-artifacts/screenshots")
 
