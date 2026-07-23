@@ -12,7 +12,7 @@ const environmentSchema = z.object({
     .min(32)
     .default("sakekeep-local-share-token-secret-change-before-any-nonlocal-use"),
   APP_ORIGIN: z.string().url().default("http://localhost:3000"),
-  SAKEKEEP_DEMO_MODE: z
+  VITE_SAKEKEEP_DEMO_MODE: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),

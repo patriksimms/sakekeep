@@ -8,6 +8,7 @@ import { AppHeader } from "#/components/app-header.tsx"
 import { ThemeProvider } from "#/components/theme-provider.tsx"
 import { Toaster } from "#/components/ui/sonner.tsx"
 import { TooltipProvider } from "#/components/ui/tooltip.tsx"
+import { isDemoMode } from "#/lib/demo-mode.ts"
 
 import appCss from "../styles.css?url"
 
@@ -52,6 +53,26 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         },
       })
   )
+  const app = (
+    <>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <TooltipProvider>
+            <a
+              href="#main-content"
+              className="fixed top-2 left-2 z-50 -translate-y-20 rounded-lg bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
+            >
+              Skip to content
+            </a>
+            <AppHeader />
+            {children}
+            <Toaster closeButton />
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+      <Scripts />
+    </>
+  )
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -59,24 +80,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <ClerkProvider appearance={{ theme: shadcn }}>
-          <QueryClientProvider client={queryClient}>
-            <ThemeProvider>
-              <TooltipProvider>
-                <a
-                  href="#main-content"
-                  className="fixed top-2 left-2 z-50 -translate-y-20 rounded-lg bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
-                >
-                  Skip to content
-                </a>
-                <AppHeader />
-                {children}
-                <Toaster closeButton />
-              </TooltipProvider>
-            </ThemeProvider>
-          </QueryClientProvider>
-          <Scripts />
-        </ClerkProvider>
+        {isDemoMode ? app : <ClerkProvider appearance={{ theme: shadcn }}>{app}</ClerkProvider>}
       </body>
     </html>
   )

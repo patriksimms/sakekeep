@@ -3,7 +3,10 @@ import { resolve } from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
-const collectingToken = "oTC0yjSC98MvzGGiZh6x3rxgChqX5IU5"
+import { shareTokenForProject } from "../src/server/share-token.ts"
+
+const collectingProjectId = "22222222-2222-4222-8222-222222222222"
+const collectingToken = shareTokenForProject(collectingProjectId)
 const closedProjectId = "11111111-1111-4111-8111-111111111111"
 const screenshots = resolve("visual-artifacts/screenshots")
 
@@ -159,6 +162,40 @@ test.describe.serial("critical local prototype workflows", () => {
       fullPage: true,
     })
     await expectAccessible(page)
+  })
+
+  test("workspace tabs persist in the URL and browser history", async ({ page }) => {
+    await page.goto(`/projects/${closedProjectId}?tab=layouts&source=bookmark`)
+    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+
+    await page.getByRole("tab", { name: "4. Book review" }).click()
+    await expect(page).toHaveURL(/tab=book/)
+    await expect(page).toHaveURL(/source=bookmark/)
+    await page.reload()
+    await expect(page.getByRole("tab", { name: "4. Book review" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+
+    await page.goBack()
+    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+    await page.goForward()
+    await expect(page.getByRole("tab", { name: "4. Book review" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+
+    await page.goto(`/projects/${closedProjectId}?tab=unknown`)
+    await expect(page.getByRole("tab", { name: "5. Export" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
   })
 
   test("organizer reviews a current book and exports a verified PDF", async ({ page }) => {
