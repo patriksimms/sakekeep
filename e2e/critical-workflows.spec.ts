@@ -184,28 +184,31 @@ test.describe.serial("critical local prototype workflows", () => {
     expect(response.status()).toBe(201)
     const duplicate = (await response.json()) as { id: string; name: string }
 
-    await expect(page.getByText("3 layouts")).toBeVisible()
-    await expect(page.getByLabel("Layout name")).toHaveValue(duplicate.name)
-    await page.getByRole("combobox", { name: "Choose a layout" }).click()
-    await expect(page.getByRole("option")).toHaveCount(3)
-    await expect(page.getByRole("option", { name: "Warm quote", exact: true })).toBeVisible()
-    await expect(page.getByRole("option", { name: duplicate.name, exact: true })).toBeVisible()
-
-    expect(
-      (await request.delete(`/api/projects/${closedProjectId}/layouts/${duplicate.id}`)).ok()
-    ).toBe(true)
-    expect(
-      (
-        await request.post(`/api/projects/${closedProjectId}/book`, {
-          data: {
-            mode: "cycle",
-            seed: "demo-seed",
-            manualAssignments: {},
-            resolutionOverrides: [],
-          },
-        })
-      ).ok()
-    ).toBe(true)
+    try {
+      await expect(page.getByText("3 layouts")).toBeVisible()
+      await expect(page.getByLabel("Layout name")).toHaveValue(duplicate.name)
+      await page.getByRole("combobox", { name: "Choose a layout" }).click()
+      await expect(page.getByRole("option")).toHaveCount(3)
+      await expect(page.getByRole("option", { name: "Warm quote", exact: true })).toBeVisible()
+      await expect(page.getByRole("option", { name: "Playful note", exact: true })).toBeVisible()
+      await expect(page.getByRole("option", { name: duplicate.name, exact: true })).toBeVisible()
+    } finally {
+      expect(
+        (await request.delete(`/api/projects/${closedProjectId}/layouts/${duplicate.id}`)).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: {
+              mode: "cycle",
+              seed: "demo-seed",
+              manualAssignments: {},
+              resolutionOverrides: [],
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
