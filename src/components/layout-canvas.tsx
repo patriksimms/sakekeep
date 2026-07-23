@@ -2,7 +2,13 @@ import { Canvas, Circle, FabricImage, FabricObject, Line, Rect, Textbox } from "
 import { useEffect, useRef, type RefObject } from "react"
 
 import { PAGE_SPEC } from "#/domain/layout.ts"
-import { type LayoutElement, type LayoutSchema, type RelativeGeometry } from "#/domain/types.ts"
+import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
+import {
+  type FormQuestion,
+  type LayoutElement,
+  type LayoutSchema,
+  type RelativeGeometry,
+} from "#/domain/types.ts"
 
 type SakekeepObject = FabricObject & { sakekeepElementId?: string }
 
@@ -51,7 +57,8 @@ function elementName(element: LayoutElement) {
 
 async function objectForElement(
   element: LayoutElement,
-  canvasWidth: number
+  canvasWidth: number,
+  questions: FormQuestion[]
 ): Promise<SakekeepObject> {
   const geometry = canonicalToCanvasGeometry(element.geometry, canvasWidth)
   const common = {
@@ -71,9 +78,7 @@ async function objectForElement(
     const content =
       element.type === "static-text"
         ? element.content
-        : element.showLabel
-          ? `${element.label || "Question"}\nAnswer preview`
-          : "Answer preview"
+        : boundQuestionPlaceholder(questions, element.questionId)
     const scale = canvasWidth / PAGE_SPEC.mediaWidthMm
     object = new Textbox(content, {
       ...common,
@@ -86,6 +91,7 @@ async function objectForElement(
       textAlign: element.text.alignment,
       lineHeight: element.text.lineHeight,
       fill: element.text.color,
+      editable: element.type === "static-text",
     })
   } else if (element.type === "rectangle") {
     object = new Rect({
@@ -168,6 +174,7 @@ function geometryFromObject(object: FabricObject, canvasWidth: number): Relative
 
 export function LayoutCanvas({
   schema,
+  questions,
   width,
   selectedId,
   onSelect,
@@ -175,6 +182,7 @@ export function LayoutCanvas({
   canvasRef,
 }: {
   schema: LayoutSchema
+  questions: FormQuestion[]
   width: number
   selectedId: string | null
   onSelect: (id: string | null) => void
@@ -245,7 +253,7 @@ export function LayoutCanvas({
     let cancelled = false
     const render = async () => {
       const objects = await Promise.all(
-        schema.elements.map((item) => objectForElement(item, width))
+        schema.elements.map((item) => objectForElement(item, width, questions))
       )
       if (cancelled) return
       canvas.clear()
@@ -261,7 +269,7 @@ export function LayoutCanvas({
     return () => {
       cancelled = true
     }
-  }, [schema, selectedId, width])
+  }, [questions, schema, selectedId, width])
 
   return (
     <div

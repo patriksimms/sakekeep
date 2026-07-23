@@ -67,6 +67,7 @@ import { Separator } from "#/components/ui/separator.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
+import { layoutQuestionPalette, questionPrompt } from "#/domain/layout-question-palette.ts"
 import {
   type FormQuestion,
   type LayoutElement,
@@ -314,16 +315,12 @@ function ElementInspector({
       ...element,
       geometry: { ...element.geometry, [key]: value },
     })
-  const compatibleQuestions =
-    element.type === "image-frame" || element.type === "gallery-frame"
-      ? questions.filter((question) => question.type === "images")
-      : questions.filter(
-          (question) =>
-            question.type === "single-line" ||
-            question.type === "multiline" ||
-            question.type === "radio" ||
-            question.type === "checkboxes"
-        )
+  const boundQuestion =
+    element.type === "bound-text" ||
+    element.type === "image-frame" ||
+    element.type === "gallery-frame"
+      ? questions.find((question) => question.id === element.questionId)
+      : undefined
 
   return (
     <div className="flex flex-col gap-5">
@@ -385,25 +382,13 @@ function ElementInspector({
           <Separator />
           <Field>
             <FieldLabel>Question binding</FieldLabel>
-            <Select
-              value={element.questionId}
-              onValueChange={(questionId) => {
-                if (questionId) onChange({ ...element, questionId })
-              }}
+            <p
+              aria-label="Question binding"
+              className="rounded-lg border bg-muted/45 px-3 py-2 text-sm"
             >
-              <SelectTrigger className="w-full" aria-label="Question binding">
-                <SelectValue placeholder="Choose a question" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {compatibleQuestions.map((question) => (
-                    <SelectItem key={question.id} value={question.id}>
-                      {question.prompt || "Untitled question"}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              {questionPrompt(boundQuestion)}
+            </p>
+            <FieldDescription>Frozen with the published questionnaire.</FieldDescription>
           </Field>
         </>
       )}
@@ -680,22 +665,11 @@ function Editor({
   }
 
   const selected = schema.elements.find((element) => element.id === selectedId)
-  const textQuestion = project.formSchema.questions.find(
-    (question) =>
-      question.type === "single-line" ||
-      question.type === "multiline" ||
-      question.type === "radio" ||
-      question.type === "checkboxes"
-  )
-  const imageQuestion = project.formSchema.questions.find((question) => question.type === "images")
+  const questionPalette = layoutQuestionPalette(project.formSchema.questions)
 
-  const add = (type: LayoutElement["type"]) => {
-    const binding =
-      type === "image-frame" || type === "gallery-frame" ? imageQuestion?.id : textQuestion?.id
-    let next = addElement(schema, type, binding)
+  const add = (type: LayoutElement["type"], questionId?: string) => {
+    const next = addElement(schema, type, questionId)
     const added = next.elements.at(-1)!
-    if (type === "bound-text" && !binding) return
-    if ((type === "image-frame" || type === "gallery-frame") && !binding) return
     markChanged(next)
     setSelectedId(added.id)
   }
@@ -779,101 +753,109 @@ function Editor({
 
       <div className="min-w-0">
         <Card className="mb-4 bg-card/90">
-          <CardContent className="flex flex-wrap items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => add("bound-text")}
-              disabled={!textQuestion}
-            >
-              <TypeIcon data-icon="inline-start" />
-              Answer text
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => add("static-text")}>
-              <TypeIcon data-icon="inline-start" />
-              Static text
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => add("image-frame")}
-              disabled={!imageQuestion}
-            >
-              <ImageIcon data-icon="inline-start" />
-              Image
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => add("gallery-frame")}
-              disabled={!imageQuestion}
-            >
-              <GalleryHorizontalIcon data-icon="inline-start" />
-              Gallery
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => add("rectangle")}
-              aria-label="Add rectangle"
-            >
-              <RectangleHorizontalIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => add("circle")}
-              aria-label="Add circle"
-            >
-              <CircleIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => add("line")}
-              aria-label="Add line"
-            >
-              <MinusIcon />
-            </Button>
-            <label className="inline-flex">
-              <input
-                type="file"
-                className="sr-only"
-                accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
-                onChange={uploadDecorative}
-              />
-              <span className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50">
-                <ImagePlusIcon aria-hidden="true" />
-                Decor
-              </span>
-            </label>
-            <Separator orientation="vertical" className="mx-1 h-6" />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Undo"
-              disabled={historyIndex.current <= 0}
-              onClick={() => {
-                if (historyIndex.current <= 0) return
-                historyIndex.current -= 1
-                markChanged(structuredClone(history.current[historyIndex.current]!), false)
-              }}
-            >
-              <Undo2Icon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Redo"
-              disabled={historyIndex.current >= history.current.length - 1}
-              onClick={() => {
-                if (historyIndex.current >= history.current.length - 1) return
-                historyIndex.current += 1
-                markChanged(structuredClone(history.current[historyIndex.current]!), false)
-              }}
-            >
-              <Redo2Icon />
-            </Button>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {questionPalette.map((item) => (
+                <div
+                  key={item.questionId}
+                  className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/70 p-2"
+                >
+                  <span className="min-w-0 truncate text-sm font-medium" title={item.prompt}>
+                    {item.prompt}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
+                    {item.actions.map((action) => (
+                      <Button
+                        key={action.elementType}
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
+                        onClick={() => add(action.elementType, item.questionId)}
+                      >
+                        {action.elementType === "bound-text" ? (
+                          <TypeIcon data-icon="inline-start" />
+                        ) : action.elementType === "image-frame" ? (
+                          <ImageIcon data-icon="inline-start" />
+                        ) : (
+                          <GalleryHorizontalIcon data-icon="inline-start" />
+                        )}
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Separator />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => add("static-text")}>
+                <TypeIcon data-icon="inline-start" />
+                Static text
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => add("rectangle")}
+                aria-label="Add rectangle"
+              >
+                <RectangleHorizontalIcon />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => add("circle")}
+                aria-label="Add circle"
+              >
+                <CircleIcon />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => add("line")}
+                aria-label="Add line"
+              >
+                <MinusIcon />
+              </Button>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  className="sr-only"
+                  accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
+                  onChange={uploadDecorative}
+                />
+                <span className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50">
+                  <ImagePlusIcon aria-hidden="true" />
+                  Decor
+                </span>
+              </label>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Undo"
+                disabled={historyIndex.current <= 0}
+                onClick={() => {
+                  if (historyIndex.current <= 0) return
+                  historyIndex.current -= 1
+                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                }}
+              >
+                <Undo2Icon />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Redo"
+                disabled={historyIndex.current >= history.current.length - 1}
+                onClick={() => {
+                  if (historyIndex.current >= history.current.length - 1) return
+                  historyIndex.current += 1
+                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                }}
+              >
+                <Redo2Icon />
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -975,6 +957,7 @@ function Editor({
         >
           <LayoutCanvas
             schema={schema}
+            questions={project.formSchema.questions}
             width={canvasWidth}
             selectedId={selectedId}
             onSelect={setSelectedId}

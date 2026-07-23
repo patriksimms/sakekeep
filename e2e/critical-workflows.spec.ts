@@ -150,24 +150,102 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
-      "Answer text",
+      "Add text for What should we call you in the book?",
+      "Add text for Which memory still makes you smile?",
+      "Add text for What is Lea’s secret superpower?",
+      "Add text for What should the next chapter include?",
+      "Add image for Add one or two favourite photos",
+      "Add gallery for Add one or two favourite photos",
       "Static text",
-      "Image",
-      "Gallery",
       "Add rectangle",
       "Add circle",
       "Add line",
     ]) {
-      await expect(page.getByRole("button", { name })).toBeVisible()
+      await expect(page.getByRole("button", { name, exact: true })).toBeVisible()
     }
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await expect(page.getByRole("button", { name: "Answer text", exact: true })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Image", exact: true })).toHaveCount(0)
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     await expect(page.getByText("Question binding")).toBeVisible()
+    await expect(page.getByLabel("Question binding")).toHaveText(
+      "Which memory still makes you smile?"
+    )
+    await expect(page.getByRole("combobox", { name: "Question binding" })).toHaveCount(0)
     await expect(page.getByText("Font family")).toBeVisible()
     await page.screenshot({
       path: resolve(screenshots, "layout-editor-tablet.png"),
       fullPage: true,
     })
     await expectAccessible(page)
+  })
+
+  test("question palette inserts exact read-only bindings and keeps static text editable", async ({
+    page,
+    request,
+  }) => {
+    const created = await request.post(`/api/projects/${closedProjectId}/duplicate`)
+    const projectId = ((await created.json()) as { id: string }).id
+    await request.post(`/api/projects/${projectId}/publish`)
+    await request.post(`/api/projects/${projectId}/close`)
+
+    const latestElement = async () => {
+      const response = await request.get(`/api/projects/${projectId}`)
+      const project = (await response.json()) as {
+        layouts: Array<{
+          name: string
+          schema: { elements: Array<{ type: string; questionId?: string }> }
+        }>
+      }
+      return project.layouts.find((layout) => layout.name === "Warm quote")!.schema.elements.at(-1)
+    }
+
+    try {
+      await page.setViewportSize({ width: 1365, height: 900 })
+      await page.goto(`/projects/${projectId}?tab=layouts`)
+
+      const addMemory = page.getByRole("button", {
+        name: "Add text for Which memory still makes you smile?",
+      })
+      await addMemory.focus()
+      await page.keyboard.press("Enter")
+      await expect(page.getByLabel("Question binding")).toHaveText(
+        "Which memory still makes you smile?"
+      )
+      await expect(page.getByRole("combobox", { name: "Question binding" })).toHaveCount(0)
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+      expect(await latestElement()).toMatchObject({ type: "bound-text", questionId: "memory" })
+
+      const upperCanvas = page.locator("canvas.upper-canvas")
+      await upperCanvas.dblclick({ position: { x: 100, y: 80 } })
+      expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("TEXTAREA")
+
+      await page
+        .getByRole("button", { name: "Add image for Add one or two favourite photos" })
+        .click()
+      await expect(page.getByLabel("Question binding")).toHaveText(
+        "Add one or two favourite photos"
+      )
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+      expect(await latestElement()).toMatchObject({ type: "image-frame", questionId: "photos" })
+
+      await page
+        .getByRole("button", { name: "Add gallery for Add one or two favourite photos" })
+        .click()
+      await expect(page.getByLabel("Question binding")).toHaveText(
+        "Add one or two favourite photos"
+      )
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+      expect(await latestElement()).toMatchObject({ type: "gallery-frame", questionId: "photos" })
+
+      await page.getByRole("button", { name: "Static text", exact: true }).click()
+      await expect(page.getByLabel("Content")).toBeEditable()
+      await page.getByLabel("Content").fill("An editable static note")
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+    } finally {
+      await request.delete(`/api/projects/${projectId}`)
+    }
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
