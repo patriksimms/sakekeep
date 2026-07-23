@@ -1172,7 +1172,7 @@ export function LayoutsPanel({
                 }}
               >
                 <CopyIcon data-icon="inline-start" />
-                Duplicate
+                Duplicate layout
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger render={<Button variant="outline" />}>

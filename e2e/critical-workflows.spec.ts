@@ -137,7 +137,10 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
-  test("layout editor works at tablet size and canonical tools are present", async ({ page }) => {
+  test("layout editor works at tablet size and canonical tools are present", async ({
+    page,
+    request,
+  }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.goto(`/projects/${closedProjectId}`)
     await page.getByRole("tab", { name: "3. Layouts" }).click()
@@ -148,6 +151,7 @@ test.describe.serial("critical local prototype workflows", () => {
     await page.getByRole("option", { name: "Playful note" }).click()
     await expect(layoutSelect).toContainText("Playful note")
     await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
+    await expect(page.getByRole("button", { name: "Duplicate layout" })).toBeVisible()
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
       "Answer text",
@@ -161,6 +165,7 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
     await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await expect(page.getByRole("button", { name: "Duplicate selected element" })).toBeVisible()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
     await page.screenshot({
@@ -168,6 +173,42 @@ test.describe.serial("critical local prototype workflows", () => {
       fullPage: true,
     })
     await expectAccessible(page)
+
+    const duplicateResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/${closedProjectId}/layouts`) &&
+        response.request().method() === "POST"
+    )
+    await page.getByRole("button", { name: "Duplicate layout" }).click()
+    const response = await duplicateResponse
+    expect(response.status()).toBe(201)
+    const duplicate = (await response.json()) as { id: string; name: string }
+
+    try {
+      await expect(page.getByText("3 layouts")).toBeVisible()
+      await expect(page.getByLabel("Layout name")).toHaveValue(duplicate.name)
+      await page.getByRole("combobox", { name: "Choose a layout" }).click()
+      await expect(page.getByRole("option")).toHaveCount(3)
+      await expect(page.getByRole("option", { name: "Warm quote", exact: true })).toBeVisible()
+      await expect(page.getByRole("option", { name: "Playful note", exact: true })).toBeVisible()
+      await expect(page.getByRole("option", { name: duplicate.name, exact: true })).toBeVisible()
+    } finally {
+      expect(
+        (await request.delete(`/api/projects/${closedProjectId}/layouts/${duplicate.id}`)).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: {
+              mode: "cycle",
+              seed: "demo-seed",
+              manualAssignments: {},
+              resolutionOverrides: [],
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
