@@ -741,6 +741,10 @@ export function BookReview({
                   </CardHeader>
                   <CardContent>
                     <Select
+                      items={project.layouts.map((layout) => ({
+                        label: layout.name,
+                        value: layout.id,
+                      }))}
                       value={selected.layoutId}
                       onValueChange={async (layoutId) => {
                         const manualAssignments = {
