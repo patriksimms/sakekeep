@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu.tsx"
+import { isDemoMode } from "#/lib/demo-mode.ts"
 
 export function AppHeader() {
   const { theme, setTheme } = useTheme()
@@ -28,22 +29,30 @@ export function AppHeader() {
           Sakekeep
         </Link>
         <nav aria-label="Primary" className="flex items-center gap-2">
-          <Show when="signed-in">
+          {isDemoMode ? (
             <Link to="/projects" className={buttonVariants({ variant: "ghost" })}>
               Projects
             </Link>
-          </Show>
-          <Show when="signed-out">
-            <SignInButton mode="modal">
-              <Button variant="ghost">Sign in</Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-              <Button>Sign up</Button>
-            </SignUpButton>
-          </Show>
-          <Show when="signed-in">
-            <UserButton />
-          </Show>
+          ) : (
+            <>
+              <Show when="signed-in">
+                <Link to="/projects" className={buttonVariants({ variant: "ghost" })}>
+                  Projects
+                </Link>
+              </Show>
+              <Show when="signed-out">
+                <SignInButton mode="modal">
+                  <Button variant="ghost">Sign in</Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button>Sign up</Button>
+                </SignUpButton>
+              </Show>
+              <Show when="signed-in">
+                <UserButton />
+              </Show>
+            </>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button variant="outline" size="icon" aria-label={`Theme: ${theme}`} />}
