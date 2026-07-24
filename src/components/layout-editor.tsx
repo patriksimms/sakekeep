@@ -779,7 +779,8 @@ function Editor({
 
   return (
     <div
-      className="grid min-h-[700px] gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]"
+      aria-label="Layout editor workspace"
+      className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]"
       onKeyDown={(event) => {
         const activeObject = canvas.current?.getActiveObject() as
           | { isEditing?: boolean }
@@ -794,13 +795,16 @@ function Editor({
         deleteSelected()
       }}
     >
-      <Card className="h-fit bg-card/90 xl:sticky xl:top-20">
+      <Card
+        aria-label="Layers"
+        className="h-48 bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+      >
         <CardHeader>
           <CardTitle>Layers</CardTitle>
           <CardDescription>Topmost first</CardDescription>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-72 xl:max-h-[580px]">
+        <CardContent className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
             <div className="flex flex-col gap-1 pr-2">
               {[...schema.elements].reverse().map((element) => (
                 <Button
@@ -936,9 +940,10 @@ function Editor({
           </CardContent>
         </Card>
 
-        {selected && (
-          <Card className="mb-4 bg-card/90">
-            <CardContent className="flex flex-wrap items-center gap-1">
+        <Card aria-label="Selection tools" className="mb-4 bg-card/90">
+          <CardContent className="flex min-h-8 flex-wrap items-center gap-1">
+            {selected ? (
+              <>
               <IconAction label="Align horizontal centre">
                 <Button
                   size="icon-sm"
@@ -1054,9 +1059,14 @@ function Editor({
                   <Trash2Icon />
                 </Button>
               </IconAction>
-            </CardContent>
-          </Card>
-        )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Select an element to use alignment and layer actions.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         <div
           ref={container}
@@ -1074,15 +1084,18 @@ function Editor({
         </div>
       </div>
 
-      <Card className="h-fit bg-card/90 xl:sticky xl:top-20">
+      <Card
+        aria-label="Inspector"
+        className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+      >
         <CardHeader>
           <CardTitle>Inspector</CardTitle>
           <CardAction>
             <SaveIndicator state={saveState} />
           </CardAction>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-[650px] pr-3">
+        <CardContent className="min-h-0 flex-1">
+          <ScrollArea className="h-full pr-3">
             <FieldGroup>
               <Field>
                 <FieldLabel>Layout name</FieldLabel>

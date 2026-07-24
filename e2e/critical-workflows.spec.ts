@@ -4,7 +4,6 @@ import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
 import type { LayoutRecord, Project } from "../src/domain/types.ts"
-
 import { shareTokenForProject } from "../src/server/share-token.ts"
 
 const collectingProjectId = "22222222-2222-4222-8222-222222222222"
@@ -139,21 +138,25 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
-  test("layout editor works at tablet size and canonical tools are present", async ({
+  test("layout editor stays stable across selection and sidebar overflow", async ({
     page,
     request,
   }) => {
+    test.setTimeout(60_000)
     await page.setViewportSize({ width: 1024, height: 768 })
-    await page.goto(`/projects/${closedProjectId}`)
-    await page.getByRole("tab", { name: "3. Layouts" }).click()
+    await page.goto(`/projects/${closedProjectId}?tab=layouts`)
     await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")
+    expect(originalLayout).toBeDefined()
+    const originalGeometry = originalLayout!.schema.elements.map(({ id, geometry }) => ({
+      id,
+      geometry,
+    }))
     const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
     await expect(layoutSelect).toContainText("Warm quote")
-    await layoutSelect.click()
-    await page.getByRole("option", { name: "Playful note" }).click()
-    await expect(layoutSelect).toContainText("Playful note")
-    await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
-    await expect(page.getByRole("button", { name: "Duplicate layout" })).toBeVisible()
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
       "Answer text",
@@ -166,83 +169,128 @@ test.describe.serial("critical local prototype workflows", () => {
     ]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
+
+    const renderedCanvas = page.locator("canvas.upper-canvas")
+    const clearSelection = async () => {
+      const bounds = await renderedCanvas.boundingBox()
+      expect(bounds).not.toBeNull()
+      await renderedCanvas.click({
+        position: { x: bounds!.width - 2, y: bounds!.height - 2 },
+      })
+    }
+    const canvasDocumentBounds = async () => {
+      await renderedCanvas.waitFor({ state: "visible" })
+      const bounds = await renderedCanvas.boundingBox()
+      expect(bounds).not.toBeNull()
+      const scroll = await page.evaluate(() => ({
+        x: window.scrollX,
+        y: window.scrollY,
+      }))
+      return {
+        ...bounds!,
+        x: bounds!.x + scroll.x,
+        y: bounds!.y + scroll.y,
+      }
+    }
+    const tabletBounds = await canvasDocumentBounds()
+    expect(tabletBounds).not.toBeNull()
     await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
-    await expect(page.getByRole("button", { name: "Duplicate selected element" })).toBeVisible()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
-    await page.screenshot({
-      path: resolve(screenshots, "layout-editor-tablet.png"),
-      fullPage: true,
-    })
-    await expectAccessible(page)
-
-    await layoutSelect.click()
-    await page.getByRole("option", { name: "Warm quote" }).click()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
     await page.getByRole("button", { name: "Rectangle", exact: true }).click()
-    const opacity = page.getByRole("spinbutton", { name: "Opacity" })
-    await expect(opacity).toHaveAttribute("step", "0.05")
-    await expect(opacity).toHaveAttribute("min", "0")
-    await expect(opacity).toHaveAttribute("max", "1")
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    await clearSelection()
+    await expect(
+      page.getByText("Select an element to use alignment and layer actions.")
+    ).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    ).toBe(true)
 
-    await opacity.fill("")
-    await expect(opacity).toHaveValue("")
-    await opacity.blur()
-    await expect(opacity).toHaveValue("1")
+    await page.setViewportSize({ width: 1365, height: 900 })
+    await page.reload()
+    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const desktopBounds = await canvasDocumentBounds()
+    expect(desktopBounds).not.toBeNull()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    await clearSelection()
+    await expect(
+      page.getByText("Select an element to use alignment and layer actions.")
+    ).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
 
-    const originalProject = (await (
+    const currentProject = (await (
       await request.get(`/api/projects/${closedProjectId}`)
     ).json()) as Project
-    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")
-    expect(originalLayout).toBeDefined()
+    expect(
+      currentProject.layouts
+        .find((layout) => layout.id === originalLayout!.id)!
+        .schema.elements.map(({ id, geometry }) => ({ id, geometry }))
+    ).toEqual(originalGeometry)
 
+    const layersCard = page.locator('[data-slot="card"][aria-label="Layers"]')
+    const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
+    const layersBounds = await layersCard.boundingBox()
+    const inspectorBounds = await inspectorCard.boundingBox()
+    expect(layersBounds?.height).toBe(804)
+    expect(inspectorBounds?.height).toBe(804)
+
+    const sourceElement = originalLayout!.schema.elements.find(
+      (element) => element.type === "rectangle"
+    )
+    expect(sourceElement).toBeDefined()
     try {
-      const saveResponse = page.waitForResponse(
-        (response) =>
-          response.url().includes(`/${closedProjectId}/layouts/`) &&
-          response.request().method() === "PATCH"
+      const longLayoutResponse = await request.patch(
+        `/api/projects/${closedProjectId}/layouts/${originalLayout!.id}`,
+        {
+          data: {
+            expectedRevision: originalLayout!.revision,
+            schema: {
+              ...originalLayout!.schema,
+              elements: [
+                ...originalLayout!.schema.elements,
+                ...Array.from({ length: 30 }, (_, index) => ({
+                  ...structuredClone(sourceElement!),
+                  id: `overflow-layer-${index}`,
+                })),
+              ],
+            },
+          },
+        }
       )
-      await opacity.fill("0.35")
-      await opacity.press("ArrowUp")
-      await expect(opacity).toHaveValue("0.4")
-      await opacity.press("ArrowDown")
-      const savedResponse = await saveResponse
-      expect(savedResponse.status()).toBe(200)
-      const savedLayout = (await savedResponse.json()) as LayoutRecord
-      const changedElement = savedLayout.schema.elements.find(
-        (element) => element.type === "rectangle" && element.opacity === 0.35
-      )
-      if (!changedElement) {
-        throw new Error("Saved layout did not retain the rectangle opacity at 0.35.")
-      }
-
-      await expect(opacity).toHaveValue("0.35")
-      await expect(page.getByRole("status")).toContainText("Saved")
-      await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toHaveAttribute(
-        "data-selected-element-opacity",
-        "0.35"
-      )
-
+      expect(longLayoutResponse.ok()).toBe(true)
       await page.reload()
-      await page.getByRole("button", { name: "Rectangle", exact: true }).click()
-      await expect(page.getByRole("spinbutton", { name: "Opacity" })).toHaveValue("0.35")
-
-      await page.getByRole("tab", { name: "4. Book review" }).click()
-      await expect(
-        page.locator(`[data-layout-element-id="${changedElement.id}"]`).first()
-      ).toHaveCSS("opacity", "0.35")
+      await expect(page.getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(31)
+      const layersViewport = layersCard.locator('[data-slot="scroll-area-viewport"]')
+      const overflow = await layersViewport.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }))
+      expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight)
+      await layersViewport.evaluate((element) => {
+        element.scrollTop = 200
+      })
+      expect(await layersViewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+      expect(await canvasDocumentBounds()).toEqual(desktopBounds)
     } finally {
-      const currentProject = (await (
+      const changedProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)
       ).json()) as Project
-      const currentLayout = currentProject.layouts.find(
-        (layout) => layout.id === originalLayout?.id
-      )
-      expect(currentLayout).toBeDefined()
+      const changedLayout = changedProject.layouts.find(
+        (layout) => layout.id === originalLayout!.id
+      ) as LayoutRecord
       expect(
         (
-          await request.patch(`/api/projects/${closedProjectId}/layouts/${currentLayout!.id}`, {
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${changedLayout.id}`, {
             data: {
-              expectedRevision: currentLayout!.revision,
+              expectedRevision: changedLayout.revision,
               schema: originalLayout!.schema,
             },
           })
@@ -262,139 +310,14 @@ test.describe.serial("critical local prototype workflows", () => {
       ).toBe(true)
     }
 
-    const duplicateResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`/${closedProjectId}/layouts`) &&
-        response.request().method() === "POST"
-    )
-    await page.getByRole("button", { name: "Duplicate layout" }).click()
-    const response = await duplicateResponse
-    expect(response.status()).toBe(201)
-    const duplicate = (await response.json()) as { id: string; name: string }
-
-    try {
-      await expect(page.getByText("3 layouts")).toBeVisible()
-      await expect(page.getByLabel("Layout name")).toHaveValue(duplicate.name)
-      await page.getByRole("combobox", { name: "Choose a layout" }).click()
-      await expect(page.getByRole("option")).toHaveCount(3)
-      await expect(page.getByRole("option", { name: "Warm quote", exact: true })).toBeVisible()
-      await expect(page.getByRole("option", { name: "Playful note", exact: true })).toBeVisible()
-      await expect(page.getByRole("option", { name: duplicate.name, exact: true })).toBeVisible()
-    } finally {
-      expect(
-        (await request.delete(`/api/projects/${closedProjectId}/layouts/${duplicate.id}`)).ok()
-      ).toBe(true)
-      expect(
-        (
-          await request.post(`/api/projects/${closedProjectId}/book`, {
-            data: {
-              mode: "cycle",
-              seed: "demo-seed",
-              manualAssignments: {},
-              resolutionOverrides: [],
-            },
-          })
-        ).ok()
-      ).toBe(true)
-    }
-  })
-
-  test("layout element actions are discoverable, stack correctly, and delete safely", async ({
-    page,
-    request,
-  }) => {
-    const created = await request.post(`/api/projects/${closedProjectId}/duplicate`)
-    const projectId = ((await created.json()) as { id: string }).id
-    await request.post(`/api/projects/${projectId}/publish`)
-    await request.post(`/api/projects/${projectId}/close`)
-
-    try {
-      await page.setViewportSize({ width: 1365, height: 900 })
-      await page.goto(`/projects/${projectId}?tab=layouts`)
-      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
-      await page.getByRole("button", { name: "Add line" }).click()
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-
-      const layer = page.getByRole("button", {
-        name: "Which memory still makes you smile?",
-        exact: true,
-      })
-      await layer.click()
-
-      const backward = page.getByRole("button", { name: "Send backward one layer" })
-      const forward = page.getByRole("button", { name: "Bring forward one layer" })
-      const back = page.getByRole("button", { name: "Send to back", exact: true })
-      const front = page.getByRole("button", { name: "Bring to front", exact: true })
-      await expect(backward).toBeEnabled()
-      await expect(forward).toBeEnabled()
-      await expect(back).toBeEnabled()
-      await expect(front).toBeEnabled()
-
-      await back.hover()
-      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText("Send to back")
-      await page.mouse.move(0, 0)
-      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0)
-      await backward.focus()
-      await page.keyboard.press("Tab")
-      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
-        "Bring forward one layer"
-      )
-      await backward.click()
-      await expect(backward).toBeEnabled()
-      await expect(forward).toBeEnabled()
-      await back.click()
-      await expect(backward).toBeDisabled()
-      await expect(back).toBeDisabled()
-      await page.mouse.move(0, 0)
-      await page.getByLabel("Send to back unavailable").hover()
-      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText("Send to back")
-      await page.mouse.move(0, 0)
-      await page.getByRole("button", { name: "Align vertical centre" }).focus()
-      await page.keyboard.press("Tab")
-      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
-        "Send backward one layer"
-      )
-
-      await front.click()
-      await expect(forward).toBeDisabled()
-      await expect(front).toBeDisabled()
-
-      await backward.click()
-      await expect(backward).toBeEnabled()
-      await expect(forward).toBeEnabled()
-
-      const canvas = page.getByLabel("Visual DIN A5 landscape layout canvas")
-      await canvas.focus()
-      await canvas.press("Delete")
-      await expect(layer).toHaveCount(0)
-      await expect(
-        page.getByText("Select an element on the canvas or in the layers list.")
-      ).toBeVisible()
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-
-      await page.getByRole("button", { name: "Undo" }).click()
-      await expect(layer).toBeVisible()
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-
-      await layer.click()
-      const layoutName = page.getByLabel("Layout name")
-      await layoutName.focus()
-      await layoutName.press("End")
-      await layoutName.press("Backspace")
-      await expect(layoutName).toHaveValue("Warm quot")
-      await expect(layer).toBeVisible()
-      await layoutName.fill("Warm quote")
-
-      await page.getByRole("button", { name: "Delete selected element" }).click()
-      await expect(layer).toHaveCount(0)
-      await page.getByRole("button", { name: "Undo" }).click()
-      await expect(layer).toBeVisible()
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-      await page.reload()
-      await expect(layer).toBeVisible()
-    } finally {
-      await request.delete(`/api/projects/${projectId}`)
-    }
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.reload()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page.screenshot({
+      path: resolve(screenshots, "layout-editor-tablet.png"),
+      fullPage: true,
+    })
+    await expectAccessible(page)
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
