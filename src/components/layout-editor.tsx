@@ -970,7 +970,10 @@ function Editor({
                   <Undo2Icon />
                 </Button>
               </IconAction>
-              <IconAction label="Redo" disabled={historyIndex.current >= history.current.length - 1}>
+              <IconAction
+                label="Redo"
+                disabled={historyIndex.current >= history.current.length - 1}
+              >
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -993,121 +996,121 @@ function Editor({
           <CardContent className="flex min-h-8 flex-wrap items-center gap-1">
             {selected ? (
               <>
-              <IconAction label="Align horizontal centre">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Align horizontal centre"
-                  onClick={() =>
-                    changeSelected({
-                      ...selected,
-                      geometry: {
-                        ...selected.geometry,
-                        x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
-                      },
-                    })
-                  }
-                >
-                  <AlignCenterHorizontalIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Align vertical centre">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Align vertical centre"
-                  onClick={() =>
-                    changeSelected({
-                      ...selected,
-                      geometry: {
-                        ...selected.geometry,
-                        y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
-                      },
-                    })
-                  }
-                >
-                  <AlignCenterVerticalIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Send backward one layer" disabled={isBackmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Send backward one layer"
-                  disabled={isBackmost}
-                  onClick={() => moveLayer("backward")}
-                >
-                  <ArrowDownIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Bring forward one layer" disabled={isFrontmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Bring forward one layer"
-                  disabled={isFrontmost}
-                  onClick={() => moveLayer("forward")}
-                >
-                  <ArrowUpIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Send to back" disabled={isBackmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Send to back"
-                  disabled={isBackmost}
-                  onClick={() => moveLayer("back")}
-                >
-                  <SendToBackIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Bring to front" disabled={isFrontmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Bring to front"
-                  disabled={isFrontmost}
-                  onClick={() => moveLayer("front")}
-                >
-                  <BringToFrontIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Duplicate selected element">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Duplicate selected element"
-                  onClick={() => {
-                    const duplicate = {
-                      ...structuredClone(selected),
-                      id: crypto.randomUUID(),
-                      geometry: {
-                        ...selected.geometry,
-                        x: selected.geometry.x + 4,
-                        y: selected.geometry.y + 4,
-                      },
+                <IconAction label="Align horizontal centre">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Align horizontal centre"
+                    onClick={() =>
+                      changeSelected({
+                        ...selected,
+                        geometry: {
+                          ...selected.geometry,
+                          x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
+                        },
+                      })
                     }
-                    markChanged({
-                      ...schema,
-                      elements: [...schema.elements, duplicate],
-                    })
-                    setSelectedId(duplicate.id)
-                  }}
-                >
-                  <CopyIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Delete selected element">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Delete selected element"
-                  onClick={deleteSelected}
-                >
-                  <Trash2Icon />
-                </Button>
-              </IconAction>
+                  >
+                    <AlignCenterHorizontalIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Align vertical centre">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Align vertical centre"
+                    onClick={() =>
+                      changeSelected({
+                        ...selected,
+                        geometry: {
+                          ...selected.geometry,
+                          y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
+                        },
+                      })
+                    }
+                  >
+                    <AlignCenterVerticalIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Send backward one layer" disabled={isBackmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Send backward one layer"
+                    disabled={isBackmost}
+                    onClick={() => moveLayer("backward")}
+                  >
+                    <ArrowDownIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Bring forward one layer" disabled={isFrontmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Bring forward one layer"
+                    disabled={isFrontmost}
+                    onClick={() => moveLayer("forward")}
+                  >
+                    <ArrowUpIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Send to back" disabled={isBackmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Send to back"
+                    disabled={isBackmost}
+                    onClick={() => moveLayer("back")}
+                  >
+                    <SendToBackIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Bring to front" disabled={isFrontmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Bring to front"
+                    disabled={isFrontmost}
+                    onClick={() => moveLayer("front")}
+                  >
+                    <BringToFrontIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Duplicate selected element">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Duplicate selected element"
+                    onClick={() => {
+                      const duplicate = {
+                        ...structuredClone(selected),
+                        id: crypto.randomUUID(),
+                        geometry: {
+                          ...selected.geometry,
+                          x: selected.geometry.x + 4,
+                          y: selected.geometry.y + 4,
+                        },
+                      }
+                      markChanged({
+                        ...schema,
+                        elements: [...schema.elements, duplicate],
+                      })
+                      setSelectedId(duplicate.id)
+                    }}
+                  >
+                    <CopyIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Delete selected element">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Delete selected element"
+                    onClick={deleteSelected}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </IconAction>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
