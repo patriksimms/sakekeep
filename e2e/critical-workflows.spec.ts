@@ -189,7 +189,9 @@ test.describe.serial("critical local prototype workflows", () => {
     }
     const tabletBounds = await canvasDocumentBounds()
     expect(tabletBounds).not.toBeNull()
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
@@ -211,7 +213,9 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
     const desktopBounds = await canvasDocumentBounds()
     expect(desktopBounds).not.toBeNull()
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
     await page.getByRole("button", { name: "Rectangle", exact: true }).click()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
@@ -307,7 +311,9 @@ test.describe.serial("critical local prototype workflows", () => {
 
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.reload()
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     await page.screenshot({
       path: resolve(screenshots, "layout-editor-tablet.png"),
       fullPage: true,
