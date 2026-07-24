@@ -9,6 +9,7 @@ import {
   CircleIcon,
   CopyIcon,
   GalleryHorizontalIcon,
+  GripVerticalIcon,
   ImageIcon,
   ImagePlusIcon,
   LayersIcon,
@@ -33,6 +34,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
   type ReactElement,
 } from "react"
 import { toast } from "sonner"
@@ -80,6 +82,7 @@ import {
   moveElementLayer,
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
+import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
 import {
   type FormQuestion,
@@ -596,6 +599,8 @@ function Editor({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("saved")
   const [canvasWidth, setCanvasWidth] = useState(700)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; edge: DropEdge } | null>(null)
   const container = useRef<HTMLDivElement>(null)
   const canvas = useRef<Canvas | null>(null)
   const history = useRef<LayoutSchema[]>([layout.schema])
@@ -754,6 +759,40 @@ function Editor({
   const isBackmost = selectedIndex <= 0
   const isFrontmost = selectedIndex === schema.elements.length - 1
 
+  const resetDrag = () => {
+    setDraggedId(null)
+    setDropTarget(null)
+  }
+
+  const dragOverLayer = (event: DragEvent<HTMLDivElement>, targetId: string) => {
+    if (!draggedId || draggedId === targetId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const edge: DropEdge = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after"
+    setDropTarget((current) =>
+      current?.id === targetId && current.edge === edge ? current : { id: targetId, edge }
+    )
+  }
+
+  const dropLayer = (event: DragEvent<HTMLDivElement>, targetId: string) => {
+    event.preventDefault()
+    const sourceId = draggedId ?? event.dataTransfer.getData("text/plain")
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const edge =
+      dropTarget?.id === targetId
+        ? dropTarget.edge
+        : event.clientY < bounds.top + bounds.height / 2
+          ? "before"
+          : "after"
+    const elements = reorderElementsFromTopmostList(schema.elements, sourceId, targetId, edge)
+    if (elements !== schema.elements) {
+      markChanged({ ...schema, elements })
+      setSelectedId(sourceId)
+    }
+    resetDrag()
+  }
+
   const uploadDecorative = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ""
@@ -806,20 +845,46 @@ function Editor({
         <CardContent className="min-h-0 flex-1">
           <ScrollArea className="h-full">
             <div className="flex flex-col gap-1 pr-2">
-              {[...schema.elements].reverse().map((element) => (
-                <Button
-                  key={element.id}
-                  type="button"
-                  variant={selectedId === element.id ? "secondary" : "ghost"}
-                  className="h-auto justify-start text-left"
-                  onClick={() => setSelectedId(element.id)}
-                >
-                  <LayersIcon data-icon="inline-start" />
-                  <span className="truncate">
-                    {elementLabel(element, project.formSchema.questions)}
-                  </span>
-                </Button>
-              ))}
+              {[...schema.elements].reverse().map((element) => {
+                const label = elementLabel(element, project.formSchema.questions)
+                const target = dropTarget?.id === element.id ? dropTarget.edge : null
+                return (
+                  <div
+                    key={element.id}
+                    data-layer-row={label}
+                    data-dragging={draggedId === element.id || undefined}
+                    data-drop-edge={target ?? undefined}
+                    className="relative flex items-center rounded-lg data-[dragging=true]:opacity-45 data-[drop-edge=after]:after:absolute data-[drop-edge=after]:after:inset-x-1 data-[drop-edge=after]:after:-bottom-0.5 data-[drop-edge=after]:after:h-0.5 data-[drop-edge=after]:after:rounded-full data-[drop-edge=after]:after:bg-primary data-[drop-edge=before]:before:absolute data-[drop-edge=before]:before:inset-x-1 data-[drop-edge=before]:before:-top-0.5 data-[drop-edge=before]:before:h-0.5 data-[drop-edge=before]:before:rounded-full data-[drop-edge=before]:before:bg-primary"
+                    onDragOver={(event) => dragOverLayer(event, element.id)}
+                    onDrop={(event) => dropLayer(event, element.id)}
+                  >
+                    <button
+                      type="button"
+                      draggable
+                      aria-label={`Drag ${label} layer`}
+                      className="inline-flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move"
+                        event.dataTransfer.setData("text/plain", element.id)
+                        setDraggedId(element.id)
+                        setDropTarget(null)
+                      }}
+                      onDragEnd={resetDrag}
+                    >
+                      <GripVerticalIcon aria-hidden="true" />
+                    </button>
+                    <Button
+                      type="button"
+                      variant={selectedId === element.id ? "secondary" : "ghost"}
+                      className="h-auto min-w-0 flex-1 justify-start text-left"
+                      onClick={() => setSelectedId(element.id)}
+                    >
+                      <LayersIcon data-icon="inline-start" />
+                      <span className="truncate">{label}</span>
+                    </Button>
+                  </div>
+                )
+              })}
               {schema.elements.length === 0 && (
                 <p className="py-5 text-center text-xs text-muted-foreground">
                   Add an element from the toolbar.
