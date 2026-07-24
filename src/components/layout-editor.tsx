@@ -38,6 +38,7 @@ import {
 import { toast } from "sonner"
 
 import { LayoutCanvas } from "#/components/layout-canvas.tsx"
+import { NumericField } from "#/components/numeric-field.tsx"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -163,34 +164,6 @@ function SaveIndicator({ state }: { state: SaveState }) {
       <value.icon className={state === "saving" ? "animate-spin" : undefined} />
       {value.label}
     </span>
-  )
-}
-
-function NumericField({
-  label,
-  value,
-  onChange,
-  step = 0.5,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-  step?: number
-}) {
-  return (
-    <Field>
-      <FieldLabel>{label}</FieldLabel>
-      <Input
-        aria-label={label}
-        type="number"
-        step={step}
-        value={Number(value.toFixed(3))}
-        onChange={(event) => {
-          const next = Number(event.target.value)
-          if (Number.isFinite(next)) onChange(next)
-        }}
-      />
-    </Field>
   )
 }
 
@@ -411,7 +384,9 @@ function ElementInspector({
           label="Opacity"
           value={element.opacity}
           step={0.05}
-          onChange={(value) => onChange({ ...element, opacity: Math.min(1, Math.max(0, value)) })}
+          min={0}
+          max={1}
+          onChange={(value) => onChange({ ...element, opacity: value })}
         />
         <Field orientation="horizontal">
           <Switch
