@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LayoutParityRouteImport } from './routes/layout-parity'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiProjectsRouteImport } from './routes/api.projects'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
@@ -33,6 +34,11 @@ import { Route as ApiProjectsProjectIdLayoutsLayoutIdRouteImport } from './route
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LayoutParityRoute = LayoutParityRouteImport.update({
+  id: '/layout-parity',
+  path: '/layout-parity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -141,6 +147,7 @@ const ApiProjectsProjectIdLayoutsLayoutIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/layout-parity': typeof LayoutParityRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/layout-parity': typeof LayoutParityRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -186,6 +194,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/layout-parity': typeof LayoutParityRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/layout-parity'
     | '/api/health'
     | '/api/projects'
     | '/projects/$projectId'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/layout-parity'
     | '/api/health'
     | '/api/projects'
     | '/projects/$projectId'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/layout-parity'
     | '/api/health'
     | '/api/projects'
     | '/projects/$projectId'
@@ -277,6 +289,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LayoutParityRoute: typeof LayoutParityRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/layout-parity': {
+      id: '/layout-parity'
+      path: '/layout-parity'
+      fullPath: '/layout-parity'
+      preLoaderRoute: typeof LayoutParityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -487,6 +507,7 @@ const ApiProjectsRouteWithChildren = ApiProjectsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LayoutParityRoute: LayoutParityRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,

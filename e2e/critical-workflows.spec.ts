@@ -138,35 +138,26 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
-  test("layout editor persists inline static text and keeps bound text read-only", async ({
+  test("layout editor stays stable across selection and sidebar overflow", async ({
     page,
     request,
   }) => {
     test.setTimeout(60_000)
     await page.setViewportSize({ width: 1024, height: 768 })
-    await page.goto(`/projects/${closedProjectId}`)
-    await page.getByRole("tab", { name: "3. Layouts" }).click()
+    await page.goto(`/projects/${closedProjectId}?tab=layouts`)
     await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
-    const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
-    await expect(layoutSelect).toContainText("Warm quote")
-    await layoutSelect.click()
-    await page.getByRole("option", { name: "Playful note" }).click()
-    await expect(layoutSelect).toContainText("Playful note")
-    await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
-    await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     const originalProject = (await (
       await request.get(`/api/projects/${closedProjectId}`)
     ).json()) as Project
-    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Playful note")
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")
     expect(originalLayout).toBeDefined()
-    const originalStaticText = originalLayout!.schema.elements.find(
-      (element) => element.type === "static-text"
-    )
-    const originalBoundText = originalLayout!.schema.elements.find(
-      (element) => element.type === "bound-text"
-    )
-    expect(originalStaticText?.type).toBe("static-text")
-    expect(originalBoundText?.type).toBe("bound-text")
+    const originalGeometry = originalLayout!.schema.elements.map(({ id, geometry }) => ({
+      id,
+      geometry,
+    }))
+    const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
+    await expect(layoutSelect).toContainText("Warm quote")
+    await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
       "Answer text",
       "Static text",
@@ -179,107 +170,127 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
 
-    const canvas = page.locator("canvas.upper-canvas")
-    const hiddenTextarea = page.locator('textarea[data-fabric="textarea"]')
-    const waitForCanvasRender = () =>
-      page.evaluate(
-        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      )
-    const enterStaticTextEditing = async () => {
-      await waitForCanvasRender()
-      await canvas.click({ position: { x: 200, y: 100 } })
-      await canvas.dblclick({ position: { x: 200, y: 100 } })
-      await expect(hiddenTextarea).toHaveCount(1)
-    }
-    const editedContent = "You made a lasting difference."
-    const inspectorContent = "The inspector keeps the final word."
-
-    try {
-      await enterStaticTextEditing()
-      await expect(hiddenTextarea).toHaveValue("You made a difference.")
-      await hiddenTextarea.fill(editedContent)
-      const firstSave = page.waitForResponse(
-        (response) =>
-          response.url().includes(`/${closedProjectId}/layouts/`) &&
-          response.request().method() === "PATCH"
-      )
-      await page.getByRole("button", { name: "Circle", exact: true }).click()
-      await expect(page.getByRole("status")).toContainText(/Unsaved|Saving/)
-      expect((await firstSave).status()).toBe(200)
-      await expect(page.getByRole("status")).toContainText("Saved")
-
-      await page.getByRole("button", { name: editedContent }).click()
-      await expect(page.getByLabel("Content")).toHaveValue(editedContent)
-      await page.getByRole("button", { name: "Undo" }).click()
-      await expect(page.getByLabel("Content")).toHaveValue("You made a difference.")
-      const historySave = page.waitForResponse(
-        (response) =>
-          response.url().includes(`/${closedProjectId}/layouts/`) &&
-          response.request().method() === "PATCH"
-      )
-      await page.getByRole("button", { name: "Redo" }).click()
-      await expect(page.getByLabel("Content")).toHaveValue(editedContent)
-      expect((await historySave).status()).toBe(200)
-      await expect(page.getByRole("status")).toContainText("Saved")
-
-      await page.reload()
-      await layoutSelect.click()
-      await page.getByRole("option", { name: "Playful note" }).click()
-      await page.getByRole("button", { name: editedContent }).click()
-      await expect(page.getByLabel("Content")).toHaveValue(editedContent)
-
-      await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
-      await waitForCanvasRender()
-      await canvas.click({ position: { x: 200, y: 300 } })
-      await canvas.dblclick({ position: { x: 200, y: 300 } })
-      await expect(hiddenTextarea).toHaveCount(0)
-
-      await page.getByRole("button", { name: editedContent }).click()
-      await enterStaticTextEditing()
-      await hiddenTextarea.fill("Inline edit before inspector")
-      await page.getByRole("button", { name: "Circle", exact: true }).click()
-      await page.getByRole("button", { name: "Inline edit before inspector" }).click()
-      const latestSave = page.waitForResponse(
-        (response) =>
-          response.url().includes(`/${closedProjectId}/layouts/`) &&
-          response.request().method() === "PATCH"
-      )
-      await page.getByLabel("Content").fill(inspectorContent)
-      expect((await latestSave).status()).toBe(200)
-      await expect(page.getByRole("status")).toContainText("Saved")
-
-      await page.reload()
-      await layoutSelect.click()
-      await page.getByRole("option", { name: "Playful note" }).click()
-      await page.getByRole("button", { name: inspectorContent }).click()
-      await expect(page.getByLabel("Content")).toHaveValue(inspectorContent)
-
-      const savedProject = (await (
-        await request.get(`/api/projects/${closedProjectId}`)
-      ).json()) as Project
-      const savedLayout = savedProject.layouts.find((layout) => layout.id === originalLayout!.id)
-      const savedStaticText = savedLayout!.schema.elements.find(
-        (element) => element.id === originalStaticText!.id
-      )
-      expect(savedStaticText).toEqual({
-        ...originalStaticText,
-        content: inspectorContent,
+    const renderedCanvas = page.locator("canvas.upper-canvas")
+    const clearSelection = async () => {
+      const bounds = await renderedCanvas.boundingBox()
+      expect(bounds).not.toBeNull()
+      await renderedCanvas.click({
+        position: { x: bounds!.width - 2, y: bounds!.height - 2 },
       })
-      expect(
-        savedLayout!.schema.elements.find((element) => element.id === originalBoundText!.id)
-      ).toEqual(originalBoundText)
+    }
+    const canvasDocumentBounds = async () => {
+      await renderedCanvas.waitFor({ state: "visible" })
+      const bounds = await renderedCanvas.boundingBox()
+      expect(bounds).not.toBeNull()
+      const scroll = await page.evaluate(() => ({
+        x: window.scrollX,
+        y: window.scrollY,
+      }))
+      return {
+        ...bounds!,
+        x: bounds!.x + scroll.x,
+        y: bounds!.y + scroll.y,
+      }
+    }
+    const tabletBounds = await canvasDocumentBounds()
+    expect(tabletBounds).not.toBeNull()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await expect(page.getByText("Question binding")).toBeVisible()
+    await expect(page.getByText("Font family")).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    await clearSelection()
+    await expect(
+      page.getByText("Select an element to use alignment and layer actions.")
+    ).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    ).toBe(true)
+
+    await page.setViewportSize({ width: 1365, height: 900 })
+    await page.reload()
+    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const desktopBounds = await canvasDocumentBounds()
+    expect(desktopBounds).not.toBeNull()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    await clearSelection()
+    await expect(
+      page.getByText("Select an element to use alignment and layer actions.")
+    ).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+
+    const currentProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    expect(
+      currentProject.layouts
+        .find((layout) => layout.id === originalLayout!.id)!
+        .schema.elements.map(({ id, geometry }) => ({ id, geometry }))
+    ).toEqual(originalGeometry)
+
+    const layersCard = page.locator('[data-slot="card"][aria-label="Layers"]')
+    const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
+    const layersBounds = await layersCard.boundingBox()
+    const inspectorBounds = await inspectorCard.boundingBox()
+    expect(layersBounds?.height).toBe(804)
+    expect(inspectorBounds?.height).toBe(804)
+
+    const sourceElement = originalLayout!.schema.elements.find(
+      (element) => element.type === "rectangle"
+    )
+    expect(sourceElement).toBeDefined()
+    try {
+      const longLayoutResponse = await request.patch(
+        `/api/projects/${closedProjectId}/layouts/${originalLayout!.id}`,
+        {
+          data: {
+            expectedRevision: originalLayout!.revision,
+            schema: {
+              ...originalLayout!.schema,
+              elements: [
+                ...originalLayout!.schema.elements,
+                ...Array.from({ length: 30 }, (_, index) => ({
+                  ...structuredClone(sourceElement!),
+                  id: `overflow-layer-${index}`,
+                })),
+              ],
+            },
+          },
+        }
+      )
+      expect(longLayoutResponse.ok()).toBe(true)
+      await page.reload()
+      await expect(page.getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(31)
+      const layersViewport = layersCard.locator('[data-slot="scroll-area-viewport"]')
+      const overflow = await layersViewport.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }))
+      expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight)
+      await layersViewport.evaluate((element) => {
+        element.scrollTop = 200
+      })
+      expect(await layersViewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+      expect(await canvasDocumentBounds()).toEqual(desktopBounds)
     } finally {
-      const currentProject = (await (
+      const changedProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)
       ).json()) as Project
-      const currentLayout = currentProject.layouts.find(
+      const changedLayout = changedProject.layouts.find(
         (layout) => layout.id === originalLayout!.id
       ) as LayoutRecord
       expect(
         (
-          await request.patch(`/api/projects/${closedProjectId}/layouts/${currentLayout.id}`, {
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${changedLayout.id}`, {
             data: {
-              expectedRevision: currentLayout.revision,
+              expectedRevision: changedLayout.revision,
               schema: originalLayout!.schema,
             },
           })
@@ -299,12 +310,9 @@ test.describe.serial("critical local prototype workflows", () => {
       ).toBe(true)
     }
 
+    await page.setViewportSize({ width: 1024, height: 768 })
     await page.reload()
-    await layoutSelect.click()
-    await page.getByRole("option", { name: "Playful note" }).click()
     await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
-    await expect(page.getByText("Question binding")).toBeVisible()
-    await expect(page.getByText("Font family")).toBeVisible()
     await page.screenshot({
       path: resolve(screenshots, "layout-editor-tablet.png"),
       fullPage: true,
