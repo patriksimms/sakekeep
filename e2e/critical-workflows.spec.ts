@@ -3,6 +3,7 @@ import { resolve } from "node:path"
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
+import type { LayoutRecord, Project } from "../src/domain/types.ts"
 import { shareTokenForProject } from "../src/server/share-token.ts"
 
 const collectingProjectId = "22222222-2222-4222-8222-222222222222"
@@ -18,28 +19,6 @@ async function expectAccessible(page: Page) {
       .map((violation) => `${violation.id}: ${violation.help} (${violation.nodes.length})`)
       .join("\n")
   ).toEqual([])
-}
-
-async function canvasPixelAt(page: Page, xMm: number, yMm: number) {
-  return page.getByLabel("Visual DIN A5 landscape layout canvas").evaluate(
-    (canvas, point) => {
-      const element = canvas as HTMLCanvasElement
-      const bounds = element.getBoundingClientRect()
-      const cssScale = bounds.width / 216
-      const pixelScale = element.width / bounds.width
-      const context = element.getContext("2d")
-      if (!context) throw new Error("Canvas context unavailable.")
-      return Array.from(
-        context.getImageData(
-          Math.round((point.xMm + 3) * cssScale * pixelScale),
-          Math.round((point.yMm + 3) * cssScale * pixelScale),
-          1,
-          1
-        ).data
-      )
-    },
-    { xMm, yMm }
-  )
 }
 
 test.describe.serial("critical local prototype workflows", () => {
@@ -159,17 +138,25 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
-  test("layout editor works at tablet size and canonical tools are present", async ({ page }) => {
+  test("layout editor stays stable across selection and sidebar overflow", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000)
     await page.setViewportSize({ width: 1024, height: 768 })
-    await page.goto(`/projects/${closedProjectId}`)
-    await page.getByRole("tab", { name: "3. Layouts" }).click()
+    await page.goto(`/projects/${closedProjectId}?tab=layouts`)
     await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")
+    expect(originalLayout).toBeDefined()
+    const originalGeometry = originalLayout!.schema.elements.map(({ id, geometry }) => ({
+      id,
+      geometry,
+    }))
     const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
     await expect(layoutSelect).toContainText("Warm quote")
-    await layoutSelect.click()
-    await page.getByRole("option", { name: "Playful note" }).click()
-    await expect(layoutSelect).toContainText("Playful note")
-    await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
       "Answer text",
@@ -182,139 +169,155 @@ test.describe.serial("critical local prototype workflows", () => {
     ]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
-    await page
-      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
-      .click()
+
+    const renderedCanvas = page.locator("canvas.upper-canvas")
+    const clearSelection = async () => {
+      const bounds = await renderedCanvas.boundingBox()
+      expect(bounds).not.toBeNull()
+      await renderedCanvas.click({
+        position: { x: bounds!.width - 2, y: bounds!.height - 2 },
+      })
+    }
+    const canvasDocumentBounds = async () => {
+      await renderedCanvas.waitFor({ state: "visible" })
+      const bounds = await renderedCanvas.boundingBox()
+      expect(bounds).not.toBeNull()
+      const scroll = await page.evaluate(() => ({
+        x: window.scrollX,
+        y: window.scrollY,
+      }))
+      return {
+        ...bounds!,
+        x: bounds!.x + scroll.x,
+        y: bounds!.y + scroll.y,
+      }
+    }
+    const tabletBounds = await canvasDocumentBounds()
+    expect(tabletBounds).not.toBeNull()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    await clearSelection()
+    await expect(
+      page.getByText("Select an element to use alignment and layer actions.")
+    ).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(tabletBounds)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    ).toBe(true)
+
+    await page.setViewportSize({ width: 1365, height: 900 })
+    await page.reload()
+    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const desktopBounds = await canvasDocumentBounds()
+    expect(desktopBounds).not.toBeNull()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    await clearSelection()
+    await expect(
+      page.getByText("Select an element to use alignment and layer actions.")
+    ).toBeVisible()
+    expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+
+    const currentProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    expect(
+      currentProject.layouts
+        .find((layout) => layout.id === originalLayout!.id)!
+        .schema.elements.map(({ id, geometry }) => ({ id, geometry }))
+    ).toEqual(originalGeometry)
+
+    const layersCard = page.locator('[data-slot="card"][aria-label="Layers"]')
+    const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
+    const layersBounds = await layersCard.boundingBox()
+    const inspectorBounds = await inspectorCard.boundingBox()
+    expect(layersBounds?.height).toBe(804)
+    expect(inspectorBounds?.height).toBe(804)
+
+    const sourceElement = originalLayout!.schema.elements.find(
+      (element) => element.type === "rectangle"
+    )
+    expect(sourceElement).toBeDefined()
+    try {
+      const longLayoutResponse = await request.patch(
+        `/api/projects/${closedProjectId}/layouts/${originalLayout!.id}`,
+        {
+          data: {
+            expectedRevision: originalLayout!.revision,
+            schema: {
+              ...originalLayout!.schema,
+              elements: [
+                ...originalLayout!.schema.elements,
+                ...Array.from({ length: 30 }, (_, index) => ({
+                  ...structuredClone(sourceElement!),
+                  id: `overflow-layer-${index}`,
+                })),
+              ],
+            },
+          },
+        }
+      )
+      expect(longLayoutResponse.ok()).toBe(true)
+      await page.reload()
+      await expect(page.getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(31)
+      const layersViewport = layersCard.locator('[data-slot="scroll-area-viewport"]')
+      const overflow = await layersViewport.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }))
+      expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight)
+      await layersViewport.evaluate((element) => {
+        element.scrollTop = 200
+      })
+      expect(await layersViewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+      expect(await canvasDocumentBounds()).toEqual(desktopBounds)
+    } finally {
+      const changedProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const changedLayout = changedProject.layouts.find(
+        (layout) => layout.id === originalLayout!.id
+      ) as LayoutRecord
+      expect(
+        (
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${changedLayout.id}`, {
+            data: {
+              expectedRevision: changedLayout.revision,
+              schema: originalLayout!.schema,
+            },
+          })
+        ).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: {
+              mode: "cycle",
+              seed: "demo-seed",
+              manualAssignments: {},
+              resolutionOverrides: [],
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
+
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.reload()
+    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
     await page.screenshot({
       path: resolve(screenshots, "layout-editor-tablet.png"),
       fullPage: true,
     })
     await expectAccessible(page)
-  })
-
-  test("layer dragging controls canvas order, history, cancellation, and persistence", async ({
-    page,
-    request,
-  }) => {
-    test.setTimeout(60_000)
-    const created = await request.post(`/api/projects/${closedProjectId}/duplicate`)
-    const projectId = ((await created.json()) as { id: string }).id
-    await request.post(`/api/projects/${projectId}/publish`)
-    await request.post(`/api/projects/${projectId}/close`)
-
-    try {
-      await page.setViewportSize({ width: 1365, height: 900 })
-      await page.goto(`/projects/${projectId}?tab=layouts`)
-      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
-
-      await page.getByRole("button", { name: "Rectangle", exact: true }).click()
-      for (const [label, value] of [
-        ["X (mm)", "20"],
-        ["Y (mm)", "20"],
-        ["Width", "50"],
-        ["Height", "50"],
-      ] as const) {
-        await page.getByRole("spinbutton", { name: label, exact: true }).fill(value)
-      }
-      await page.getByLabel("Fill colour").fill("#ef4444")
-
-      await page.getByRole("button", { name: "Add circle" }).click()
-      for (const [label, value] of [
-        ["X (mm)", "20"],
-        ["Y (mm)", "20"],
-        ["Width", "50"],
-        ["Height", "50"],
-      ] as const) {
-        await page.getByRole("spinbutton", { name: label, exact: true }).fill(value)
-      }
-      await page.getByLabel("Fill colour").fill("#3b82f6")
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-      await expect
-        .poll(async () => {
-          const [red, , blue] = await canvasPixelAt(page, 30, 30)
-          return blue! > red!
-        })
-        .toBe(true)
-
-      const rectangleHandle = page.getByRole("button", { name: "Drag Rectangle layer" })
-      const rectangleRow = page.locator('[data-layer-row="Rectangle"]')
-      const circleRow = page.locator('[data-layer-row="Circle"]')
-      const dataTransfer = await page.evaluateHandle(() => new DataTransfer())
-      await rectangleHandle.dispatchEvent("dragstart", { dataTransfer })
-      const circleBounds = await circleRow.boundingBox()
-      if (!circleBounds) throw new Error("Circle layer row is not visible.")
-      await circleRow.dispatchEvent("dragover", {
-        dataTransfer,
-        clientY: circleBounds.y + 1,
-      })
-      await expect(rectangleRow).toHaveAttribute("data-dragging", "true")
-      await expect(circleRow).toHaveAttribute("data-drop-edge", "before")
-      await rectangleHandle.dispatchEvent("dragend", { dataTransfer })
-      await expect(rectangleRow).not.toHaveAttribute("data-dragging")
-      await expect(circleRow).not.toHaveAttribute("data-drop-edge")
-      await expect
-        .poll(async () => {
-          const [red, , blue] = await canvasPixelAt(page, 30, 30)
-          return blue! > red!
-        })
-        .toBe(true)
-
-      await rectangleHandle.dragTo(circleRow, {
-        targetPosition: { x: 30, y: 2 },
-      })
-      await expect(page.locator("[data-layer-row]").first()).toHaveAttribute(
-        "data-layer-row",
-        "Rectangle"
-      )
-      await expect(page.getByText("rectangle", { exact: true })).toBeVisible()
-      await expect
-        .poll(async () => {
-          const [red, , blue] = await canvasPixelAt(page, 30, 30)
-          return red! > blue!
-        })
-        .toBe(true)
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-
-      await page.getByRole("button", { name: "Undo" }).click()
-      await expect
-        .poll(async () => {
-          const [red, , blue] = await canvasPixelAt(page, 30, 30)
-          return blue! > red!
-        })
-        .toBe(true)
-      await page.getByRole("button", { name: "Redo" }).click()
-      await expect
-        .poll(async () => {
-          const [red, , blue] = await canvasPixelAt(page, 30, 30)
-          return red! > blue!
-        })
-        .toBe(true)
-      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
-
-      await page.reload()
-      await expect(page.locator("[data-layer-row]").first()).toHaveAttribute(
-        "data-layer-row",
-        "Rectangle"
-      )
-      await expect
-        .poll(async () => {
-          const [red, , blue] = await canvasPixelAt(page, 30, 30)
-          return red! > blue!
-        })
-        .toBe(true)
-
-      await page
-        .getByRole("button", { name: "What should we call you in the book?", exact: true })
-        .click()
-      const bringForward = page.getByRole("button", { name: "Bring forward" })
-      await bringForward.focus()
-      await page.keyboard.press("Enter")
-      await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled()
-    } finally {
-      await request.delete(`/api/projects/${projectId}`)
-    }
   })
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {

@@ -28,10 +28,19 @@ import {
   UnlockIcon,
   XCircleIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react"
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactElement,
+} from "react"
 import { toast } from "sonner"
 
 import { LayoutCanvas } from "#/components/layout-canvas.tsx"
+import { NumericField } from "#/components/numeric-field.tsx"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,8 +76,14 @@ import {
 import { Separator } from "#/components/ui/separator.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
-import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.tsx"
+import {
+  isEditorDeleteKey,
+  moveElementLayer,
+  type LayerAction,
+} from "#/domain/layout-editor-actions.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
+import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
 import {
   type FormQuestion,
   type LayoutElement,
@@ -80,6 +95,41 @@ import {
 import { api, projectApi } from "#/lib/api.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
+
+function IconAction({
+  label,
+  disabled = false,
+  children,
+}: {
+  label: string
+  disabled?: boolean
+  children: ReactElement
+}) {
+  if (disabled) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              className="inline-flex rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              tabIndex={0}
+              aria-label={`${label} unavailable`}
+            />
+          }
+        >
+          {children}
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 function elementLabel(element: LayoutElement, questions: FormQuestion[]): string {
   if (element.type === "static-text") return element.content || "Static text"
@@ -117,34 +167,6 @@ function SaveIndicator({ state }: { state: SaveState }) {
       <value.icon className={state === "saving" ? "animate-spin" : undefined} />
       {value.label}
     </span>
-  )
-}
-
-function NumericField({
-  label,
-  value,
-  onChange,
-  step = 0.5,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-  step?: number
-}) {
-  return (
-    <Field>
-      <FieldLabel>{label}</FieldLabel>
-      <Input
-        aria-label={label}
-        type="number"
-        step={step}
-        value={Number(value.toFixed(3))}
-        onChange={(event) => {
-          const next = Number(event.target.value)
-          if (Number.isFinite(next)) onChange(next)
-        }}
-      />
-    </Field>
   )
 }
 
@@ -365,7 +387,9 @@ function ElementInspector({
           label="Opacity"
           value={element.opacity}
           step={0.05}
-          onChange={(value) => onChange({ ...element, opacity: Math.min(1, Math.max(0, value)) })}
+          min={0}
+          max={1}
+          onChange={(value) => onChange({ ...element, opacity: value })}
         />
         <Field orientation="horizontal">
           <Switch
@@ -713,16 +737,27 @@ function Editor({
     })
   }
 
-  const moveLayer = (direction: -1 | 1) => {
+  const moveLayer = (action: LayerAction) => {
     if (!selected) return
-    const index = schema.elements.findIndex((element) => element.id === selected.id)
-    const nextIndex = Math.min(schema.elements.length - 1, Math.max(0, index + direction))
-    if (nextIndex === index) return
-    const elements = [...schema.elements]
-    const [moved] = elements.splice(index, 1)
-    elements.splice(nextIndex, 0, moved!)
+    const elements = moveElementLayer(schema.elements, selected.id, action)
+    if (elements === schema.elements) return
     markChanged({ ...schema, elements })
   }
+
+  const deleteSelected = () => {
+    if (!selected) return
+    markChanged({
+      ...schema,
+      elements: schema.elements.filter((element) => element.id !== selected.id),
+    })
+    setSelectedId(null)
+  }
+
+  const selectedIndex = selected
+    ? schema.elements.findIndex((element) => element.id === selected.id)
+    : -1
+  const isBackmost = selectedIndex <= 0
+  const isFrontmost = selectedIndex === schema.elements.length - 1
 
   const resetDrag = () => {
     setDraggedId(null)
@@ -743,12 +778,11 @@ function Editor({
   const dropLayer = (event: DragEvent<HTMLDivElement>, targetId: string) => {
     event.preventDefault()
     const sourceId = draggedId ?? event.dataTransfer.getData("text/plain")
+    const bounds = event.currentTarget.getBoundingClientRect()
     const edge =
       dropTarget?.id === targetId
         ? dropTarget.edge
-        : event.clientY <
-            event.currentTarget.getBoundingClientRect().top +
-              event.currentTarget.getBoundingClientRect().height / 2
+        : event.clientY < bounds.top + bounds.height / 2
           ? "before"
           : "after"
     const elements = reorderElementsFromTopmostList(schema.elements, sourceId, targetId, edge)
@@ -783,14 +817,33 @@ function Editor({
   }
 
   return (
-    <div className="grid min-h-[700px] gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]">
-      <Card className="h-fit bg-card/90 xl:sticky xl:top-20">
+    <div
+      aria-label="Layout editor workspace"
+      className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]"
+      onKeyDown={(event) => {
+        const activeObject = canvas.current?.getActiveObject() as
+          | { isEditing?: boolean }
+          | undefined
+        if (
+          !selected ||
+          !isEditorDeleteKey(event, event.target, activeObject?.isEditing === true)
+        ) {
+          return
+        }
+        event.preventDefault()
+        deleteSelected()
+      }}
+    >
+      <Card
+        aria-label="Layers"
+        className="h-48 bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+      >
         <CardHeader>
           <CardTitle>Layers</CardTitle>
           <CardDescription>Topmost first</CardDescription>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-72 xl:max-h-[580px]">
+        <CardContent className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
             <div className="flex flex-col gap-1 pr-2">
               {[...schema.elements].reverse().map((element) => {
                 const label = elementLabel(element, project.formSchema.questions)
@@ -876,30 +929,36 @@ function Editor({
               <GalleryHorizontalIcon data-icon="inline-start" />
               Gallery
             </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => add("rectangle")}
-              aria-label="Add rectangle"
-            >
-              <RectangleHorizontalIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => add("circle")}
-              aria-label="Add circle"
-            >
-              <CircleIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => add("line")}
-              aria-label="Add line"
-            >
-              <MinusIcon />
-            </Button>
+            <IconAction label="Add rectangle">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => add("rectangle")}
+                aria-label="Add rectangle"
+              >
+                <RectangleHorizontalIcon />
+              </Button>
+            </IconAction>
+            <IconAction label="Add circle">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => add("circle")}
+                aria-label="Add circle"
+              >
+                <CircleIcon />
+              </Button>
+            </IconAction>
+            <IconAction label="Add line">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => add("line")}
+                aria-label="Add line"
+              >
+                <MinusIcon />
+              </Button>
+            </IconAction>
             <label className="inline-flex">
               <input
                 type="file"
@@ -913,126 +972,166 @@ function Editor({
               </span>
             </label>
             <Separator orientation="vertical" className="mx-1 h-6" />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Undo"
-              disabled={historyIndex.current <= 0}
-              onClick={() => {
-                if (historyIndex.current <= 0) return
-                historyIndex.current -= 1
-                markChanged(structuredClone(history.current[historyIndex.current]!), false)
-              }}
-            >
-              <Undo2Icon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Redo"
-              disabled={historyIndex.current >= history.current.length - 1}
-              onClick={() => {
-                if (historyIndex.current >= history.current.length - 1) return
-                historyIndex.current += 1
-                markChanged(structuredClone(history.current[historyIndex.current]!), false)
-              }}
-            >
-              <Redo2Icon />
-            </Button>
+            <IconAction label="Undo" disabled={historyIndex.current <= 0}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Undo"
+                disabled={historyIndex.current <= 0}
+                onClick={() => {
+                  if (historyIndex.current <= 0) return
+                  historyIndex.current -= 1
+                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                }}
+              >
+                <Undo2Icon />
+              </Button>
+            </IconAction>
+            <IconAction label="Redo" disabled={historyIndex.current >= history.current.length - 1}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Redo"
+                disabled={historyIndex.current >= history.current.length - 1}
+                onClick={() => {
+                  if (historyIndex.current >= history.current.length - 1) return
+                  historyIndex.current += 1
+                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                }}
+              >
+                <Redo2Icon />
+              </Button>
+            </IconAction>
           </CardContent>
         </Card>
 
-        {selected && (
-          <Card className="mb-4 bg-card/90">
-            <CardContent className="flex flex-wrap items-center gap-1">
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Align horizontal centre"
-                onClick={() =>
-                  changeSelected({
-                    ...selected,
-                    geometry: {
-                      ...selected.geometry,
-                      x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
-                    },
-                  })
-                }
-              >
-                <AlignCenterHorizontalIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Align vertical centre"
-                onClick={() =>
-                  changeSelected({
-                    ...selected,
-                    geometry: {
-                      ...selected.geometry,
-                      y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
-                    },
-                  })
-                }
-              >
-                <AlignCenterVerticalIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Send backward"
-                onClick={() => moveLayer(-1)}
-              >
-                <SendToBackIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Bring forward"
-                onClick={() => moveLayer(1)}
-              >
-                <BringToFrontIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Duplicate selected element"
-                onClick={() => {
-                  const duplicate = {
-                    ...structuredClone(selected),
-                    id: crypto.randomUUID(),
-                    geometry: {
-                      ...selected.geometry,
-                      x: selected.geometry.x + 4,
-                      y: selected.geometry.y + 4,
-                    },
+        <Card aria-label="Selection tools" className="mb-4 bg-card/90">
+          <CardContent className="flex min-h-8 flex-wrap items-center gap-1">
+            {selected ? (
+              <>
+              <IconAction label="Align horizontal centre">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Align horizontal centre"
+                  onClick={() =>
+                    changeSelected({
+                      ...selected,
+                      geometry: {
+                        ...selected.geometry,
+                        x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
+                      },
+                    })
                   }
-                  markChanged({
-                    ...schema,
-                    elements: [...schema.elements, duplicate],
-                  })
-                  setSelectedId(duplicate.id)
-                }}
-              >
-                <CopyIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Delete selected element"
-                onClick={() => {
-                  markChanged({
-                    ...schema,
-                    elements: schema.elements.filter((element) => element.id !== selected.id),
-                  })
-                  setSelectedId(null)
-                }}
-              >
-                <Trash2Icon />
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                >
+                  <AlignCenterHorizontalIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Align vertical centre">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Align vertical centre"
+                  onClick={() =>
+                    changeSelected({
+                      ...selected,
+                      geometry: {
+                        ...selected.geometry,
+                        y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
+                      },
+                    })
+                  }
+                >
+                  <AlignCenterVerticalIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Send backward one layer" disabled={isBackmost}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Send backward one layer"
+                  disabled={isBackmost}
+                  onClick={() => moveLayer("backward")}
+                >
+                  <ArrowDownIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Bring forward one layer" disabled={isFrontmost}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Bring forward one layer"
+                  disabled={isFrontmost}
+                  onClick={() => moveLayer("forward")}
+                >
+                  <ArrowUpIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Send to back" disabled={isBackmost}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Send to back"
+                  disabled={isBackmost}
+                  onClick={() => moveLayer("back")}
+                >
+                  <SendToBackIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Bring to front" disabled={isFrontmost}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Bring to front"
+                  disabled={isFrontmost}
+                  onClick={() => moveLayer("front")}
+                >
+                  <BringToFrontIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Duplicate selected element">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Duplicate selected element"
+                  onClick={() => {
+                    const duplicate = {
+                      ...structuredClone(selected),
+                      id: crypto.randomUUID(),
+                      geometry: {
+                        ...selected.geometry,
+                        x: selected.geometry.x + 4,
+                        y: selected.geometry.y + 4,
+                      },
+                    }
+                    markChanged({
+                      ...schema,
+                      elements: [...schema.elements, duplicate],
+                    })
+                    setSelectedId(duplicate.id)
+                  }}
+                >
+                  <CopyIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Delete selected element">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Delete selected element"
+                  onClick={deleteSelected}
+                >
+                  <Trash2Icon />
+                </Button>
+              </IconAction>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Select an element to use alignment and layer actions.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         <div
           ref={container}
@@ -1045,19 +1144,23 @@ function Editor({
             onSelect={setSelectedId}
             onChange={markChanged}
             canvasRef={canvas}
+            questions={project.formSchema.questions}
           />
         </div>
       </div>
 
-      <Card className="h-fit bg-card/90 xl:sticky xl:top-20">
+      <Card
+        aria-label="Inspector"
+        className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+      >
         <CardHeader>
           <CardTitle>Inspector</CardTitle>
           <CardAction>
             <SaveIndicator state={saveState} />
           </CardAction>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-[650px] pr-3">
+        <CardContent className="min-h-0 flex-1">
+          <ScrollArea className="h-full pr-3">
             <FieldGroup>
               <Field>
                 <FieldLabel>Layout name</FieldLabel>
@@ -1190,40 +1293,49 @@ export function LayoutsPanel({
           </Button>
           {selected && (
             <>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Move layout up"
-                disabled={selected.position === 0}
-                onClick={async () => {
-                  const ids = project.layouts.map((layout) => layout.id)
-                  const index = ids.indexOf(selected.id)
-                  ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
-                  const result = await projectApi.layoutAction<{
-                    layouts: LayoutRecord[]
-                  }>(project.id, { action: "reorder", layoutIds: ids })
-                  updateLayouts(result.layouts)
-                }}
-              >
-                <ArrowUpIcon />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Move layout down"
+              <IconAction label="Move layout up" disabled={selected.position === 0}>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Move layout up"
+                  disabled={selected.position === 0}
+                  onClick={async () => {
+                    if (selected.position === 0) return
+                    const ids = project.layouts.map((layout) => layout.id)
+                    const index = ids.indexOf(selected.id)
+                    ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
+                    const result = await projectApi.layoutAction<{
+                      layouts: LayoutRecord[]
+                    }>(project.id, { action: "reorder", layoutIds: ids })
+                    updateLayouts(result.layouts)
+                  }}
+                >
+                  <ArrowUpIcon />
+                </Button>
+              </IconAction>
+              <IconAction
+                label="Move layout down"
                 disabled={selected.position === project.layouts.length - 1}
-                onClick={async () => {
-                  const ids = project.layouts.map((layout) => layout.id)
-                  const index = ids.indexOf(selected.id)
-                  ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
-                  const result = await projectApi.layoutAction<{
-                    layouts: LayoutRecord[]
-                  }>(project.id, { action: "reorder", layoutIds: ids })
-                  updateLayouts(result.layouts)
-                }}
               >
-                <ArrowDownIcon />
-              </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Move layout down"
+                  disabled={selected.position === project.layouts.length - 1}
+                  onClick={async () => {
+                    if (selected.position === project.layouts.length - 1) return
+                    const ids = project.layouts.map((layout) => layout.id)
+                    const index = ids.indexOf(selected.id)
+                    ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
+                    const result = await projectApi.layoutAction<{
+                      layouts: LayoutRecord[]
+                    }>(project.id, { action: "reorder", layoutIds: ids })
+                    updateLayouts(result.layouts)
+                  }}
+                >
+                  <ArrowDownIcon />
+                </Button>
+              </IconAction>
               <Button
                 variant="outline"
                 onClick={async () => {
@@ -1236,7 +1348,7 @@ export function LayoutsPanel({
                 }}
               >
                 <CopyIcon data-icon="inline-start" />
-                Duplicate
+                Duplicate layout
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger render={<Button variant="outline" />}>
