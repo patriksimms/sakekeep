@@ -158,15 +158,10 @@ test.describe.serial("critical local prototype workflows", () => {
     const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
     await expect(layoutSelect).toContainText("Warm quote")
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
-    for (const name of [
-      "Answer text",
-      "Static text",
-      "Image",
-      "Gallery",
-      "Add rectangle",
-      "Add circle",
-      "Add line",
-    ]) {
+    await expect(page.getByRole("button", { name: /^Add text for / }).first()).toBeVisible()
+    await expect(page.getByRole("button", { name: /^Add image for / }).first()).toBeVisible()
+    await expect(page.getByRole("button", { name: /^Add gallery for / }).first()).toBeVisible()
+    for (const name of ["Static text", "Add rectangle", "Add circle", "Add line"]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
 
