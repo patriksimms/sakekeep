@@ -66,203 +66,30 @@ import {
   SelectValue,
 } from "#/components/ui/select.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
-import { gallerySlots } from "#/domain/layout.ts"
+import { LayoutPageElements } from "#/components/layout-page.tsx"
 import {
   type BookPage,
   type GeneratedBook,
   type GenerationSettings,
-  type ImageAnswer,
-  type LayoutElement,
   type PageProblem,
   type Project,
   type StandaloneBookPage,
   type StandalonePageType,
-  type SubmissionAnswer,
-  type SubmissionSummary,
 } from "#/domain/types.ts"
 import { projectApi } from "#/lib/api.ts"
-
-function answerImages(answer: SubmissionAnswer | undefined): ImageAnswer[] {
-  if (!Array.isArray(answer)) return []
-  return answer.filter(
-    (item): item is ImageAnswer => typeof item === "object" && item !== null && "assetId" in item
-  )
-}
-
-function elementStyle(element: LayoutElement): React.CSSProperties {
-  return {
-    position: "absolute",
-    left: `${((element.geometry.x + 3) / 216) * 100}%`,
-    top: `${((element.geometry.y + 3) / 154) * 100}%`,
-    width: `${(element.geometry.width / 216) * 100}%`,
-    height: `${(element.geometry.height / 154) * 100}%`,
-    transform: `rotate(${element.geometry.rotation}deg)`,
-    transformOrigin: "top left",
-    opacity: element.opacity,
-  }
-}
-
-function PreviewElement({
-  element,
-  submission,
-  project,
-}: {
-  element: LayoutElement
-  submission: SubmissionSummary
-  project: Project
-}) {
-  const style = elementStyle(element)
-  const marker = { "data-layout-element-id": element.id }
-  if (element.type === "static-text" || element.type === "bound-text") {
-    const answer =
-      element.type === "bound-text" ? submission.answers[element.questionId] : element.content
-    const content = typeof answer === "string" ? answer : ""
-    const question =
-      element.type === "bound-text"
-        ? project.formSchema.questions.find((candidate) => candidate.id === element.questionId)
-        : null
-    return (
-      <div
-        {...marker}
-        style={{
-          ...style,
-          color: element.text.color,
-          fontFamily:
-            element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
-          fontSize: `${Math.max(5, element.text.fontSize * 0.42)}px`,
-          fontStyle: element.text.fontStyle,
-          fontWeight: element.text.fontWeight,
-          textAlign: element.text.alignment,
-          lineHeight: element.text.lineHeight,
-          overflow: "hidden",
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {element.type === "bound-text" && element.showLabel && (
-          <strong className="block">{element.label || question?.prompt || ""}</strong>
-        )}
-        {content}
-      </div>
-    )
-  }
-  if (element.type === "rectangle" || element.type === "circle") {
-    return (
-      <div
-        {...marker}
-        style={{
-          ...style,
-          borderRadius: element.type === "circle" ? "50%" : undefined,
-          background: element.fill,
-          border: `${Math.max(1, element.strokeWidth)}px solid ${element.stroke}`,
-        }}
-      />
-    )
-  }
-  if (element.type === "line") {
-    return (
-      <div {...marker} style={style}>
-        <svg width="100%" height="100%" preserveAspectRatio="none">
-          <line
-            x1="0"
-            y1="0"
-            x2="100%"
-            y2="100%"
-            stroke={element.stroke}
-            strokeWidth={Math.max(1, element.strokeWidth)}
-          />
-        </svg>
-      </div>
-    )
-  }
-  if (element.type === "decorative-image") {
-    return element.assetId ? (
-      <img
-        {...marker}
-        src={`/api/assets/${element.assetId}?variant=preview`}
-        alt=""
-        aria-hidden="true"
-        style={{
-          ...style,
-          objectFit: "cover",
-          objectPosition: `${element.focalPoint.x * 100}% ${element.focalPoint.y * 100}%`,
-        }}
-      />
-    ) : null
-  }
-  if (element.type !== "image-frame" && element.type !== "gallery-frame") {
-    return null
-  }
-  const images = answerImages(submission.answers[element.questionId])
-  if (element.type === "image-frame") {
-    const image = images[0]
-    return image ? (
-      <img
-        {...marker}
-        src={image.previewUrl}
-        alt=""
-        aria-hidden="true"
-        style={{
-          ...style,
-          objectFit: "cover",
-          objectPosition: `${(element.focalPoint?.x ?? image.focalPoint?.x ?? 0.5) * 100}% ${(element.focalPoint?.y ?? image.focalPoint?.y ?? 0.5) * 100}%`,
-          borderRadius: `${element.cornerRadius}px`,
-        }}
-      />
-    ) : (
-      <div {...marker} style={style} className="border border-dashed border-foreground/15" />
-    )
-  }
-  const slots = gallerySlots(
-    element.arrangement,
-    element.geometry.width,
-    element.geometry.height,
-    element.gap
-  )
-  return (
-    <div {...marker} style={style}>
-      {slots.map((slot, index) => {
-        const image = images[index]
-        return image ? (
-          <img
-            key={`${image.assetId}-${index}`}
-            src={image.previewUrl}
-            alt=""
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: `${(slot.x / element.geometry.width) * 100}%`,
-              top: `${(slot.y / element.geometry.height) * 100}%`,
-              width: `${(slot.width / element.geometry.width) * 100}%`,
-              height: `${(slot.height / element.geometry.height) * 100}%`,
-              objectFit: "cover",
-              objectPosition: `${(element.focalPoint?.x ?? image.focalPoint?.x ?? 0.5) * 100}% ${(element.focalPoint?.y ?? image.focalPoint?.y ?? 0.5) * 100}%`,
-            }}
-          />
-        ) : (
-          <span
-            key={index}
-            className="absolute border border-dashed border-foreground/15"
-            style={{
-              left: `${(slot.x / element.geometry.width) * 100}%`,
-              top: `${(slot.y / element.geometry.height) * 100}%`,
-              width: `${(slot.width / element.geometry.width) * 100}%`,
-              height: `${(slot.height / element.geometry.height) * 100}%`,
-            }}
-          />
-        )
-      })}
-    </div>
-  )
-}
 
 export function PagePreview({
   page,
   project,
   className,
+  decorativeAssetUrl,
+  showProblems = true,
 }: {
   page: BookPage
   project: Project
   className?: string
+  decorativeAssetUrl?: (assetId: string) => string
+  showProblems?: boolean
 }) {
   const layout =
     page.kind === "submission"
@@ -277,7 +104,7 @@ export function PagePreview({
   return (
     <div
       className={`paper-shadow relative aspect-[216/154] overflow-hidden rounded-md ring-1 ring-foreground/10 ${className ?? ""}`}
-      style={{ background }}
+      style={{ background, containerType: "inline-size" }}
       data-testid="page-preview"
     >
       {page.kind === "standalone" ? (
@@ -290,20 +117,21 @@ export function PagePreview({
           </div>
         )
       ) : layout && submission ? (
-        layout.schema.elements.map((element) => (
-          <PreviewElement
-            key={element.id}
-            element={element}
-            submission={submission}
-            project={project}
-          />
-        ))
+        <LayoutPageElements
+          schema={layout.schema}
+          content={{
+            questions: project.formSchema.questions,
+            submission,
+            decorativeAssetUrl,
+          }}
+          testId="preview-layout-elements"
+        />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-xs text-destructive">
           Missing source
         </div>
       )}
-      {page.problems.length > 0 && (
+      {showProblems && page.problems.length > 0 && (
         <Badge
           variant={page.problems.some((problem) => problem.blocking) ? "destructive" : "secondary"}
           className="absolute top-2 right-2"

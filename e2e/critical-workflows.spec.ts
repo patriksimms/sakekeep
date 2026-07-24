@@ -153,6 +153,7 @@ test.describe.serial("critical local prototype workflows", () => {
     await page.getByRole("option", { name: "Playful note" }).click()
     await expect(layoutSelect).toContainText("Playful note")
     await expect(page.getByLabel("Layout name")).toHaveValue("Playful note")
+    await expect(page.getByRole("button", { name: "Duplicate layout" })).toBeVisible()
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     for (const name of [
       "Answer text",
@@ -166,6 +167,7 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
     await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await expect(page.getByRole("button", { name: "Duplicate selected element" })).toBeVisible()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
     await page.screenshot({
@@ -258,6 +260,140 @@ test.describe.serial("critical local prototype workflows", () => {
           })
         ).ok()
       ).toBe(true)
+    }
+
+    const duplicateResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/${closedProjectId}/layouts`) &&
+        response.request().method() === "POST"
+    )
+    await page.getByRole("button", { name: "Duplicate layout" }).click()
+    const response = await duplicateResponse
+    expect(response.status()).toBe(201)
+    const duplicate = (await response.json()) as { id: string; name: string }
+
+    try {
+      await expect(page.getByText("3 layouts")).toBeVisible()
+      await expect(page.getByLabel("Layout name")).toHaveValue(duplicate.name)
+      await page.getByRole("combobox", { name: "Choose a layout" }).click()
+      await expect(page.getByRole("option")).toHaveCount(3)
+      await expect(page.getByRole("option", { name: "Warm quote", exact: true })).toBeVisible()
+      await expect(page.getByRole("option", { name: "Playful note", exact: true })).toBeVisible()
+      await expect(page.getByRole("option", { name: duplicate.name, exact: true })).toBeVisible()
+    } finally {
+      expect(
+        (await request.delete(`/api/projects/${closedProjectId}/layouts/${duplicate.id}`)).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: {
+              mode: "cycle",
+              seed: "demo-seed",
+              manualAssignments: {},
+              resolutionOverrides: [],
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
+  })
+
+  test("layout element actions are discoverable, stack correctly, and delete safely", async ({
+    page,
+    request,
+  }) => {
+    const created = await request.post(`/api/projects/${closedProjectId}/duplicate`)
+    const projectId = ((await created.json()) as { id: string }).id
+    await request.post(`/api/projects/${projectId}/publish`)
+    await request.post(`/api/projects/${projectId}/close`)
+
+    try {
+      await page.setViewportSize({ width: 1365, height: 900 })
+      await page.goto(`/projects/${projectId}?tab=layouts`)
+      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+      await page.getByRole("button", { name: "Add line" }).click()
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+
+      const layer = page.getByRole("button", {
+        name: "Which memory still makes you smile?",
+        exact: true,
+      })
+      await layer.click()
+
+      const backward = page.getByRole("button", { name: "Send backward one layer" })
+      const forward = page.getByRole("button", { name: "Bring forward one layer" })
+      const back = page.getByRole("button", { name: "Send to back", exact: true })
+      const front = page.getByRole("button", { name: "Bring to front", exact: true })
+      await expect(backward).toBeEnabled()
+      await expect(forward).toBeEnabled()
+      await expect(back).toBeEnabled()
+      await expect(front).toBeEnabled()
+
+      await back.hover()
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText("Send to back")
+      await page.mouse.move(0, 0)
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0)
+      await backward.focus()
+      await page.keyboard.press("Tab")
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
+        "Bring forward one layer"
+      )
+      await backward.click()
+      await expect(backward).toBeEnabled()
+      await expect(forward).toBeEnabled()
+      await back.click()
+      await expect(backward).toBeDisabled()
+      await expect(back).toBeDisabled()
+      await page.mouse.move(0, 0)
+      await page.getByLabel("Send to back unavailable").hover()
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText("Send to back")
+      await page.mouse.move(0, 0)
+      await page.getByRole("button", { name: "Align vertical centre" }).focus()
+      await page.keyboard.press("Tab")
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
+        "Send backward one layer"
+      )
+
+      await front.click()
+      await expect(forward).toBeDisabled()
+      await expect(front).toBeDisabled()
+
+      await backward.click()
+      await expect(backward).toBeEnabled()
+      await expect(forward).toBeEnabled()
+
+      const canvas = page.getByLabel("Visual DIN A5 landscape layout canvas")
+      await canvas.focus()
+      await canvas.press("Delete")
+      await expect(layer).toHaveCount(0)
+      await expect(
+        page.getByText("Select an element on the canvas or in the layers list.")
+      ).toBeVisible()
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+
+      await page.getByRole("button", { name: "Undo" }).click()
+      await expect(layer).toBeVisible()
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+
+      await layer.click()
+      const layoutName = page.getByLabel("Layout name")
+      await layoutName.focus()
+      await layoutName.press("End")
+      await layoutName.press("Backspace")
+      await expect(layoutName).toHaveValue("Warm quot")
+      await expect(layer).toBeVisible()
+      await layoutName.fill("Warm quote")
+
+      await page.getByRole("button", { name: "Delete selected element" }).click()
+      await expect(layer).toHaveCount(0)
+      await page.getByRole("button", { name: "Undo" }).click()
+      await expect(layer).toBeVisible()
+      await expect(page.getByRole("status")).toContainText("Saved", { timeout: 10_000 })
+      await page.reload()
+      await expect(layer).toBeVisible()
+    } finally {
+      await request.delete(`/api/projects/${projectId}`)
     }
   })
 
