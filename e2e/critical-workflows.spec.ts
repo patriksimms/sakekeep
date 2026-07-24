@@ -158,15 +158,10 @@ test.describe.serial("critical local prototype workflows", () => {
     const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
     await expect(layoutSelect).toContainText("Warm quote")
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
-    for (const name of [
-      "Answer text",
-      "Static text",
-      "Image",
-      "Gallery",
-      "Add rectangle",
-      "Add circle",
-      "Add line",
-    ]) {
+    await expect(page.getByRole("button", { name: /^Add text for / }).first()).toBeVisible()
+    await expect(page.getByRole("button", { name: /^Add image for / }).first()).toBeVisible()
+    await expect(page.getByRole("button", { name: /^Add gallery for / }).first()).toBeVisible()
+    for (const name of ["Static text", "Add rectangle", "Add circle", "Add line"]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
 
@@ -194,7 +189,9 @@ test.describe.serial("critical local prototype workflows", () => {
     }
     const tabletBounds = await canvasDocumentBounds()
     expect(tabletBounds).not.toBeNull()
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
@@ -216,7 +213,9 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
     const desktopBounds = await canvasDocumentBounds()
     expect(desktopBounds).not.toBeNull()
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
     await page.getByRole("button", { name: "Rectangle", exact: true }).click()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
@@ -312,7 +311,9 @@ test.describe.serial("critical local prototype workflows", () => {
 
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.reload()
-    await page.getByRole("button", { name: "Which memory still makes you smile?" }).click()
+    await page
+      .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
+      .click()
     await page.screenshot({
       path: resolve(screenshots, "layout-editor-tablet.png"),
       fullPage: true,

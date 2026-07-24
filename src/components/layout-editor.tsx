@@ -83,6 +83,11 @@ import {
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
+import {
+  boundQuestionLabel,
+  layoutQuestionPalette,
+  questionPrompt,
+} from "#/domain/layout-question-palette.ts"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
 import {
   type FormQuestion,
@@ -138,9 +143,7 @@ function elementLabel(element: LayoutElement, questions: FormQuestion[]): string
     element.type === "image-frame" ||
     element.type === "gallery-frame"
   ) {
-    return (
-      questions.find((question) => question.id === element.questionId)?.prompt || "Unbound element"
-    )
+    return boundQuestionLabel(questions, element.questionId)
   }
   const labels: Record<LayoutElement["type"], string> = {
     "bound-text": "Question text",
@@ -338,16 +341,12 @@ function ElementInspector({
       ...element,
       geometry: { ...element.geometry, [key]: value },
     })
-  const compatibleQuestions =
-    element.type === "image-frame" || element.type === "gallery-frame"
-      ? questions.filter((question) => question.type === "images")
-      : questions.filter(
-          (question) =>
-            question.type === "single-line" ||
-            question.type === "multiline" ||
-            question.type === "radio" ||
-            question.type === "checkboxes"
-        )
+  const boundQuestion =
+    element.type === "bound-text" ||
+    element.type === "image-frame" ||
+    element.type === "gallery-frame"
+      ? questions.find((question) => question.id === element.questionId)
+      : undefined
 
   return (
     <div className="flex flex-col gap-5">
@@ -411,25 +410,13 @@ function ElementInspector({
           <Separator />
           <Field>
             <FieldLabel>Question binding</FieldLabel>
-            <Select
-              value={element.questionId}
-              onValueChange={(questionId) => {
-                if (questionId) onChange({ ...element, questionId })
-              }}
+            <p
+              aria-label="Question binding"
+              className="rounded-lg border bg-muted/45 px-3 py-2 text-sm"
             >
-              <SelectTrigger className="w-full" aria-label="Question binding">
-                <SelectValue placeholder="Choose a question" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {compatibleQuestions.map((question) => (
-                    <SelectItem key={question.id} value={question.id}>
-                      {question.prompt || "Untitled question"}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              {questionPrompt(boundQuestion)}
+            </p>
+            <FieldDescription>Frozen with the published questionnaire.</FieldDescription>
           </Field>
         </>
       )}
@@ -708,22 +695,11 @@ function Editor({
   }
 
   const selected = schema.elements.find((element) => element.id === selectedId)
-  const textQuestion = project.formSchema.questions.find(
-    (question) =>
-      question.type === "single-line" ||
-      question.type === "multiline" ||
-      question.type === "radio" ||
-      question.type === "checkboxes"
-  )
-  const imageQuestion = project.formSchema.questions.find((question) => question.type === "images")
+  const questionPalette = layoutQuestionPalette(project.formSchema.questions)
 
-  const add = (type: LayoutElement["type"]) => {
-    const binding =
-      type === "image-frame" || type === "gallery-frame" ? imageQuestion?.id : textQuestion?.id
-    let next = addElement(schema, type, binding)
+  const add = (type: LayoutElement["type"], questionId?: string) => {
+    const next = addElement(schema, type, questionId)
     const added = next.elements.at(-1)!
-    if (type === "bound-text" && !binding) return
-    if ((type === "image-frame" || type === "gallery-frame") && !binding) return
     markChanged(next)
     setSelectedId(added.id)
   }
@@ -897,111 +873,122 @@ function Editor({
 
       <div className="min-w-0">
         <Card className="mb-4 bg-card/90">
-          <CardContent className="flex flex-wrap items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => add("bound-text")}
-              disabled={!textQuestion}
-            >
-              <TypeIcon data-icon="inline-start" />
-              Answer text
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => add("static-text")}>
-              <TypeIcon data-icon="inline-start" />
-              Static text
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => add("image-frame")}
-              disabled={!imageQuestion}
-            >
-              <ImageIcon data-icon="inline-start" />
-              Image
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => add("gallery-frame")}
-              disabled={!imageQuestion}
-            >
-              <GalleryHorizontalIcon data-icon="inline-start" />
-              Gallery
-            </Button>
-            <IconAction label="Add rectangle">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => add("rectangle")}
-                aria-label="Add rectangle"
-              >
-                <RectangleHorizontalIcon />
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {questionPalette.map((item) => (
+                <div
+                  key={item.questionId}
+                  className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/70 p-2"
+                >
+                  <span className="min-w-0 truncate text-sm font-medium" title={item.prompt}>
+                    {item.prompt}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
+                    {item.actions.map((action) => (
+                      <Button
+                        key={action.elementType}
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
+                        onClick={() => add(action.elementType, item.questionId)}
+                      >
+                        {action.elementType === "bound-text" ? (
+                          <TypeIcon data-icon="inline-start" />
+                        ) : action.elementType === "image-frame" ? (
+                          <ImageIcon data-icon="inline-start" />
+                        ) : (
+                          <GalleryHorizontalIcon data-icon="inline-start" />
+                        )}
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Separator />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => add("static-text")}>
+                <TypeIcon data-icon="inline-start" />
+                Static text
               </Button>
-            </IconAction>
-            <IconAction label="Add circle">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => add("circle")}
-                aria-label="Add circle"
-              >
-                <CircleIcon />
-              </Button>
-            </IconAction>
-            <IconAction label="Add line">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => add("line")}
-                aria-label="Add line"
-              >
-                <MinusIcon />
-              </Button>
-            </IconAction>
-            <label className="inline-flex">
-              <input
-                type="file"
-                className="sr-only"
-                accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
-                onChange={uploadDecorative}
-              />
-              <span className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50">
-                <ImagePlusIcon aria-hidden="true" />
-                Decor
-              </span>
-            </label>
-            <Separator orientation="vertical" className="mx-1 h-6" />
-            <IconAction label="Undo" disabled={historyIndex.current <= 0}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Undo"
-                disabled={historyIndex.current <= 0}
-                onClick={() => {
-                  if (historyIndex.current <= 0) return
-                  historyIndex.current -= 1
-                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
-                }}
-              >
-                <Undo2Icon />
-              </Button>
-            </IconAction>
-            <IconAction label="Redo" disabled={historyIndex.current >= history.current.length - 1}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Redo"
+              <IconAction label="Add rectangle">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => add("rectangle")}
+                  aria-label="Add rectangle"
+                >
+                  <RectangleHorizontalIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Add circle">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => add("circle")}
+                  aria-label="Add circle"
+                >
+                  <CircleIcon />
+                </Button>
+              </IconAction>
+              <IconAction label="Add line">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => add("line")}
+                  aria-label="Add line"
+                >
+                  <MinusIcon />
+                </Button>
+              </IconAction>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  className="sr-only"
+                  accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
+                  onChange={uploadDecorative}
+                />
+                <span className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50">
+                  <ImagePlusIcon aria-hidden="true" />
+                  Decor
+                </span>
+              </label>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+              <IconAction label="Undo" disabled={historyIndex.current <= 0}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Undo"
+                  disabled={historyIndex.current <= 0}
+                  onClick={() => {
+                    if (historyIndex.current <= 0) return
+                    historyIndex.current -= 1
+                    markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                  }}
+                >
+                  <Undo2Icon />
+                </Button>
+              </IconAction>
+              <IconAction
+                label="Redo"
                 disabled={historyIndex.current >= history.current.length - 1}
-                onClick={() => {
-                  if (historyIndex.current >= history.current.length - 1) return
-                  historyIndex.current += 1
-                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
-                }}
               >
-                <Redo2Icon />
-              </Button>
-            </IconAction>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Redo"
+                  disabled={historyIndex.current >= history.current.length - 1}
+                  onClick={() => {
+                    if (historyIndex.current >= history.current.length - 1) return
+                    historyIndex.current += 1
+                    markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                  }}
+                >
+                  <Redo2Icon />
+                </Button>
+              </IconAction>
+            </div>
           </CardContent>
         </Card>
 
@@ -1009,121 +996,121 @@ function Editor({
           <CardContent className="flex min-h-8 flex-wrap items-center gap-1">
             {selected ? (
               <>
-              <IconAction label="Align horizontal centre">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Align horizontal centre"
-                  onClick={() =>
-                    changeSelected({
-                      ...selected,
-                      geometry: {
-                        ...selected.geometry,
-                        x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
-                      },
-                    })
-                  }
-                >
-                  <AlignCenterHorizontalIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Align vertical centre">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Align vertical centre"
-                  onClick={() =>
-                    changeSelected({
-                      ...selected,
-                      geometry: {
-                        ...selected.geometry,
-                        y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
-                      },
-                    })
-                  }
-                >
-                  <AlignCenterVerticalIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Send backward one layer" disabled={isBackmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Send backward one layer"
-                  disabled={isBackmost}
-                  onClick={() => moveLayer("backward")}
-                >
-                  <ArrowDownIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Bring forward one layer" disabled={isFrontmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Bring forward one layer"
-                  disabled={isFrontmost}
-                  onClick={() => moveLayer("forward")}
-                >
-                  <ArrowUpIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Send to back" disabled={isBackmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Send to back"
-                  disabled={isBackmost}
-                  onClick={() => moveLayer("back")}
-                >
-                  <SendToBackIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Bring to front" disabled={isFrontmost}>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Bring to front"
-                  disabled={isFrontmost}
-                  onClick={() => moveLayer("front")}
-                >
-                  <BringToFrontIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Duplicate selected element">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Duplicate selected element"
-                  onClick={() => {
-                    const duplicate = {
-                      ...structuredClone(selected),
-                      id: crypto.randomUUID(),
-                      geometry: {
-                        ...selected.geometry,
-                        x: selected.geometry.x + 4,
-                        y: selected.geometry.y + 4,
-                      },
+                <IconAction label="Align horizontal centre">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Align horizontal centre"
+                    onClick={() =>
+                      changeSelected({
+                        ...selected,
+                        geometry: {
+                          ...selected.geometry,
+                          x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
+                        },
+                      })
                     }
-                    markChanged({
-                      ...schema,
-                      elements: [...schema.elements, duplicate],
-                    })
-                    setSelectedId(duplicate.id)
-                  }}
-                >
-                  <CopyIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Delete selected element">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Delete selected element"
-                  onClick={deleteSelected}
-                >
-                  <Trash2Icon />
-                </Button>
-              </IconAction>
+                  >
+                    <AlignCenterHorizontalIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Align vertical centre">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Align vertical centre"
+                    onClick={() =>
+                      changeSelected({
+                        ...selected,
+                        geometry: {
+                          ...selected.geometry,
+                          y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
+                        },
+                      })
+                    }
+                  >
+                    <AlignCenterVerticalIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Send backward one layer" disabled={isBackmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Send backward one layer"
+                    disabled={isBackmost}
+                    onClick={() => moveLayer("backward")}
+                  >
+                    <ArrowDownIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Bring forward one layer" disabled={isFrontmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Bring forward one layer"
+                    disabled={isFrontmost}
+                    onClick={() => moveLayer("forward")}
+                  >
+                    <ArrowUpIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Send to back" disabled={isBackmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Send to back"
+                    disabled={isBackmost}
+                    onClick={() => moveLayer("back")}
+                  >
+                    <SendToBackIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Bring to front" disabled={isFrontmost}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Bring to front"
+                    disabled={isFrontmost}
+                    onClick={() => moveLayer("front")}
+                  >
+                    <BringToFrontIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Duplicate selected element">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Duplicate selected element"
+                    onClick={() => {
+                      const duplicate = {
+                        ...structuredClone(selected),
+                        id: crypto.randomUUID(),
+                        geometry: {
+                          ...selected.geometry,
+                          x: selected.geometry.x + 4,
+                          y: selected.geometry.y + 4,
+                        },
+                      }
+                      markChanged({
+                        ...schema,
+                        elements: [...schema.elements, duplicate],
+                      })
+                      setSelectedId(duplicate.id)
+                    }}
+                  >
+                    <CopyIcon />
+                  </Button>
+                </IconAction>
+                <IconAction label="Delete selected element">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Delete selected element"
+                    onClick={deleteSelected}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </IconAction>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">

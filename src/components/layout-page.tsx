@@ -1,4 +1,5 @@
 import { gallerySlots } from "#/domain/layout.ts"
+import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
 import {
   canonicalToPercentageGeometry,
   millimetresToContainerWidth,
@@ -84,7 +85,7 @@ function ElementContent({
         ? element.content
         : content.submission
           ? answerText(content.submission.answers[element.questionId], question)
-          : "Answer preview"
+          : boundQuestionPlaceholder(content.questions ?? [], element.questionId)
     return (
       <div
         data-layout-element-id={element.id}
