@@ -55,6 +55,28 @@ describe("canonical layout schema", () => {
     ).toBe(true)
   })
 
+  it("preserves fractional opacity and rejects non-finite or out-of-range values", () => {
+    const schema = addElement(emptyLayoutSchema(), "rectangle")
+    const element = schema.elements[0]!
+
+    for (const opacity of [0, 0.35, 1]) {
+      const parsed = layoutSchemaValidator.parse({
+        ...schema,
+        elements: [{ ...element, opacity }],
+      })
+      expect(parsed.elements[0]?.opacity).toBe(opacity)
+    }
+
+    for (const opacity of [-0.01, 1.01, Number.NaN]) {
+      expect(
+        layoutSchemaValidator.safeParse({
+          ...schema,
+          elements: [{ ...element, opacity }],
+        }).success
+      ).toBe(false)
+    }
+  })
+
   it("creates deterministic gallery slots and editable focal points", () => {
     expect(gallerySlots("four-square", 100, 60, 4)).toHaveLength(4)
     const schema = addElement(emptyLayoutSchema(), "gallery-frame", "photos")
