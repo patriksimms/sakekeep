@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ImprintRouteImport } from './routes/imprint'
 import { Route as LayoutParityRouteImport } from './routes/layout-parity'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiProjectsRouteImport } from './routes/api.projects'
@@ -34,6 +35,11 @@ import { Route as ApiProjectsProjectIdLayoutsLayoutIdRouteImport } from './route
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImprintRoute = ImprintRouteImport.update({
+  id: '/imprint',
+  path: '/imprint',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutParityRoute = LayoutParityRouteImport.update({
@@ -147,6 +153,7 @@ const ApiProjectsProjectIdLayoutsLayoutIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/imprint': typeof ImprintRoute
   '/layout-parity': typeof LayoutParityRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
@@ -170,6 +177,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/imprint': typeof ImprintRoute
   '/layout-parity': typeof LayoutParityRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
@@ -194,6 +202,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/imprint': typeof ImprintRoute
   '/layout-parity': typeof LayoutParityRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/imprint'
     | '/layout-parity'
     | '/api/health'
     | '/api/projects'
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/imprint'
     | '/layout-parity'
     | '/api/health'
     | '/api/projects'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/imprint'
     | '/layout-parity'
     | '/api/health'
     | '/api/projects'
@@ -289,6 +301,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ImprintRoute: typeof ImprintRoute
   LayoutParityRoute: typeof LayoutParityRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
@@ -309,6 +322,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/imprint': {
+      id: '/imprint'
+      path: '/imprint'
+      fullPath: '/imprint'
+      preLoaderRoute: typeof ImprintRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/layout-parity': {
@@ -507,6 +527,7 @@ const ApiProjectsRouteWithChildren = ApiProjectsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ImprintRoute: ImprintRoute,
   LayoutParityRoute: LayoutParityRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
