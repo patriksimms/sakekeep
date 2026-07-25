@@ -1,12 +1,23 @@
-import { defineConfig } from "vite"
+import { defineConfig, loadEnv } from "vite"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 
 import viteReact from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
-const config = defineConfig({
-  resolve: { tsconfigPaths: true },
-  plugins: [tailwindcss(), tanstackStart(), viteReact()],
+import { validateProductionAuthConfiguration } from "./src/server/auth-config.ts"
+
+const config = defineConfig(({ command, mode }) => {
+  if (command === "build") {
+    validateProductionAuthConfiguration({
+      ...loadEnv(mode, process.cwd(), ""),
+      ...process.env,
+    })
+  }
+
+  return {
+    resolve: { tsconfigPaths: true },
+    plugins: [tailwindcss(), tanstackStart(), viteReact()],
+  }
 })
 
 export default config
