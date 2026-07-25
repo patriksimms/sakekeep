@@ -1,5 +1,8 @@
 import { spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const required = [
   "VITE_CLERK_PUBLISHABLE_KEY",
@@ -13,10 +16,13 @@ if (missing.length > 0) {
 }
 
 const suffix = randomBytes(8).toString("hex")
-const environment = {
+const postgresPassword = `postgres-${randomBytes(24).toString("hex")}`
+const statePath = join(tmpdir(), `sakekeep-production-smoke-${suffix}.json`)
+const environment: NodeJS.ProcessEnv = {
   ...process.env,
   COMPOSE_PROJECT_NAME: `sakekeep-smoke-${suffix}`,
-  POSTGRES_PASSWORD: `postgres-${randomBytes(24).toString("hex")}`,
+  POSTGRES_PASSWORD: postgresPassword,
+  DATABASE_URL: `postgresql://sakekeep:${encodeURIComponent(postgresPassword)}@postgres:5432/sakekeep`,
   S3_ACCESS_KEY_ID: `smoke-${suffix}`,
   S3_SECRET_ACCESS_KEY: randomBytes(32).toString("hex"),
   S3_BUCKET: `sakekeep-smoke-${suffix}`,
@@ -32,19 +38,28 @@ function run(command: string, args: string[]) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed`)
 }
 
+const playwright = [
+  "run",
+  "test:e2e",
+  "--",
+  "--config=playwright.production.config.ts",
+  "e2e/production-smoke.spec.ts",
+]
+
 try {
   run("docker", [...compose, "config", "--quiet"])
   run("docker", [...compose, "build", "app", "migrate"])
   run("docker", [...compose, "up", "-d", "--wait"])
   run("docker", [...compose, "run", "--rm", "migrate", "bun", "run", "db:seed"])
+  Object.assign(environment, {
+    PRODUCTION_SMOKE_PHASE: "create",
+    PRODUCTION_SMOKE_STATE_PATH: statePath,
+  })
+  run("bun", playwright)
   run("docker", [...compose, "up", "-d", "--wait", "--force-recreate", "app"])
-  run("bun", [
-    "run",
-    "test:e2e",
-    "--",
-    "--config=playwright.production.config.ts",
-    "e2e/production-smoke.spec.ts",
-  ])
+  environment.PRODUCTION_SMOKE_PHASE = "verify"
+  run("bun", playwright)
 } finally {
   run("docker", [...compose, "down", "--volumes", "--remove-orphans"])
+  rmSync(statePath, { force: true })
 }

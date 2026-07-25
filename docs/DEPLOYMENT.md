@@ -15,27 +15,29 @@ DNS; only the `app` service receives a Coolify domain.
 
 Configure these Coolify build-time and runtime values:
 
-| Variable                     | Scope         | Requirement                                 |
-| ---------------------------- | ------------- | ------------------------------------------- |
-| `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                   |
-| `DATABASE_URL`               | Runtime       | Compose derives it from `POSTGRES_PASSWORD` |
-| `S3_ENDPOINT`                | Runtime       | Compose fixes it to `http://rustfs:9000`    |
-| `S3_REGION`                  | Runtime       | Defaults to `us-east-1`                     |
-| `S3_ACCESS_KEY_ID`           | Runtime       | Unique RustFS access key                    |
-| `S3_SECRET_ACCESS_KEY`       | Runtime       | Unique generated secret                     |
-| `S3_BUCKET`                  | Runtime       | Defaults to `sakekeep`                      |
-| `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable  |
-| `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin           |
-| `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                            |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Build/runtime | Clerk production publishable key            |
-| `CLERK_SECRET_KEY`           | Runtime       | Clerk production secret key                 |
-| `NODE_ENV`, `HOST`, `PORT`   | Runtime       | Fixed to `production`, `0.0.0.0`, `3000`    |
+| Variable                     | Scope         | Requirement                                  |
+| ---------------------------- | ------------- | -------------------------------------------- |
+| `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                    |
+| `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password |
+| `S3_ENDPOINT`                | Runtime       | Compose fixes it to `http://rustfs:9000`     |
+| `S3_REGION`                  | Runtime       | Defaults to `us-east-1`                      |
+| `S3_ACCESS_KEY_ID`           | Runtime       | Unique RustFS access key                     |
+| `S3_SECRET_ACCESS_KEY`       | Runtime       | Unique generated secret                      |
+| `S3_BUCKET`                  | Runtime       | Defaults to `sakekeep`                       |
+| `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable   |
+| `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin            |
+| `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                             |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Build/runtime | Clerk production publishable key             |
+| `CLERK_SECRET_KEY`           | Runtime       | Clerk production secret key                  |
+| `NODE_ENV`, `HOST`, `PORT`   | Runtime       | Fixed to `production`, `0.0.0.0`, `3000`     |
 
 Compose uses required-variable expressions, so missing secrets stop
 configuration before deployment. The application also rejects local defaults,
 demo mode, short share secrets, and non-HTTPS origins in production. Values
 starting with `VITE_` are public browser configuration; never put a secret in
-one.
+one. `DATABASE_URL` must use the same password as `POSTGRES_PASSWORD`, with
+reserved URL characters percent-encoded (for example, `#` becomes `%23` and
+`/` becomes `%2F`).
 
 To validate the production definition without using real credentials:
 
@@ -101,10 +103,10 @@ bun run smoke:production
 
 The smoke test uses a uniquely named Compose project, builds the production
 targets, starts an empty stack, runs migrations without an automatic seed,
-inserts test fixtures explicitly, recreates the app container, signs into the
-organizer UI, exercises an anonymous image submission, creates and downloads a
-PDF export, and removes its test volumes. It never uses production credentials
-or volumes.
+inserts test fixtures explicitly, signs into the organizer UI, exercises an
+anonymous image submission, and creates a PDF export. It then recreates the app
+container and retrieves the submission, uploaded image, and PDF before removing
+its test volumes. It never uses production credentials or volumes.
 
 ## Backups and restore
 

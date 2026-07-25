@@ -1,8 +1,13 @@
+import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
 
+const postgresPassword = "compose#validation/password?with@reserved:characters"
+const databaseUrl =
+  "postgresql://sakekeep:compose%23validation%2Fpassword%3Fwith%40reserved%3Acharacters@postgres:5432/sakekeep"
 const validationEnvironment = {
   ...process.env,
-  POSTGRES_PASSWORD: "compose-validation-postgres-password",
+  POSTGRES_PASSWORD: postgresPassword,
+  DATABASE_URL: databaseUrl,
   S3_ACCESS_KEY_ID: "compose-validation-access-key",
   S3_SECRET_ACCESS_KEY: "compose-validation-object-store-secret",
   S3_BUCKET: "sakekeep-compose-validation",
@@ -14,11 +19,25 @@ const validationEnvironment = {
 
 const result = spawnSync(
   "docker",
-  ["compose", "-f", "docker-compose.coolify.yml", "config", "--quiet"],
+  ["compose", "-f", "docker-compose.coolify.yml", "config", "--format", "json"],
   {
     env: validationEnvironment,
-    stdio: "inherit",
+    encoding: "utf8",
   }
 )
 if (result.error) throw result.error
-process.exit(result.status ?? 1)
+if (result.status !== 0) {
+  process.stderr.write(result.stderr)
+  process.exit(result.status ?? 1)
+}
+
+const config = JSON.parse(result.stdout) as {
+  services: Record<string, { environment: Record<string, string> }>
+}
+assert.equal(config.services.app?.environment.DATABASE_URL, databaseUrl)
+assert.equal(config.services.migrate?.environment.DATABASE_URL, databaseUrl)
+assert.equal(config.services.postgres?.environment.POSTGRES_PASSWORD, postgresPassword)
+assert.equal(
+  decodeURIComponent(new URL(config.services.app.environment.DATABASE_URL).password),
+  postgresPassword
+)
