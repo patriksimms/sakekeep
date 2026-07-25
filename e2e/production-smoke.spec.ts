@@ -6,7 +6,8 @@ import { shareTokenForProject } from "../src/server/share-token"
 
 test.skip(process.env.PRODUCTION_SMOKE !== "true", "Run through bun run smoke:production.")
 
-const projectId = "11111111-1111-4111-8111-111111111111"
+const collectingProjectId = "22222222-2222-4222-8222-222222222222"
+const exportProjectId = "11111111-1111-4111-8111-111111111111"
 const submissionMarker = "The production container preserved an uploaded image."
 const statePath = process.env.PRODUCTION_SMOKE_STATE_PATH
 if (process.env.PRODUCTION_SMOKE === "true" && !statePath) {
@@ -29,7 +30,7 @@ test("creates persistent production data before app recreation", async ({ page, 
   await page.goto("/projects")
   await expect(page.getByText("Lea’s farewell book")).toBeVisible()
 
-  const collectingToken = shareTokenForProject("22222222-2222-4222-8222-222222222222")
+  const collectingToken = shareTokenForProject(collectingProjectId)
   const publicResponse = await request.get(`/s/${collectingToken}`)
   expect(publicResponse.ok()).toBe(true)
 
@@ -50,7 +51,7 @@ test("creates persistent production data before app recreation", async ({ page, 
     checks: { database: { status: "ok" }, objectStore: { status: "ok" } },
   })
 
-  const exportResponse = await request.post(`/api/projects/${projectId}/export`, { data: {} })
+  const exportResponse = await request.post(`/api/projects/${exportProjectId}/export`, { data: {} })
   expect(exportResponse.ok()).toBe(true)
   const { id } = (await exportResponse.json()) as { id: string }
   const download = await request.get(`/api/exports/${id}`)
@@ -70,7 +71,7 @@ test("retrieves production data after app recreation", async ({ request }) => {
     checks: { database: { status: "ok" }, objectStore: { status: "ok" } },
   })
 
-  const projectResponse = await request.get(`/api/projects/${projectId}?submissions=true`)
+  const projectResponse = await request.get(`/api/projects/${collectingProjectId}?submissions=true`)
   expect(projectResponse.ok()).toBe(true)
   const project = (await projectResponse.json()) as Project
   const submission = project.submissions?.find((candidate) =>
