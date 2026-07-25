@@ -80,6 +80,8 @@ bun run storage:cleanup   # retry tombstoned/orphan object deletion
 bun run setup:icc         # fetch and checksum-verify the ECI ICC profile
 bun run dev               # development server on localhost:3000
 bun run build             # production client and server build
+bun run start             # native Bun production server after a build
+bun run smoke:production  # isolated production Compose smoke test (requires Clerk test credentials)
 bun run verify            # every required repository gate
 ```
 
@@ -93,6 +95,7 @@ bun run test
 bun run test:e2e
 bun run build
 docker compose config --quiet
+bun run scripts/check-production-compose.ts
 ```
 
 Vitest covers schema validation, lifecycle and concurrency behavior,
@@ -132,6 +135,19 @@ This prototype does not run an independent commercial or ISO 15930 conformance
 validator. The precise PDF/X-4 claim boundary, ICC licensing decision, and
 manual Poppler verification procedure are documented in
 `docs/PDF_PIPELINE.md`.
+
+## Production deployment
+
+The production image uses the repository-pinned Bun runtime and serves the
+TanStack Start fetch handler through the native server in `server.ts`; it does
+not use Vite preview or Nitro. `docker-compose.coolify.yml` adds the application,
+one-shot migrations, internal-only PostgreSQL and RustFS services, health
+checks, and persistent volumes. The complete Coolify, Cloudflare, backup,
+restore, migration, cleanup, logging, sizing, and smoke-test procedure is in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+Do not expose a deployment publicly until organizer authorization and
+restricted Clerk sign-up in issue #23 are complete.
 
 ## Reset and cleanup
 
