@@ -12,11 +12,11 @@ x-app-environment: &app-environment
   PORT: "3000"
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
   DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL with a percent-encoded password}
-  S3_ENDPOINT: http://rustfs:9000
-  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ENDPOINT: https://eu2.contabostorage.com
+  S3_REGION: ${S3_REGION:-default}
   S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID}
   S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY}
-  S3_BUCKET: ${S3_BUCKET:-sakekeep}
+  S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
   SHARE_TOKEN_SECRET: ${SHARE_TOKEN_SECRET:?Set SHARE_TOKEN_SECRET}
   APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
   VITE_SAKEKEEP_DEMO_MODE: "false"
@@ -33,8 +33,6 @@ services:
       migrate:
         condition: service_completed_successfully
       postgres:
-        condition: service_healthy
-      rustfs:
         condition: service_healthy
     expose:
       - "3000"
@@ -78,39 +76,5 @@ services:
       timeout: 5s
       retries: 20
 
-  rustfs-permissions:
-    image: alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
-    user: root
-    volumes:
-      - rustfs-data:/fix/data
-      - rustfs-logs:/fix/logs
-    command: ["sh", "-c", "chown -R 10001:10001 /fix/data /fix/logs"]
-    restart: "no"
-
-  rustfs:
-    image: rustfs/rustfs:latest@sha256:3c2d55977829620284ece8593901bf776bcfc0fc9972784352de4dcffdb92416
-    depends_on:
-      rustfs-permissions:
-        condition: service_completed_successfully
-    environment:
-      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID}
-      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY}
-      RUSTFS_CONSOLE_ENABLE: "false"
-      RUSTFS_OBS_LOG_DIRECTORY: /logs
-    command: ["/data"]
-    expose:
-      - "9000"
-    volumes:
-      - rustfs-data:/data
-      - rustfs-logs:/logs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-
 volumes:
   postgres-data:
-  rustfs-data:
-  rustfs-logs:

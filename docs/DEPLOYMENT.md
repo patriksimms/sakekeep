@@ -10,8 +10,9 @@ untrusted users.
 
 `docker-compose.coolify.yml` builds one image with separate `runtime` and
 `migrate` targets. The one-shot migration container must complete before the
-application starts. PostgreSQL and RustFS are reachable only by Compose service
-DNS; only the `app` service receives a Coolify domain.
+application starts. PostgreSQL is reachable only by Compose service DNS, while
+the app uses Contabo Object Storage at `https://eu2.contabostorage.com`. Only
+the `app` service receives a Coolify domain.
 
 Configure these Coolify build-time and runtime values:
 
@@ -19,11 +20,11 @@ Configure these Coolify build-time and runtime values:
 | ---------------------------- | ------------- | -------------------------------------------- |
 | `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                    |
 | `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password |
-| `S3_ENDPOINT`                | Runtime       | Compose fixes it to `http://rustfs:9000`     |
-| `S3_REGION`                  | Runtime       | Defaults to `us-east-1`                      |
-| `S3_ACCESS_KEY_ID`           | Runtime       | Unique RustFS access key                     |
-| `S3_SECRET_ACCESS_KEY`       | Runtime       | Unique generated secret                      |
-| `S3_BUCKET`                  | Runtime       | Defaults to `sakekeep`                       |
+| `S3_ENDPOINT`                | Runtime       | Fixed to `https://eu2.contabostorage.com`    |
+| `S3_REGION`                  | Runtime       | Defaults to `default`                        |
+| `S3_ACCESS_KEY_ID`           | Runtime       | Contabo access key                           |
+| `S3_SECRET_ACCESS_KEY`       | Runtime       | Contabo secret key                           |
+| `S3_BUCKET`                  | Runtime       | Existing Contabo bucket name                 |
 | `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable   |
 | `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin            |
 | `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                             |
@@ -52,19 +53,19 @@ bun run scripts/check-production-compose.ts
 2. Set the Compose file to `/docker-compose.coolify.yml`.
 3. Add the variables above. Mark runtime secrets as secret values and make
    `VITE_CLERK_PUBLISHABLE_KEY` available during the image build.
-4. Deploy. Confirm `postgres` and `rustfs` become healthy, `migrate` exits zero,
-   and `app` becomes healthy. The migration and permissions services use
-   `restart: "no"` because they are intentionally one-shot; current Coolify
-   excludes such services from long-running status evaluation.
+4. Deploy. Confirm `postgres` becomes healthy, `migrate` exits zero, and `app`
+   becomes healthy. The migration service uses `restart: "no"` because it is
+   intentionally one-shot; current Coolify excludes such services from
+   long-running status evaluation.
 5. Assign `https://<hostname>:3000` to the `app` service only. `3000` is the
    container target; Coolify's proxy serves normal public HTTPS. Do not add
-   domains or host port mappings for PostgreSQL or RustFS.
+   domains or host port mappings for PostgreSQL.
 6. Keep the resource private until organizer authorization and restricted Clerk
    sign-up from issue #23 have been verified.
 
-Named volumes (`postgres-data`, `rustfs-data`, and `rustfs-logs`) survive app
-rebuilds and normal redeployments. Never select a destructive volume reset for
-a routine deployment.
+The `postgres-data` named volume survives app rebuilds and normal redeployments.
+Objects persist in the external Contabo bucket. Never select a destructive
+database volume reset or empty the bucket for a routine deployment.
 
 ## Cloudflare and firewall
 
@@ -78,8 +79,9 @@ a routine deployment.
    cached by the application; fingerprinted `/assets/**` files are immutable.
 
 The server firewall should expose only SSH as operationally required and the
-Coolify proxy's HTTP/HTTPS ports. Port 3000, PostgreSQL 5432, RustFS 9000, and
-the RustFS console must not be reachable from the public network.
+Coolify proxy's HTTP/HTTPS ports. Port 3000 and PostgreSQL 5432 must not be
+reachable from the public network. Allow outbound HTTPS from the app to
+`eu2.contabostorage.com`.
 
 ## Verification
 
@@ -89,7 +91,7 @@ After deployment:
 curl --fail --silent https://<hostname>/api/health
 ```
 
-The endpoint returns `200` only when both PostgreSQL and RustFS respond.
+The endpoint returns `200` only when both PostgreSQL and Contabo Object Storage respond.
 Stopping either dependency must change it to `503`.
 
 For a destructive, isolated local production-stack smoke test, create a Clerk
@@ -102,15 +104,17 @@ bun run smoke:production
 ```
 
 The smoke test uses a uniquely named Compose project, builds the production
-targets, starts an empty stack, runs migrations without an automatic seed,
+targets, adds an isolated RustFS service through `docker-compose.smoke.yml`,
+starts an empty stack, runs migrations without an automatic seed,
 inserts test fixtures explicitly, signs into the organizer UI, exercises an
 anonymous image submission, and creates a PDF export. It then recreates the app
 container and retrieves the submission, uploaded image, and PDF before removing
-its test volumes. It never uses production credentials or volumes.
+its test volumes. The override tests the S3 integration without reading from or
+writing to Contabo. It never uses production credentials or volumes.
 
 ## Backups and restore
 
-Treat the PostgreSQL dump and RustFS data snapshot as one timestamped recovery
+Treat the PostgreSQL dump and Contabo bucket backup as one timestamped recovery
 set. A database record can reference an object, so restoring only one side can
 produce missing assets or orphaned objects.
 
@@ -125,16 +129,16 @@ For a consistent logical backup:
      pg_dump -U sakekeep -d sakekeep --format=custom > sakekeep-YYYYMMDD.dump
    ```
 
-4. Snapshot or archive the `rustfs-data` volume using the host's encrypted,
-   tested backup system.
-5. Store the dump, RustFS snapshot, deployed SHA, and checksums together outside
-   the Coolify host.
+4. Mirror or archive the Contabo bucket to a separate, encrypted backup
+   location using an S3-compatible backup tool.
+5. Store the dump, bucket backup, deployed SHA, and checksums as one recovery
+   set outside the Coolify host and outside the production bucket.
 
-To restore, create fresh empty volumes, restore the RustFS snapshot and
-PostgreSQL dump from the same recovery set, deploy the recorded application
-version, run its migrations, then check `/api/health`, a representative public
-share, an image, and a PDF download before reopening traffic. Test this
-procedure periodically on an isolated Compose project.
+To restore, create a fresh database volume and destination bucket, restore the
+bucket backup and PostgreSQL dump from the same recovery set, configure the
+recorded application version for that bucket, run its migrations, then check
+`/api/health`, a representative public share, an image, and a PDF download
+before reopening traffic. Test this procedure periodically in isolation.
 
 ## Migrations, cleanup, logs, and sizing
 
@@ -155,11 +159,11 @@ docker compose -f docker-compose.coolify.yml exec -T app bun run storage:cleanup
 Inspect application and dependency logs in Coolify or with:
 
 ```sh
-docker compose -f docker-compose.coolify.yml logs --since=1h app migrate postgres rustfs
+docker compose -f docker-compose.coolify.yml logs --since=1h app migrate postgres
 ```
 
 Start with at least 2 CPU cores and 2 GiB RAM for the app, then measure real
 exports. Sharp image processing and PDF generation create short CPU and memory
 spikes; larger books and concurrent exports may require 4 GiB or more. Set
 Coolify resource limits only after measuring peak resident memory, and leave
-headroom for PostgreSQL, RustFS, and the proxy.
+headroom for PostgreSQL and the proxy.

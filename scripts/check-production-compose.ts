@@ -32,11 +32,27 @@ if (result.status !== 0) {
 }
 
 const config = JSON.parse(result.stdout) as {
-  services: Record<string, { environment: Record<string, string> }>
+  services: Record<
+    string,
+    {
+      environment: Record<string, string>
+      ports?: unknown[]
+    }
+  >
+  volumes?: Record<string, unknown>
 }
 assert.equal(config.services.app?.environment.DATABASE_URL, databaseUrl)
 assert.equal(config.services.migrate?.environment.DATABASE_URL, databaseUrl)
 assert.equal(config.services.postgres?.environment.POSTGRES_PASSWORD, postgresPassword)
+assert.equal(config.services.app?.environment.S3_ENDPOINT, "https://eu2.contabostorage.com")
+assert.equal(config.services.migrate?.environment.S3_ENDPOINT, "https://eu2.contabostorage.com")
+assert.equal(config.services.app?.environment.S3_REGION, "default")
+assert.equal(config.services.migrate?.environment.S3_REGION, "default")
+assert.equal(config.services.rustfs, undefined)
+assert.equal(config.services["rustfs-permissions"], undefined)
+assert.equal(config.services.app?.ports, undefined)
+assert.equal(config.services.postgres?.ports, undefined)
+assert.deepEqual(Object.keys(config.volumes ?? {}), ["postgres-data"])
 assert.equal(
   decodeURIComponent(new URL(config.services.app.environment.DATABASE_URL).password),
   postgresPassword
