@@ -21,7 +21,7 @@ Configure these Coolify build-time and runtime values:
 | `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                    |
 | `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password |
 | `S3_ENDPOINT`                | Runtime       | Fixed to `https://eu2.contabostorage.com`    |
-| `S3_REGION`                  | Runtime       | Defaults to `default`                        |
+| `S3_REGION`                  | Runtime       | Fixed to `default`                           |
 | `S3_ACCESS_KEY_ID`           | Runtime       | Contabo access key                           |
 | `S3_SECRET_ACCESS_KEY`       | Runtime       | Contabo secret key                           |
 | `S3_BUCKET`                  | Runtime       | Existing Contabo bucket name                 |
