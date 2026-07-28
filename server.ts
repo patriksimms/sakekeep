@@ -1,5 +1,7 @@
 import { relative, resolve, sep } from "node:path"
 
+import { validateProductionAuthConfiguration } from "#/server/auth-config.ts"
+
 const clientDirectory = resolve("dist/client")
 const serverEntryPoint = resolve("dist/server/server.js")
 const fingerprintedAsset = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/
@@ -92,6 +94,10 @@ function messageFor(error: unknown): string {
 }
 
 export async function startServer() {
+  if (process.env.NODE_ENV === "production") {
+    validateProductionAuthConfiguration(process.env)
+  }
+
   const port = Number(process.env.PORT ?? 3000)
   const hostname = process.env.HOST ?? "0.0.0.0"
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {

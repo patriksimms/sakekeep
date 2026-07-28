@@ -2,12 +2,10 @@ import { clerkMiddleware } from "@clerk/tanstack-react-start/server"
 import { createStart } from "@tanstack/react-start"
 
 import { isDemoMode } from "#/lib/demo-mode.ts"
-import { validateProductionAuthConfiguration } from "#/server/auth-config.ts"
 import { authorizationMiddleware } from "#/server/auth-policy.ts"
 
-if (process.env.NODE_ENV === "production") {
-  validateProductionAuthConfiguration(process.env)
-}
+// Production auth configuration is validated in server.ts; this module is bundled for the
+// browser too, where `process.env` compiles to `{}` and any check here always fails.
 
 export const startInstance = createStart(() => {
   return {
