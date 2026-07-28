@@ -1,6 +1,8 @@
 import { relative, resolve, sep } from "node:path"
 
-import { validateProductionAuthConfiguration } from "#/server/auth-config.ts"
+// Relative, not the "#/" alias: this file runs from source inside the runtime image, which
+// has no tsconfig.json, and Bun resolves "#/" through tsconfig paths rather than package.json.
+import { validateProductionAuthConfiguration } from "./src/server/auth-config.ts"
 
 const clientDirectory = resolve("dist/client")
 const serverEntryPoint = resolve("dist/server/server.js")
