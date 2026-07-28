@@ -1,4 +1,4 @@
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/tanstack-react-start"
+import { Show, SignInButton, UserButton } from "@clerk/tanstack-react-start"
 import { Link } from "@tanstack/react-router"
 import { BookHeartIcon, LaptopIcon, MoonIcon, SunIcon } from "lucide-react"
 
@@ -42,11 +42,8 @@ export function AppHeader() {
               </Show>
               <Show when="signed-out">
                 <SignInButton mode="modal">
-                  <Button variant="ghost">Sign in</Button>
+                  <Button>Sign in</Button>
                 </SignInButton>
-                <SignUpButton mode="modal">
-                  <Button>Sign up</Button>
-                </SignUpButton>
               </Show>
               <Show when="signed-in">
                 <UserButton />

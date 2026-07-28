@@ -1,13 +1,11 @@
 # Sakekeep
 
-Sakekeep is an unauthenticated, local-only prototype for collecting anonymous
+Sakekeep is a private shared organizer workspace for collecting anonymous
 memories and photos, composing a friend book, and exporting a print-ready DIN
 A5 landscape PDF. `PLAN.md` is the product source of truth.
 
-> Prototype warning: there is no authentication or authorization. Anyone who
-> can reach the local server can open the organizer workspace. Use test data
-> only and do not expose port 3000, PostgreSQL, or RustFS to an untrusted
-> network.
+Clerk authentication protects every organizer page and API. Contributor links
+remain anonymous and token-based.
 
 ## Requirements
 
@@ -17,8 +15,8 @@ A5 landscape PDF. `PLAN.md` is the product source of truth.
   `bunx playwright install chromium`)
 - Optional for independent PDF inspection: Poppler (`pdfinfo` and `pdftoppm`)
 
-No hosted database, object store, identity provider, or production service is
-required.
+Clerk is required outside explicit local/test demo mode. PostgreSQL and an
+S3-compatible object store are required for application data.
 
 ## Fresh setup
 
@@ -26,6 +24,8 @@ required.
 git clone <repository-url>
 cd sakekeep
 cp .env.example .env
+# Add development Clerk keys to .env, or set VITE_SAKEKEEP_DEMO_MODE=true for
+# local-only exploration.
 bun run setup
 bun run dev
 ```
@@ -80,6 +80,8 @@ bun run storage:cleanup   # retry tombstoned/orphan object deletion
 bun run setup:icc         # fetch and checksum-verify the ECI ICC profile
 bun run dev               # development server on localhost:3000
 bun run build             # production client and server build
+bun run start             # native Bun production server after a build
+bun run smoke:production  # isolated production Compose smoke test (requires Clerk test credentials)
 bun run verify            # every required repository gate
 ```
 
@@ -93,6 +95,7 @@ bun run test
 bun run test:e2e
 bun run build
 docker compose config --quiet
+bun run scripts/check-production-compose.ts
 ```
 
 Vitest covers schema validation, lifecycle and concurrency behavior,
@@ -102,13 +105,44 @@ mobile and desktop contribution, all organizer form types, publishing, tablet
 layout review, book review, export, and automated WCAG A/AA scans. Saved visual
 evidence lives under `visual-artifacts/`.
 
+## Authentication and route policy
+
+Any user admitted to the linked Clerk instance can access the shared organizer
+workspace. There is no per-user project ownership or tenant isolation.
+
+- Authenticated organizer surfaces: `/projects/**`, `/layout-parity`,
+  `/api/projects/**`, `/api/assets/**`, and `/api/exports/**`.
+- Public surfaces: `/`, `/imprint`, `/sign-in/**`, the restricted Clerk
+  invitation flow at `/sign-up/**`, `/s/:token`, `/api/share/:token`,
+  `/api/health`, and static assets.
+- Signed-out organizer page requests redirect to `/sign-in` with a same-origin
+  return path. Signed-out organizer API requests receive JSON `401`.
+
+`VITE_SAKEKEEP_DEMO_MODE=true` bypasses Clerk only for local development and
+tests. Production startup and builds reject demo mode and missing Clerk keys.
+Never enable demo mode in a public deployment.
+
+The committed `clerk/auth-access-control.json` keeps registration restricted.
+After linking the application and creating its production instance, apply and
+verify both environments:
+
+```sh
+clerk config patch --instance dev --file clerk/auth-access-control.json --yes
+clerk config patch --instance prod --file clerk/auth-access-control.json --yes
+clerk config pull --instance dev --keys auth_access_control
+clerk config pull --instance prod --keys auth_access_control
+```
+
+Both `config pull` commands must report a non-public `sign_up_mode` before
+deployment.
+
 ## Architecture
 
 - TanStack Start, React, TypeScript, TanStack Query, Tailwind CSS, and shadcn
   Base UI components
 - PostgreSQL with Drizzle migrations as the relational source of truth
-- RustFS through the S3 API for print masters, previews, decorative assets, and
-  export artifacts
+- S3-compatible object storage for print masters, previews, decorative assets,
+  and export artifacts (RustFS locally, Contabo Object Storage in production)
 - Sharp for orientation normalization, metadata removal, color-managed print
   masters, and sRGB WebP previews
 - Fabric.js 7 as an interaction adapter over a typed, versioned canonical
@@ -132,6 +166,20 @@ This prototype does not run an independent commercial or ISO 15930 conformance
 validator. The precise PDF/X-4 claim boundary, ICC licensing decision, and
 manual Poppler verification procedure are documented in
 `docs/PDF_PIPELINE.md`.
+
+## Production deployment
+
+The production image uses the repository-pinned Bun runtime and serves the
+TanStack Start fetch handler through the native server in `server.ts`; it does
+not use Vite preview or Nitro. `docker-compose.coolify.yml` adds the application,
+one-shot migrations, internal-only PostgreSQL, external Contabo Object Storage,
+health checks, and a persistent database volume. The complete Coolify,
+Cloudflare, backup, restore, migration, cleanup, logging, sizing, and smoke-test
+procedure is in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+Do not expose a deployment publicly until organizer authorization and
+restricted Clerk sign-up in issue #23 are complete.
 
 ## Reset and cleanup
 

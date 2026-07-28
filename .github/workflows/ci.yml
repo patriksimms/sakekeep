@@ -16,7 +16,9 @@ jobs:
       S3_BUCKET: sakekeep
       SHARE_TOKEN_SECRET: sakekeep-ci-share-token-secret-with-at-least-thirty-two-characters
       APP_ORIGIN: http://127.0.0.1:3000
-      VITE_SAKEKEEP_DEMO_MODE: "true"
+      VITE_SAKEKEEP_DEMO_MODE: "false"
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_c2FrZWtlZXAuY2xlcmsuYWNjb3VudHMk
+      CLERK_SECRET_KEY: sk_test_sakekeep_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v6
