@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { validateProductionAuthConfiguration } from "./auth-config.ts"
+import {
+  validateProductionAuthBuildConfiguration,
+  validateProductionAuthConfiguration,
+} from "./auth-config.ts"
 
 const configuredProduction = {
   VITE_SAKEKEEP_DEMO_MODE: "false",
@@ -9,21 +12,38 @@ const configuredProduction = {
 }
 
 describe("production Clerk configuration", () => {
-  it("accepts configured authentication", () => {
+  it("accepts configured runtime authentication", () => {
     expect(() => validateProductionAuthConfiguration(configuredProduction)).not.toThrow()
   })
 
-  it("rejects demo mode", () => {
+  it("accepts a build without the runtime-only secret", () => {
+    const { CLERK_SECRET_KEY: _secret, ...buildEnvironment } = configuredProduction
+    expect(() => validateProductionAuthBuildConfiguration(buildEnvironment)).not.toThrow()
+  })
+
+  it.each([validateProductionAuthBuildConfiguration, validateProductionAuthConfiguration])(
+    "rejects demo mode",
+    (validate) => {
+      expect(() =>
+        validate({
+          ...configuredProduction,
+          VITE_SAKEKEEP_DEMO_MODE: "true",
+        })
+      ).toThrow(/VITE_SAKEKEEP_DEMO_MODE=true/)
+    }
+  )
+
+  it("rejects a build without VITE_CLERK_PUBLISHABLE_KEY", () => {
     expect(() =>
-      validateProductionAuthConfiguration({
+      validateProductionAuthBuildConfiguration({
         ...configuredProduction,
-        VITE_SAKEKEEP_DEMO_MODE: "true",
+        VITE_CLERK_PUBLISHABLE_KEY: "",
       })
-    ).toThrow(/VITE_SAKEKEEP_DEMO_MODE=true/)
+    ).toThrow(/VITE_CLERK_PUBLISHABLE_KEY/)
   })
 
   it.each(["VITE_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY"])(
-    "rejects a build without %s",
+    "rejects a runtime without %s",
     (name) => {
       expect(() =>
         validateProductionAuthConfiguration({
