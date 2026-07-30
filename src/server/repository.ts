@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, max, sql } from "drizzle-orm"
 
-import { emptyFormSchema, validateFormForPublish } from "../domain/form"
+import { emptyFormSchema, validateFormForDraft, validateFormForPublish } from "../domain/form"
 import { generateBook } from "../domain/generation"
 import { emptyLayoutSchema, layoutSchemaValidator } from "../domain/layout"
 import {
@@ -162,17 +162,9 @@ export async function updateProject(input: {
     if (input.expectedRevision === undefined) {
       throw new HttpError(400, "Form autosave requires an expected revision.")
     }
-    const parsed = validateFormForPublish({
-      ...input.formSchema,
-      questions: input.formSchema.questions,
-    })
-    const structuralIssues = parsed.filter(
-      (issue) => issue.message !== "Add at least one valid question before publishing."
-    )
-    if (structuralIssues.length > 0) {
-      throw new HttpError(422, "The form contains invalid configuration.", {
-        issues: structuralIssues,
-      })
+    const issues = validateFormForDraft(input.formSchema)
+    if (issues.length > 0) {
+      throw new HttpError(422, "The form contains invalid configuration.", { issues })
     }
   }
 

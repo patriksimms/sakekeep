@@ -21,7 +21,12 @@ import {
   type Project,
   type QuestionType,
 } from "#/domain/types.ts"
-import { validateFormForPublish } from "#/domain/form.ts"
+import {
+  groupFormIssues,
+  type QuestionIssues,
+  type ValidationIssue,
+  validateFormForPublish,
+} from "#/domain/form.ts"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,7 +49,13 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card.tsx"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field.tsx"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "#/components/ui/field.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import {
   Select,
@@ -56,7 +67,7 @@ import {
 } from "#/components/ui/select.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
-import { projectApi } from "#/lib/api.ts"
+import { ApiError, projectApi } from "#/lib/api.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
@@ -107,10 +118,41 @@ function SaveIndicator({ state }: { state: SaveState }) {
   )
 }
 
+/**
+ * The server reports rejected saves as `{ error, details: { issues } }`. Without this the issue
+ * list is dropped and the organizer only ever sees the generic headline.
+ */
+function validationIssuesFrom(error: unknown): ValidationIssue[] {
+  if (!(error instanceof ApiError)) return []
+  const details = error.details
+  if (typeof details !== "object" || details === null || !("issues" in details)) return []
+  const issues = (details as { issues: unknown }).issues
+  if (!Array.isArray(issues)) return []
+  return issues.filter(
+    (issue): issue is ValidationIssue =>
+      typeof issue === "object" &&
+      issue !== null &&
+      typeof (issue as ValidationIssue).path === "string" &&
+      typeof (issue as ValidationIssue).message === "string"
+  )
+}
+
+/** Toast headline companion for issues that have no field to sit next to on screen. */
+function describeIssues(issues: ValidationIssue[]): string {
+  const messages = [...new Set(issues.map((issue) => issue.message))]
+  return messages.slice(0, 3).join(" ") + (messages.length > 3 ? " …" : "")
+}
+
+/** Adapt our plain message strings to the shape `FieldError` renders. */
+function asErrors(messages: string[] | undefined) {
+  return messages?.length ? messages.map((message) => ({ message })) : undefined
+}
+
 interface QuestionEditorProps {
   question: FormQuestion
   index: number
   count: number
+  issues: QuestionIssues | undefined
   onChange: (question: FormQuestion) => void
   onMove: (direction: -1 | 1) => void
   onRemove: () => void
@@ -120,12 +162,16 @@ function QuestionEditor({
   question,
   index,
   count,
+  issues,
   onChange,
   onMove,
   onRemove,
 }: QuestionEditorProps) {
   const update = <T extends FormQuestion>(changes: Partial<T>) =>
     onChange({ ...question, ...changes } as FormQuestion)
+
+  const promptErrors = asErrors(issues?.prompt)
+  const otherErrors = asErrors(issues?.other)
 
   return (
     <Card className="bg-card/90" data-testid="question-card">
@@ -171,7 +217,7 @@ function QuestionEditor({
       </CardHeader>
       <CardContent>
         <FieldGroup>
-          <Field>
+          <Field data-invalid={promptErrors ? true : undefined}>
             <FieldLabel htmlFor={`prompt-${question.id}`}>Question</FieldLabel>
             <Textarea
               id={`prompt-${question.id}`}
@@ -180,8 +226,10 @@ function QuestionEditor({
               placeholder="What will you always remember about us?"
               rows={2}
               maxLength={500}
-              aria-invalid={!question.prompt.trim()}
+              aria-invalid={promptErrors ? true : undefined}
+              aria-describedby={promptErrors ? `prompt-error-${question.id}` : undefined}
             />
+            <FieldError id={`prompt-error-${question.id}`} errors={promptErrors} />
           </Field>
           <Field orientation="horizontal">
             <Switch
@@ -233,69 +281,77 @@ function QuestionEditor({
             <Field>
               <FieldLabel>Ordered choices</FieldLabel>
               <div className="flex flex-col gap-2">
-                {question.choices.map((choice, choiceIndex) => (
-                  <div key={choice.id} className="flex items-center gap-2">
-                    <Input
-                      value={choice.label}
-                      aria-label={`Choice ${choiceIndex + 1}`}
-                      onChange={(event) =>
-                        update({
-                          choices: question.choices.map((candidate) =>
-                            candidate.id === choice.id
-                              ? { ...candidate, label: event.target.value }
-                              : candidate
-                          ),
-                        })
-                      }
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Move choice ${choiceIndex + 1} up`}
-                      disabled={choiceIndex === 0}
-                      onClick={() => {
-                        const choices = [...question.choices]
-                        const [moved] = choices.splice(choiceIndex, 1)
-                        choices.splice(choiceIndex - 1, 0, moved!)
-                        update({ choices })
-                      }}
-                    >
-                      <ArrowUpIcon />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Move choice ${choiceIndex + 1} down`}
-                      disabled={choiceIndex === question.choices.length - 1}
-                      onClick={() => {
-                        const choices = [...question.choices]
-                        const [moved] = choices.splice(choiceIndex, 1)
-                        choices.splice(choiceIndex + 1, 0, moved!)
-                        update({ choices })
-                      }}
-                    >
-                      <ArrowDownIcon />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Delete choice ${choiceIndex + 1}`}
-                      disabled={question.choices.length <= 2}
-                      onClick={() =>
-                        update({
-                          choices: question.choices.filter(
-                            (candidate) => candidate.id !== choice.id
-                          ),
-                        })
-                      }
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </div>
-                ))}
+                {question.choices.map((choice, choiceIndex) => {
+                  const choiceErrors = asErrors(issues?.choices.get(choiceIndex))
+                  return (
+                    <div key={choice.id} className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={choice.label}
+                          aria-label={`Choice ${choiceIndex + 1}`}
+                          aria-invalid={choiceErrors ? true : undefined}
+                          aria-describedby={choiceErrors ? `choice-error-${choice.id}` : undefined}
+                          onChange={(event) =>
+                            update({
+                              choices: question.choices.map((candidate) =>
+                                candidate.id === choice.id
+                                  ? { ...candidate, label: event.target.value }
+                                  : candidate
+                              ),
+                            })
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Move choice ${choiceIndex + 1} up`}
+                          disabled={choiceIndex === 0}
+                          onClick={() => {
+                            const choices = [...question.choices]
+                            const [moved] = choices.splice(choiceIndex, 1)
+                            choices.splice(choiceIndex - 1, 0, moved!)
+                            update({ choices })
+                          }}
+                        >
+                          <ArrowUpIcon />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Move choice ${choiceIndex + 1} down`}
+                          disabled={choiceIndex === question.choices.length - 1}
+                          onClick={() => {
+                            const choices = [...question.choices]
+                            const [moved] = choices.splice(choiceIndex, 1)
+                            choices.splice(choiceIndex + 1, 0, moved!)
+                            update({ choices })
+                          }}
+                        >
+                          <ArrowDownIcon />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Delete choice ${choiceIndex + 1}`}
+                          disabled={question.choices.length <= 2}
+                          onClick={() =>
+                            update({
+                              choices: question.choices.filter(
+                                (candidate) => candidate.id !== choice.id
+                              ),
+                            })
+                          }
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </div>
+                      <FieldError id={`choice-error-${choice.id}`} errors={choiceErrors} />
+                    </div>
+                  )
+                })}
               </div>
               <Button
                 type="button"
@@ -340,6 +396,8 @@ function QuestionEditor({
               </FieldDescription>
             </Field>
           )}
+
+          <FieldError errors={otherErrors} />
         </FieldGroup>
       </CardContent>
       <CardFooter className="justify-between text-xs text-muted-foreground">
@@ -359,6 +417,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
   const [form, setForm] = useState(project.formSchema)
   const [saveState, setSaveState] = useState<SaveState>("saved")
   const [addType, setAddType] = useState<QuestionType>("single-line")
+  const [saveIssues, setSaveIssues] = useState<ValidationIssue[]>([])
   const revisionRef = useRef(project.formRevision)
   const formRef = useRef(form)
   const editVersion = useRef(0)
@@ -392,6 +451,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       })
       revisionRef.current = updated.formRevision
       savedVersion.current = version
+      setSaveIssues([])
       onProjectChange(updated)
       if (savedVersion.current === editVersion.current) {
         setSaveState("saved")
@@ -402,7 +462,11 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       }
     } catch (error) {
       setSaveState("failed")
-      toast.error(error instanceof Error ? error.message : "Autosave failed")
+      const issues = validationIssuesFrom(error)
+      setSaveIssues(issues)
+      toast.error(error instanceof Error ? error.message : "Autosave failed", {
+        description: issues.length > 0 ? describeIssues(issues) : undefined,
+      })
     } finally {
       saveInFlight.current = false
     }
@@ -434,11 +498,14 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
     formRef.current = next
     editVersion.current += 1
     setSaveState("unsaved")
+    // The stale inline errors describe a payload that no longer exists.
+    setSaveIssues([])
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void save(), 700)
   }
 
   const issues = useMemo(() => validateFormForPublish(form), [form])
+  const grouped = useMemo(() => groupFormIssues(saveIssues), [saveIssues])
 
   if (project.state !== "draft") {
     return (
@@ -567,6 +634,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
               question={question}
               index={index}
               count={form.questions.length}
+              issues={grouped.byQuestion.get(index)}
               onChange={(updated) =>
                 change({
                   ...form,
@@ -590,6 +658,27 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
             />
           ))}
         </div>
+      )}
+
+      {grouped.form.length > 0 && (
+        <Card className="border-destructive/50 bg-card/80">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangleIcon aria-hidden="true" />
+              This form could not be saved
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul
+              role="alert"
+              className="flex list-disc flex-col gap-1 pl-5 text-sm text-destructive"
+            >
+              {grouped.form.map((message, index) => (
+                <li key={`${message}-${index}`}>{message}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
 
       {issues.length > 0 && (

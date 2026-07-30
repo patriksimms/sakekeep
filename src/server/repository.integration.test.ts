@@ -7,9 +7,11 @@ import {
   createSubmissionRecord,
   deleteProject,
   duplicateProject,
+  getProject,
   publishProject,
   updateProject,
 } from "./repository.ts"
+import { FORM_SCHEMA_VERSION, type FormSchema } from "../domain/types.ts"
 import { completeForm } from "../test/fixtures.ts"
 
 const createdProjectIds = new Set<string>()
@@ -99,5 +101,90 @@ describe("repository state machine", () => {
       submissionCount: 0,
       shareUrl: null,
     })
+  })
+})
+
+describe("draft autosave validation", () => {
+  const blankPromptForm: FormSchema = {
+    version: FORM_SCHEMA_VERSION,
+    questions: [
+      { id: "fresh", type: "single-line", prompt: "", required: false, validateUrl: false },
+      {
+        id: "fresh-radio",
+        type: "radio",
+        prompt: "",
+        required: false,
+        choices: [
+          { id: "a", label: "" },
+          { id: "b", label: "Option 2" },
+        ],
+      },
+    ],
+  }
+
+  it("saves a question the organizer has only just added", async () => {
+    const project = await createProject({ title: "Fresh question" })
+    createdProjectIds.add(project.id)
+
+    const saved = await updateProject({
+      projectId: project.id,
+      formSchema: blankPromptForm,
+      expectedRevision: 0,
+    })
+    expect(saved.formSchema).toEqual(blankPromptForm)
+    expect(saved.formRevision).toBe(1)
+  })
+
+  it("still rejects a structurally invalid draft and reports which field failed", async () => {
+    const project = await createProject({ title: "Invalid draft" })
+    createdProjectIds.add(project.id)
+
+    const rejection = await updateProject({
+      projectId: project.id,
+      formSchema: {
+        version: FORM_SCHEMA_VERSION,
+        questions: [
+          {
+            id: "too-long",
+            type: "multiline",
+            prompt: "x".repeat(501),
+            required: false,
+          },
+        ],
+      },
+      expectedRevision: 0,
+    }).catch((error: unknown) => error)
+
+    expect(rejection).toBeInstanceOf(HttpError)
+    expect(rejection).toMatchObject({
+      status: 422,
+      details: {
+        issues: [{ path: "questions.0.prompt", message: "Use no more than 500 characters." }],
+      },
+    })
+
+    // The rejected save must not have advanced the revision.
+    expect((await getProject(project.id)).formRevision).toBe(0)
+  })
+
+  it("refuses to publish the blank-prompt draft it happily saved", async () => {
+    const project = await createProject({ title: "Blank prompt publish" })
+    createdProjectIds.add(project.id)
+    await updateProject({
+      projectId: project.id,
+      formSchema: blankPromptForm,
+      expectedRevision: 0,
+    })
+
+    const rejection = await publishProject(project.id).catch((error: unknown) => error)
+    expect(rejection).toBeInstanceOf(HttpError)
+    expect(rejection).toMatchObject({ status: 422 })
+    expect((rejection as HttpError).details).toMatchObject({
+      issues: expect.arrayContaining([
+        { path: "questions.0.prompt", message: "Enter a question prompt." },
+        { path: "questions.1.choices.0.label", message: "Enter a choice label." },
+      ]),
+    })
+    expect((await getProject(project.id)).state).toBe("draft")
   })
 })
