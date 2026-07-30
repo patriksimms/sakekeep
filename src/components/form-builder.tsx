@@ -140,7 +140,19 @@ function validationIssuesFrom(error: unknown): ValidationIssue[] {
 /** Toast headline companion for issues that have no field to sit next to on screen. */
 function describeIssues(issues: ValidationIssue[]): string {
   const messages = [...new Set(issues.map((issue) => issue.message))]
-  return messages.slice(0, 3).join(" ") + (messages.length > 3 ? " …" : "")
+  return messages.slice(0, 3).join(" · ") + (messages.length > 3 ? " …" : "")
+}
+
+/**
+ * Publish-blocking issues are listed away from the inputs, and an empty prompt reads identically
+ * for every question, so the message alone does not say which card to open.
+ */
+function describePublishIssue(issue: ValidationIssue): string {
+  const [root, rawIndex] = issue.path.split(".")
+  const index = Number(rawIndex)
+  return root === "questions" && Number.isInteger(index)
+    ? `Question ${index + 1}: ${issue.message}`
+    : issue.message
 }
 
 /** Adapt our plain message strings to the shape `FieldError` renders. */
@@ -461,6 +473,13 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
         timer.current = setTimeout(() => void save(), 400)
       }
     } catch (error) {
+      // Issue paths are positional, so a response that describes a superseded payload would
+      // pin its errors on whichever question now occupies that index. The edit that superseded
+      // it has already queued its own save; let that one report the real state.
+      if (version !== editVersion.current) {
+        setSaveState("unsaved")
+        return
+      }
       setSaveState("failed")
       const issues = validationIssuesFrom(error)
       setSaveIssues(issues)
@@ -692,7 +711,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
           <CardContent>
             <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
               {issues.map((issue, index) => (
-                <li key={`${issue.path}-${index}`}>{issue.message}</li>
+                <li key={`${issue.path}-${index}`}>{describePublishIssue(issue)}</li>
               ))}
             </ul>
           </CardContent>
