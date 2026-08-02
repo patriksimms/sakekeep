@@ -2,6 +2,7 @@ import { type Canvas } from "fabric"
 import {
   AlignCenterHorizontalIcon,
   AlignCenterVerticalIcon,
+  ArchiveIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   BringToFrontIcon,
@@ -1207,6 +1208,18 @@ export function LayoutsPanel({
       setSelectedId(project.layouts[0]?.id ?? null)
     }
   }, [project.layouts, selectedId])
+
+  if (project.archivedAt) {
+    return (
+      <Alert>
+        <ArchiveIcon />
+        <AlertTitle>This project is archived</AlertTitle>
+        <AlertDescription>
+          Layouts stay exactly as they were. Unarchive the project to edit them again.
+        </AlertDescription>
+      </Alert>
+    )
+  }
 
   if (project.state !== "closed") {
     return (

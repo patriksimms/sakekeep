@@ -246,6 +246,7 @@ export interface Project {
   layouts: LayoutRecord[]
   book: GeneratedBook | null
   submissions?: SubmissionSummary[]
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -257,6 +258,7 @@ export interface ProjectSummary {
   state: ProjectState
   submissionCount: number
   bookStatus: BookStatus
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
 }

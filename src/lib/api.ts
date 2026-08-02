@@ -49,8 +49,10 @@ export const projectApi = {
       body: JSON.stringify(input),
     }),
   remove: (projectId: string) => api<void>(`/api/projects/${projectId}`, { method: "DELETE" }),
-  action: (projectId: string, action: "publish" | "close" | "duplicate") =>
-    api<Project>(`/api/projects/${projectId}/${action}`, { method: "POST" }),
+  action: (
+    projectId: string,
+    action: "publish" | "close" | "duplicate" | "archive" | "unarchive"
+  ) => api<Project>(`/api/projects/${projectId}/${action}`, { method: "POST" }),
   layoutAction: <T>(projectId: string, input: object) =>
     api<T>(`/api/projects/${projectId}/layouts`, {
       method: "POST",

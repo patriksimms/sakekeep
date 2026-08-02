@@ -23,6 +23,7 @@ import { Route as ApiAssetsAssetIdRouteImport } from './routes/api.assets.$asset
 import { Route as ApiExportsExportIdRouteImport } from './routes/api.exports.$exportId'
 import { Route as ApiProjectsProjectIdRouteImport } from './routes/api.projects.$projectId'
 import { Route as ApiShareTokenRouteImport } from './routes/api.share.$token'
+import { Route as ApiProjectsProjectIdArchiveRouteImport } from './routes/api.projects.$projectId.archive'
 import { Route as ApiProjectsProjectIdAssetsRouteImport } from './routes/api.projects.$projectId.assets'
 import { Route as ApiProjectsProjectIdBookRouteImport } from './routes/api.projects.$projectId.book'
 import { Route as ApiProjectsProjectIdCloseRouteImport } from './routes/api.projects.$projectId.close'
@@ -30,6 +31,7 @@ import { Route as ApiProjectsProjectIdDuplicateRouteImport } from './routes/api.
 import { Route as ApiProjectsProjectIdExportRouteImport } from './routes/api.projects.$projectId.export'
 import { Route as ApiProjectsProjectIdLayoutsRouteImport } from './routes/api.projects.$projectId.layouts'
 import { Route as ApiProjectsProjectIdPublishRouteImport } from './routes/api.projects.$projectId.publish'
+import { Route as ApiProjectsProjectIdUnarchiveRouteImport } from './routes/api.projects.$projectId.unarchive'
 import { Route as ApiProjectsProjectIdLayoutsLayoutIdRouteImport } from './routes/api.projects.$projectId.layouts.$layoutId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -102,6 +104,12 @@ const ApiShareTokenRoute = ApiShareTokenRouteImport.update({
   path: '/api/share/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiProjectsProjectIdArchiveRoute =
+  ApiProjectsProjectIdArchiveRouteImport.update({
+    id: '/archive',
+    path: '/archive',
+    getParentRoute: () => ApiProjectsProjectIdRoute,
+  } as any)
 const ApiProjectsProjectIdAssetsRoute =
   ApiProjectsProjectIdAssetsRouteImport.update({
     id: '/assets',
@@ -144,6 +152,12 @@ const ApiProjectsProjectIdPublishRoute =
     path: '/publish',
     getParentRoute: () => ApiProjectsProjectIdRoute,
   } as any)
+const ApiProjectsProjectIdUnarchiveRoute =
+  ApiProjectsProjectIdUnarchiveRouteImport.update({
+    id: '/unarchive',
+    path: '/unarchive',
+    getParentRoute: () => ApiProjectsProjectIdRoute,
+  } as any)
 const ApiProjectsProjectIdLayoutsLayoutIdRoute =
   ApiProjectsProjectIdLayoutsLayoutIdRouteImport.update({
     id: '/$layoutId',
@@ -166,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
+  '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
   '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRoute
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
@@ -173,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/api/projects/$projectId/export': typeof ApiProjectsProjectIdExportRoute
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
+  '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
 }
 export interface FileRoutesByTo {
@@ -190,6 +206,7 @@ export interface FileRoutesByTo {
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
+  '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
   '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRoute
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
@@ -197,6 +214,7 @@ export interface FileRoutesByTo {
   '/api/projects/$projectId/export': typeof ApiProjectsProjectIdExportRoute
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
+  '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
 }
 export interface FileRoutesById {
@@ -215,6 +233,7 @@ export interface FileRoutesById {
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
+  '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
   '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRoute
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
@@ -222,6 +241,7 @@ export interface FileRoutesById {
   '/api/projects/$projectId/export': typeof ApiProjectsProjectIdExportRoute
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
+  '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
 }
 export interface FileRouteTypes {
@@ -241,6 +261,7 @@ export interface FileRouteTypes {
     | '/api/exports/$exportId'
     | '/api/projects/$projectId'
     | '/api/share/$token'
+    | '/api/projects/$projectId/archive'
     | '/api/projects/$projectId/assets'
     | '/api/projects/$projectId/book'
     | '/api/projects/$projectId/close'
@@ -248,6 +269,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/export'
     | '/api/projects/$projectId/layouts'
     | '/api/projects/$projectId/publish'
+    | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/layouts/$layoutId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -265,6 +287,7 @@ export interface FileRouteTypes {
     | '/api/exports/$exportId'
     | '/api/projects/$projectId'
     | '/api/share/$token'
+    | '/api/projects/$projectId/archive'
     | '/api/projects/$projectId/assets'
     | '/api/projects/$projectId/book'
     | '/api/projects/$projectId/close'
@@ -272,6 +295,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/export'
     | '/api/projects/$projectId/layouts'
     | '/api/projects/$projectId/publish'
+    | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/layouts/$layoutId'
   id:
     | '__root__'
@@ -289,6 +313,7 @@ export interface FileRouteTypes {
     | '/api/exports/$exportId'
     | '/api/projects/$projectId'
     | '/api/share/$token'
+    | '/api/projects/$projectId/archive'
     | '/api/projects/$projectId/assets'
     | '/api/projects/$projectId/book'
     | '/api/projects/$projectId/close'
@@ -296,6 +321,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/export'
     | '/api/projects/$projectId/layouts'
     | '/api/projects/$projectId/publish'
+    | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/layouts/$layoutId'
   fileRoutesById: FileRoutesById
 }
@@ -415,6 +441,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiShareTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/projects/$projectId/archive': {
+      id: '/api/projects/$projectId/archive'
+      path: '/archive'
+      fullPath: '/api/projects/$projectId/archive'
+      preLoaderRoute: typeof ApiProjectsProjectIdArchiveRouteImport
+      parentRoute: typeof ApiProjectsProjectIdRoute
+    }
     '/api/projects/$projectId/assets': {
       id: '/api/projects/$projectId/assets'
       path: '/assets'
@@ -464,6 +497,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsProjectIdPublishRouteImport
       parentRoute: typeof ApiProjectsProjectIdRoute
     }
+    '/api/projects/$projectId/unarchive': {
+      id: '/api/projects/$projectId/unarchive'
+      path: '/unarchive'
+      fullPath: '/api/projects/$projectId/unarchive'
+      preLoaderRoute: typeof ApiProjectsProjectIdUnarchiveRouteImport
+      parentRoute: typeof ApiProjectsProjectIdRoute
+    }
     '/api/projects/$projectId/layouts/$layoutId': {
       id: '/api/projects/$projectId/layouts/$layoutId'
       path: '/$layoutId'
@@ -490,6 +530,7 @@ const ApiProjectsProjectIdLayoutsRouteWithChildren =
   )
 
 interface ApiProjectsProjectIdRouteChildren {
+  ApiProjectsProjectIdArchiveRoute: typeof ApiProjectsProjectIdArchiveRoute
   ApiProjectsProjectIdAssetsRoute: typeof ApiProjectsProjectIdAssetsRoute
   ApiProjectsProjectIdBookRoute: typeof ApiProjectsProjectIdBookRoute
   ApiProjectsProjectIdCloseRoute: typeof ApiProjectsProjectIdCloseRoute
@@ -497,9 +538,11 @@ interface ApiProjectsProjectIdRouteChildren {
   ApiProjectsProjectIdExportRoute: typeof ApiProjectsProjectIdExportRoute
   ApiProjectsProjectIdLayoutsRoute: typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   ApiProjectsProjectIdPublishRoute: typeof ApiProjectsProjectIdPublishRoute
+  ApiProjectsProjectIdUnarchiveRoute: typeof ApiProjectsProjectIdUnarchiveRoute
 }
 
 const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
+  ApiProjectsProjectIdArchiveRoute: ApiProjectsProjectIdArchiveRoute,
   ApiProjectsProjectIdAssetsRoute: ApiProjectsProjectIdAssetsRoute,
   ApiProjectsProjectIdBookRoute: ApiProjectsProjectIdBookRoute,
   ApiProjectsProjectIdCloseRoute: ApiProjectsProjectIdCloseRoute,
@@ -508,6 +551,7 @@ const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
   ApiProjectsProjectIdLayoutsRoute:
     ApiProjectsProjectIdLayoutsRouteWithChildren,
   ApiProjectsProjectIdPublishRoute: ApiProjectsProjectIdPublishRoute,
+  ApiProjectsProjectIdUnarchiveRoute: ApiProjectsProjectIdUnarchiveRoute,
 }
 
 const ApiProjectsProjectIdRouteWithChildren =

@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowLeftIcon,
   BookOpenIcon,
   FileQuestionIcon,
@@ -29,6 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "#/components/ui/alert-dialog.tsx"
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert.tsx"
 import { Badge } from "#/components/ui/badge.tsx"
 import { Button, buttonVariants } from "#/components/ui/button.tsx"
 import {
@@ -182,17 +185,19 @@ function ProjectWorkspace() {
             <>
               <CardTitle className="flex items-center gap-2 text-3xl">
                 {project.title}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Rename project"
-                  onClick={() => {
-                    setTitle(project.title)
-                    setEditingTitle(true)
-                  }}
-                >
-                  <PencilIcon />
-                </Button>
+                {!project.archivedAt && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Rename project"
+                    onClick={() => {
+                      setTitle(project.title)
+                      setEditingTitle(true)
+                    }}
+                  >
+                    <PencilIcon />
+                  </Button>
+                )}
               </CardTitle>
               <CardDescription>
                 {project.occasion || "No occasion added"} · Updated{" "}
@@ -201,6 +206,12 @@ function ProjectWorkspace() {
             </>
           )}
           <CardAction className="flex items-center gap-2">
+            {project.archivedAt && (
+              <Badge variant="outline">
+                <ArchiveIcon data-icon="inline-start" />
+                Archived
+              </Badge>
+            )}
             <Badge className="capitalize">{project.state}</Badge>
             <Badge
               variant={project.bookStatus === "stale" ? "destructive" : "secondary"}
@@ -225,44 +236,106 @@ function ProjectWorkspace() {
               <span className="text-muted-foreground">pages</span>
             </span>
           </div>
-          <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="ghost" size="sm" />}>
-              <Trash2Icon data-icon="inline-start" />
-              Delete project
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this local project?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The project, submissions, layouts, stored image masters, previews, and exports
-                  will be removed. Safe orphan cleanup retries any object-store failure. This cannot
-                  be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  variant="destructive"
-                  onClick={async () => {
-                    try {
-                      await projectApi.remove(project.id)
-                      await queryClient.invalidateQueries({
-                        queryKey: ["projects"],
-                      })
-                      toast.success("Project deleted")
-                      await navigate({ to: "/projects" })
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Delete failed")
-                    }
-                  }}
-                >
-                  Delete everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="flex items-center gap-2">
+            {project.archivedAt ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    setProject(await projectApi.action(project.id, "unarchive"))
+                    toast.success("Project unarchived")
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Unarchive failed")
+                  }
+                }}
+              >
+                <ArchiveRestoreIcon data-icon="inline-start" />
+                Unarchive project
+              </Button>
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
+                  <ArchiveIcon data-icon="inline-start" />
+                  Archive project
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Archive this project?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      The project keeps its current {project.state} state and every response,
+                      layout, and export. While archived it accepts no new submissions and no edits.
+                      You can unarchive it at any time.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          setProject(await projectApi.action(project.id, "archive"))
+                          toast.success("Project archived")
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Archive failed")
+                        }
+                      }}
+                    >
+                      Archive project
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button variant="ghost" size="sm" />}>
+                <Trash2Icon data-icon="inline-start" />
+                Delete project
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this local project?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The project, submissions, layouts, stored image masters, previews, and exports
+                    will be removed. Safe orphan cleanup retries any object-store failure. This
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    onClick={async () => {
+                      try {
+                        await projectApi.remove(project.id)
+                        await queryClient.invalidateQueries({
+                          queryKey: ["projects"],
+                        })
+                        toast.success("Project deleted")
+                        await navigate({ to: "/projects" })
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : "Delete failed")
+                      }
+                    }}
+                  >
+                    Delete everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
+
+      {project.archivedAt && (
+        <Alert className="mb-6">
+          <ArchiveIcon />
+          <AlertTitle>Archived on {new Date(project.archivedAt).toLocaleDateString()}</AlertTitle>
+          <AlertDescription>
+            Everything stays readable, but the share link reports a closed collection and edits are
+            rejected until you unarchive the project.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs
         value={search.tab ?? defaultStep}

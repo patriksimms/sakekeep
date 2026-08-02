@@ -1,5 +1,6 @@
 import {
   AlertTriangleIcon,
+  ArchiveIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   BookOpenIcon,
@@ -301,6 +302,17 @@ export function BookReview({
     if (project.book) setSettings(project.book.settings)
   }, [project.book])
 
+  if (project.archivedAt) {
+    return (
+      <Alert>
+        <ArchiveIcon />
+        <AlertTitle>This project is archived</AlertTitle>
+        <AlertDescription>
+          The generated book is frozen. Unarchive the project to regenerate or edit pages.
+        </AlertDescription>
+      </Alert>
+    )
+  }
   if (project.state !== "closed") {
     return (
       <Alert>

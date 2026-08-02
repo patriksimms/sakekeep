@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import {
+  ArchiveIcon,
   ArrowRightIcon,
   BookHeartIcon,
   FolderPlusIcon,
@@ -134,11 +135,16 @@ function NewProjectDialog() {
 }
 
 function ProjectsPage() {
+  const [showArchived, setShowArchived] = useState(false)
   const projects = useQuery({
     queryKey: ["projects"],
     queryFn: projectApi.list,
   })
-  const projectList = projects.data?.projects ?? []
+  const allProjects = projects.data?.projects ?? []
+  const archivedCount = allProjects.filter((project) => project.archivedAt).length
+  const projectList = showArchived
+    ? allProjects
+    : allProjects.filter((project) => !project.archivedAt)
 
   return (
     <main id="main-content" className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
@@ -153,7 +159,15 @@ function ProjectsPage() {
             personal data in this prototype.
           </p>
         </div>
-        <NewProjectDialog />
+        <div className="flex items-center gap-2">
+          {archivedCount > 0 && (
+            <Button variant="outline" onClick={() => setShowArchived((current) => !current)}>
+              <ArchiveIcon data-icon="inline-start" />
+              {showArchived ? "Hide archived" : `Show archived (${archivedCount})`}
+            </Button>
+          )}
+          <NewProjectDialog />
+        </div>
       </div>
 
       {projects.isLoading ? (
@@ -198,12 +212,27 @@ function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projectList.map((project) => (
-            <Card key={project.id} className="min-h-56 bg-card/90">
+            <Card
+              key={project.id}
+              className={project.archivedAt ? "min-h-56 bg-card/60" : "min-h-56 bg-card/90"}
+            >
               <CardHeader>
                 <CardTitle className="text-xl">{project.title}</CardTitle>
                 <CardDescription>{project.occasion || "No occasion added"}</CardDescription>
-                <CardAction>
-                  <Badge variant={project.state === "collecting" ? "default" : "secondary"}>
+                <CardAction className="flex items-center gap-2">
+                  {project.archivedAt && (
+                    <Badge variant="outline">
+                      <ArchiveIcon data-icon="inline-start" />
+                      Archived
+                    </Badge>
+                  )}
+                  <Badge
+                    variant={
+                      project.state === "collecting" && !project.archivedAt
+                        ? "default"
+                        : "secondary"
+                    }
+                  >
                     {statusLabel(project.state)}
                   </Badge>
                 </CardAction>

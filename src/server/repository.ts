@@ -61,6 +61,17 @@ function shareUrl(projectId: string, state: string): string | null {
   return `${env().APP_ORIGIN}/s/${shareTokenForProject(projectId)}`
 }
 
+/**
+ * Archiving is orthogonal to the draft → collecting → closed state machine: it freezes a project in
+ * whatever state it is in. Every organizer mutation and every public submission runs through this
+ * guard, so an archived project keeps its state untouched until it is unarchived.
+ */
+function assertNotArchived(project: { archivedAt: Date | null }): void {
+  if (project.archivedAt) {
+    throw new HttpError(409, "This project is archived. Unarchive it before making changes.")
+  }
+}
+
 export async function listProjects(): Promise<ProjectSummary[]> {
   const rows = await db
     .select({
@@ -79,6 +90,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     state: project.state,
     submissionCount,
     bookStatus: project.bookStatus,
+    archivedAt: project.archivedAt ? iso(project.archivedAt) : null,
     createdAt: iso(project.createdAt),
     updatedAt: iso(project.updatedAt),
   }))
@@ -118,6 +130,7 @@ export async function getProject(projectId: string, includeSubmissions = false):
     layouts: layoutRows.map(layoutRecord),
     book: bookRows[0]?.generatedBook ?? null,
     submissions: includeSubmissions ? submissionRows.map(submissionSummary) : undefined,
+    archivedAt: project.archivedAt ? iso(project.archivedAt) : null,
     createdAt: iso(project.createdAt),
     updatedAt: iso(project.updatedAt),
   }
@@ -154,6 +167,7 @@ export async function updateProject(input: {
     .where(eq(projects.id, input.projectId))
     .limit(1)
   if (!existing) throw new HttpError(404, "Project not found.")
+  assertNotArchived(existing)
 
   if (input.formSchema) {
     if (existing.state !== "draft") {
@@ -218,6 +232,7 @@ export async function publishProject(projectId: string): Promise<Project> {
       .where(eq(projects.id, projectId))
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     if (project.state !== "draft") {
       throw new HttpError(409, "This project has already been published.")
     }
@@ -248,6 +263,7 @@ export async function closeProject(projectId: string): Promise<Project> {
       .where(eq(projects.id, projectId))
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     if (project.state === "closed") {
       throw new HttpError(409, "Collection is already permanently closed.")
     }
@@ -258,6 +274,40 @@ export async function closeProject(projectId: string): Promise<Project> {
       .update(projects)
       .set({ state: "closed", updatedAt: new Date() })
       .where(and(eq(projects.id, projectId), eq(projects.state, "collecting")))
+  })
+  return getProject(projectId, true)
+}
+
+export async function archiveProject(projectId: string): Promise<Project> {
+  await db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    if (project.archivedAt) throw new HttpError(409, "This project is already archived.")
+    await tx
+      .update(projects)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(projects.id, projectId), sql`${projects.archivedAt} is null`))
+  })
+  return getProject(projectId, true)
+}
+
+export async function unarchiveProject(projectId: string): Promise<Project> {
+  await db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project.archivedAt) throw new HttpError(409, "This project is not archived.")
+    await tx
+      .update(projects)
+      .set({ archivedAt: null, updatedAt: new Date() })
+      .where(and(eq(projects.id, projectId), sql`${projects.archivedAt} is not null`))
   })
   return getProject(projectId, true)
 }
@@ -368,6 +418,7 @@ export async function createLayout(
       .where(eq(projects.id, projectId))
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     if (project.state !== "closed") {
       throw new HttpError(409, "Close collection before authoring layouts.")
     }
@@ -419,6 +470,7 @@ export async function updateLayout(input: {
       .where(eq(projects.id, input.projectId))
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     const [updated] = await tx
       .update(layouts)
       .set({
@@ -458,6 +510,7 @@ export async function duplicateLayout(projectId: string, layoutId: string): Prom
       .where(eq(projects.id, projectId))
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     const [source] = await tx
       .select()
       .from(layouts)
@@ -494,6 +547,13 @@ export async function reorderLayouts(
   layoutIds: string[]
 ): Promise<LayoutRecord[]> {
   await db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     const current = await tx
       .select()
       .from(layouts)
@@ -543,6 +603,7 @@ export async function deleteLayout(projectId: string, layoutId: string): Promise
       .for("update")
     const [book] = await tx.select().from(books).where(eq(books.projectId, projectId))
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     if (
       book?.generatedBook.pages.some(
         (page) => page.kind === "submission" && page.layoutId === layoutId
@@ -587,6 +648,7 @@ export async function generateProjectBook(
       .where(eq(projects.id, projectId))
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     if (project.state !== "closed") {
       throw new HttpError(409, "Close collection before generating a book.")
     }
@@ -642,6 +704,13 @@ export async function updateProjectBook(input: {
   settings?: GenerationSettings
 }): Promise<GeneratedBook> {
   return db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
     const [book] = await tx
       .select()
       .from(books)
@@ -699,7 +768,7 @@ export async function findPublicProject(token: string): Promise<
     .where(eq(projects.shareTokenHash, shareTokenHash(token)))
     .limit(1)
   if (!project) return { status: "unknown" }
-  if (project.state !== "collecting") return { status: "closed" }
+  if (project.state !== "collecting" || project.archivedAt) return { status: "closed" }
   return {
     status: "collecting",
     projectId: project.id,
@@ -734,7 +803,7 @@ export async function createSubmissionRecord(input: {
       .from(projects)
       .where(eq(projects.id, input.projectId))
       .for("update")
-    if (!project || project.state !== "collecting") {
+    if (!project || project.state !== "collecting" || project.archivedAt) {
       throw new HttpError(409, "Collection is closed. This response was not saved.")
     }
     const [existing] = await tx
@@ -830,6 +899,7 @@ export async function createDecorativeAssetRecord(input: {
 }): Promise<typeof assets.$inferSelect> {
   const [project] = await db.select().from(projects).where(eq(projects.id, input.projectId))
   if (!project) throw new HttpError(404, "Project not found.")
+  assertNotArchived(project)
   if (project.state !== "closed") {
     throw new HttpError(409, "Close collection before authoring layouts.")
   }
