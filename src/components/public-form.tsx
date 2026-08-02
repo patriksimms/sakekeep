@@ -114,19 +114,20 @@ function ImagesField({
   const [dragging, setDragging] = useState(false)
   const [notice, setNotice] = useState("")
 
-  const addDroppedFiles = (candidates: File[]) => {
+  const addFiles = (candidates: File[]) => {
     const images = candidates.filter(isAcceptedImage)
     const free = Math.max(0, question.maxImages - files.length)
     const accepted = images.slice(0, free)
-    onFiles([...files, ...accepted])
-    if (accepted.length === candidates.length) {
-      setNotice("")
-      return
-    }
+    if (accepted.length > 0) onFiles([...files, ...accepted])
     setNotice(
-      images.length < candidates.length
-        ? "Only JPEG, PNG, WebP, HEIF, or HEIC images can be added."
-        : `Only ${question.maxImages} image${question.maxImages === 1 ? "" : "s"} can be added here.`
+      [
+        images.length < candidates.length &&
+          "Only JPEG, PNG, WebP, HEIF, or HEIC images can be added.",
+        accepted.length < images.length &&
+          `Only ${question.maxImages} image${question.maxImages === 1 ? "" : "s"} can be added here.`,
+      ]
+        .filter(Boolean)
+        .join(" ")
     )
   }
 
@@ -150,7 +151,7 @@ function ImagesField({
         onDrop={(event) => {
           event.preventDefault()
           setDragging(false)
-          addDroppedFiles(Array.from(event.dataTransfer?.files ?? []))
+          addFiles(Array.from(event.dataTransfer?.files ?? []))
         }}
       >
         <ImagePlusIcon aria-hidden="true" />
@@ -169,14 +170,14 @@ function ImagesField({
           multiple={question.maxImages > 1}
           aria-invalid={issue ? true : undefined}
           onChange={(event) => {
-            const selected = Array.from(event.target.files ?? [])
-            setNotice("")
-            onFiles([...files, ...selected].slice(0, question.maxImages))
+            addFiles(Array.from(event.target.files ?? []))
             event.target.value = ""
           }}
         />
       </label>
-      {notice && <FieldDescription>{notice}</FieldDescription>}
+      <FieldDescription role="status" className={notice ? undefined : "sr-only"}>
+        {notice}
+      </FieldDescription>
       {files.length > 0 && (
         <ul className="grid gap-2 sm:grid-cols-2">
           {files.map((file, index) => (

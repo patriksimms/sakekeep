@@ -112,6 +112,9 @@ describe("PublicForm privacy consent", () => {
     const submit = await renderForm()
 
     expect(await screen.findByText("Draft restored")).toBeTruthy()
+    expect((screen.getByLabelText(/A memory/) as HTMLTextAreaElement).value).toBe(
+      "A restored memory."
+    )
     expect(consentCheckbox().getAttribute("aria-checked")).toBe("false")
     expect(submit.disabled).toBe(true)
   })
@@ -152,6 +155,48 @@ describe("PublicForm image drag and drop", () => {
     expect(screen.getByRole("button", { name: "Remove two.jpg" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Remove three.webp" })).toBeNull()
     expect(screen.getByText("Only 2 images can be added here.")).toBeTruthy()
+  })
+
+  it("ignores a further drop once the question is full", async () => {
+    await renderForm()
+
+    fireEvent.drop(dropZone(), {
+      dataTransfer: { files: [imageFile("one.png"), imageFile("two.jpg", "image/jpeg")] },
+    })
+    expect(await screen.findByRole("button", { name: "Remove two.jpg" })).toBeTruthy()
+
+    fireEvent.drop(dropZone(), { dataTransfer: { files: [imageFile("late.png")] } })
+
+    expect(await screen.findByText("Only 2 images can be added here.")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Remove late.png" })).toBeNull()
+    expect(screen.getAllByRole("button", { name: /^Remove/ }).length).toBe(2)
+  })
+
+  it("accepts a dropped image again after one is removed", async () => {
+    await renderForm()
+
+    fireEvent.drop(dropZone(), {
+      dataTransfer: { files: [imageFile("one.png"), imageFile("two.jpg", "image/jpeg")] },
+    })
+    fireEvent.click(await screen.findByRole("button", { name: "Remove one.png" }))
+    fireEvent.drop(dropZone(), { dataTransfer: { files: [imageFile("three.webp")] } })
+
+    expect(await screen.findByRole("button", { name: "Remove three.webp" })).toBeTruthy()
+    expect(screen.getAllByRole("button", { name: /^Remove/ }).length).toBe(2)
+  })
+
+  it("applies the same rules to files chosen through the file picker", async () => {
+    await renderForm()
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
+
+    fireEvent.change(input, {
+      target: { files: [new File(["notes"], "notes.txt", { type: "text/plain" })] },
+    })
+
+    expect(
+      await screen.findByText("Only JPEG, PNG, WebP, HEIF, or HEIC images can be added.")
+    ).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull()
   })
 
   it("marks the drop zone while a file is dragged over it", async () => {

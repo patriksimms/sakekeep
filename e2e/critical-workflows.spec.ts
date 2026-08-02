@@ -93,7 +93,17 @@ test.describe.serial("critical local prototype workflows", () => {
       transfer.items.add(file)
       const zone = document.querySelector<HTMLElement>("label:has(input[type=file])")
       if (!zone) throw new Error("The image drop zone is missing.")
-      zone.dispatchEvent(new DragEvent("dragover", { bubbles: true, dataTransfer: transfer }))
+      const dragOver = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      })
+      zone.dispatchEvent(dragOver)
+      if (!dragOver.defaultPrevented) {
+        throw new Error(
+          "The drop zone did not cancel dragover, so the browser would open the file."
+        )
+      }
       zone.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }))
     })
 
@@ -120,10 +130,12 @@ test.describe.serial("critical local prototype workflows", () => {
         cursor: getComputedStyle(element).cursor,
       }))
     )
-    expect(cursors.length).toBeGreaterThan(0)
-    expect(
-      cursors.filter((entry) => !entry.disabled).every((entry) => entry.cursor === "pointer")
-    ).toBe(true)
+    const enabled = cursors.filter((entry) => !entry.disabled)
+    const disabled = cursors.filter((entry) => entry.disabled)
+    expect(enabled.length).toBeGreaterThan(0)
+    expect(enabled.every((entry) => entry.cursor === "pointer")).toBe(true)
+    expect(disabled.length).toBeGreaterThan(0)
+    expect(disabled.every((entry) => entry.cursor !== "pointer")).toBe(true)
   })
 
   test("organizer creates, autosaves, reorders, and publishes every question type", async ({
