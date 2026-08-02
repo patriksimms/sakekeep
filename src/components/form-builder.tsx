@@ -528,46 +528,56 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
   const issues = useMemo(() => validateFormForPublish(form), [form])
   const grouped = useMemo(() => groupFormIssues(saveIssues), [saveIssues])
 
-  if (project.state !== "draft") {
+  const archived = Boolean(project.archivedAt)
+  if (project.state !== "draft" || archived) {
     return (
       <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-heading text-2xl">Published form</h2>
-            <p className="text-sm text-muted-foreground">This revision is permanently frozen.</p>
+            <h2 className="font-heading text-2xl">
+              {archived ? "Archived form" : "Published form"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {archived
+                ? "Unarchive the project to keep editing this form."
+                : "This revision is permanently frozen."}
+            </p>
           </div>
-          <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="outline" />}>
-              <CopyIcon data-icon="inline-start" />
-              Duplicate as draft
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Duplicate this project?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The new draft copies the form and layouts, but never the share token or responses.
-                  This project remains unchanged.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    try {
-                      const duplicate = await projectApi.action(project.id, "duplicate")
-                      window.location.assign(`/projects/${duplicate.id}`)
-                    } catch (error) {
-                      toast.error(
-                        error instanceof Error ? error.message : "Could not duplicate project"
-                      )
-                    }
-                  }}
-                >
-                  Create draft copy
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {/* An archived draft has no published revision to copy from. */}
+          {project.state !== "draft" && (
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button variant="outline" />}>
+                <CopyIcon data-icon="inline-start" />
+                Duplicate as draft
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Duplicate this project?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The new draft copies the form and layouts, but never the share token or
+                    responses. This project remains unchanged.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      try {
+                        const duplicate = await projectApi.action(project.id, "duplicate")
+                        window.location.assign(`/projects/${duplicate.id}`)
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error ? error.message : "Could not duplicate project"
+                        )
+                      }
+                    }}
+                  >
+                    Create draft copy
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
         <div className="grid gap-4">
           {form.questions.map((question, index) => (

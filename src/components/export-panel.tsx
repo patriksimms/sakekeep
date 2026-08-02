@@ -1,5 +1,6 @@
 import {
   AlertTriangleIcon,
+  ArchiveIcon,
   CheckCircle2Icon,
   DownloadIcon,
   FileCheck2Icon,
@@ -34,7 +35,11 @@ export function ExportPanel({ project }: { project: Project }) {
   const blocking =
     project.book?.pages.flatMap((page) => page.problems.filter((problem) => problem.blocking))
       .length ?? 0
-  const ready = project.bookStatus === "current" && Boolean(project.book) && blocking === 0
+  const ready =
+    project.bookStatus === "current" &&
+    Boolean(project.book) &&
+    blocking === 0 &&
+    !project.archivedAt
 
   const exportBook = async () => {
     setExporting(true)
@@ -77,7 +82,16 @@ export function ExportPanel({ project }: { project: Project }) {
         ))}
       </div>
 
-      {!project.book ? (
+      {project.archivedAt ? (
+        <Alert>
+          <ArchiveIcon />
+          <AlertTitle>This project is archived</AlertTitle>
+          <AlertDescription>
+            Unarchive it from the project header to run a new export. Earlier exports stay
+            downloadable.
+          </AlertDescription>
+        </Alert>
+      ) : !project.book ? (
         <Alert>
           <PrinterIcon />
           <AlertTitle>No generated book</AlertTitle>
