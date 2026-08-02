@@ -9,82 +9,113 @@ import {
   type SubmissionAnswers,
 } from "./types"
 
+const PROMPT_MAX = 500
+const CHOICE_LABEL_MAX = 250
+
 const idSchema = z.string().min(1).max(100)
-const promptSchema = z.string().trim().min(1).max(500)
 
-const baseQuestion = z.object({
-  id: idSchema,
-  prompt: promptSchema,
-  required: z.boolean(),
-})
+/**
+ * A question is only *finished* once it carries a prompt, but the builder autosaves every
+ * keystroke, so a question is born blank and stays blank until the organizer types. Draft
+ * autosave therefore validates shape only; the `requireText` variant adds the non-empty rules
+ * that gate publishing. See {@link draftFormSchemaValidator} and {@link formSchemaValidator}.
+ */
+function buildFormValidator(requireText: boolean) {
+  const promptSchema = requireText
+    ? z
+        .string()
+        .trim()
+        .min(1, "Enter a question prompt.")
+        .max(PROMPT_MAX, `Use no more than ${PROMPT_MAX} characters.`)
+    : z.string().trim().max(PROMPT_MAX, `Use no more than ${PROMPT_MAX} characters.`)
 
-const singleLineQuestion = baseQuestion.extend({
-  type: z.literal("single-line"),
-  characterLimit: z.number().int().positive().max(100_000).optional(),
-  validateUrl: z.boolean().optional(),
-})
+  const choiceLabelSchema = requireText
+    ? z
+        .string()
+        .trim()
+        .min(1, "Enter a choice label.")
+        .max(CHOICE_LABEL_MAX, `Use no more than ${CHOICE_LABEL_MAX} characters.`)
+    : z.string().trim().max(CHOICE_LABEL_MAX, `Use no more than ${CHOICE_LABEL_MAX} characters.`)
 
-const multilineQuestion = baseQuestion.extend({
-  type: z.literal("multiline"),
-  characterLimit: z.number().int().positive().max(100_000).optional(),
-})
-
-const choiceQuestion = baseQuestion.extend({
-  type: z.union([z.literal("radio"), z.literal("checkboxes")]),
-  choices: z
-    .array(
-      z.object({
-        id: idSchema,
-        label: z.string().trim().min(1).max(250),
-      })
-    )
-    .min(2)
-    .max(50),
-})
-
-const imageQuestion = baseQuestion.extend({
-  type: z.literal("images"),
-  maxImages: z.number().int().min(1).max(10),
-})
-
-export const formQuestionSchema = z.union([
-  singleLineQuestion,
-  multilineQuestion,
-  choiceQuestion,
-  imageQuestion,
-])
-
-export const formSchemaValidator = z
-  .object({
-    version: z.literal(FORM_SCHEMA_VERSION),
-    questions: z.array(formQuestionSchema).max(100),
+  const baseQuestion = z.object({
+    id: idSchema,
+    prompt: promptSchema,
+    required: z.boolean(),
   })
-  .superRefine((form, context) => {
-    const questionIds = new Set<string>()
-    for (const [questionIndex, question] of form.questions.entries()) {
-      if (questionIds.has(question.id)) {
-        context.addIssue({
-          code: "custom",
-          path: ["questions", questionIndex, "id"],
-          message: "Question IDs must be unique.",
+
+  const singleLineQuestion = baseQuestion.extend({
+    type: z.literal("single-line"),
+    characterLimit: z.number().int().positive().max(100_000).optional(),
+    validateUrl: z.boolean().optional(),
+  })
+
+  const multilineQuestion = baseQuestion.extend({
+    type: z.literal("multiline"),
+    characterLimit: z.number().int().positive().max(100_000).optional(),
+  })
+
+  const choiceQuestion = baseQuestion.extend({
+    type: z.union([z.literal("radio"), z.literal("checkboxes")]),
+    choices: z
+      .array(
+        z.object({
+          id: idSchema,
+          label: choiceLabelSchema,
         })
-      }
-      questionIds.add(question.id)
-      if ("choices" in question) {
-        const choiceIds = new Set<string>()
-        for (const [choiceIndex, choice] of question.choices.entries()) {
-          if (choiceIds.has(choice.id)) {
-            context.addIssue({
-              code: "custom",
-              path: ["questions", questionIndex, "choices", choiceIndex, "id"],
-              message: "Choice IDs must be unique within a question.",
-            })
+      )
+      .min(2, "Offer at least two choices.")
+      .max(50, "Offer no more than 50 choices."),
+  })
+
+  const imageQuestion = baseQuestion.extend({
+    type: z.literal("images"),
+    maxImages: z.number().int().min(1).max(10),
+  })
+
+  const questionSchema = z.union([
+    singleLineQuestion,
+    multilineQuestion,
+    choiceQuestion,
+    imageQuestion,
+  ])
+
+  return z
+    .object({
+      version: z.literal(FORM_SCHEMA_VERSION),
+      questions: z.array(questionSchema).max(100),
+    })
+    .superRefine((form, context) => {
+      const questionIds = new Set<string>()
+      for (const [questionIndex, question] of form.questions.entries()) {
+        if (questionIds.has(question.id)) {
+          context.addIssue({
+            code: "custom",
+            path: ["questions", questionIndex, "id"],
+            message: "Question IDs must be unique.",
+          })
+        }
+        questionIds.add(question.id)
+        if ("choices" in question) {
+          const choiceIds = new Set<string>()
+          for (const [choiceIndex, choice] of question.choices.entries()) {
+            if (choiceIds.has(choice.id)) {
+              context.addIssue({
+                code: "custom",
+                path: ["questions", questionIndex, "choices", choiceIndex, "id"],
+                message: "Choice IDs must be unique within a question.",
+              })
+            }
+            choiceIds.add(choice.id)
           }
-          choiceIds.add(choice.id)
         }
       }
-    }
-  })
+    })
+}
+
+export const formSchemaValidator = buildFormValidator(true)
+
+/** Structural rules only: an unfinished question is a valid draft, not a rejected save. */
+export const draftFormSchemaValidator = buildFormValidator(false)
 
 export interface ValidationIssue {
   path: string
@@ -109,14 +140,16 @@ export const acceptedImageMimeTypes = new Set([
 
 export const acceptedImageExtensions = new Set(["jpg", "jpeg", "png", "webp", "heif", "heic"])
 
+function toIssues(result: z.ZodSafeParseResult<unknown>): ValidationIssue[] {
+  if (result.success) return []
+  return result.error.issues.map((issue) => ({
+    path: issue.path.join("."),
+    message: issue.message,
+  }))
+}
+
 export function validateFormForPublish(form: FormSchema): ValidationIssue[] {
-  const parsed = formSchemaValidator.safeParse(form)
-  const issues: ValidationIssue[] = parsed.success
-    ? []
-    : parsed.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        message: issue.message,
-      }))
+  const issues = toIssues(formSchemaValidator.safeParse(form))
 
   if (form.questions.length === 0) {
     issues.push({
@@ -126,6 +159,77 @@ export function validateFormForPublish(form: FormSchema): ValidationIssue[] {
   }
 
   return issues
+}
+
+/**
+ * The rules an autosaved draft must satisfy. Deliberately narrower than
+ * {@link validateFormForPublish}: an empty prompt or choice label is work in progress, not a
+ * reason to reject the save.
+ */
+export function validateFormForDraft(form: FormSchema): ValidationIssue[] {
+  return toIssues(draftFormSchemaValidator.safeParse(form))
+}
+
+export interface QuestionIssues {
+  prompt: string[]
+  choices: Map<number, string[]>
+  other: string[]
+}
+
+export interface GroupedFormIssues {
+  byQuestion: Map<number, QuestionIssues>
+  form: string[]
+}
+
+/**
+ * Turn flat `questions.0.choices.1.label`-style paths into a per-question lookup the builder can
+ * render next to the input that caused each issue. Anything that does not address a specific
+ * question falls back to the form-level list.
+ *
+ * Issues rejected by the API route are addressed against the request body and so arrive one level
+ * deeper, as `formSchema.questions.…`; both roots must resolve to the same question.
+ */
+export function questionIndexForIssue(issue: ValidationIssue): number | null {
+  const path = issue.path.startsWith("formSchema.")
+    ? issue.path.slice("formSchema.".length)
+    : issue.path
+  const [root, rawIndex] = path.split(".")
+  const index = Number(rawIndex)
+  return root === "questions" && Number.isInteger(index) ? index : null
+}
+
+export function groupFormIssues(issues: ValidationIssue[]): GroupedFormIssues {
+  const byQuestion = new Map<number, QuestionIssues>()
+  const form: string[] = []
+
+  for (const issue of issues) {
+    const path = issue.path.startsWith("formSchema.")
+      ? issue.path.slice("formSchema.".length)
+      : issue.path
+    const [root, rawIndex, field, rawChoiceIndex] = path.split(".")
+    const index = Number(rawIndex)
+    if (root !== "questions" || !Number.isInteger(index)) {
+      form.push(issue.message)
+      continue
+    }
+
+    let entry = byQuestion.get(index)
+    if (!entry) {
+      entry = { prompt: [], choices: new Map(), other: [] }
+      byQuestion.set(index, entry)
+    }
+
+    const choiceIndex = Number(rawChoiceIndex)
+    if (field === "prompt") {
+      entry.prompt.push(issue.message)
+    } else if (field === "choices" && Number.isInteger(choiceIndex)) {
+      entry.choices.set(choiceIndex, [...(entry.choices.get(choiceIndex) ?? []), issue.message])
+    } else {
+      entry.other.push(issue.message)
+    }
+  }
+
+  return { byQuestion, form }
 }
 
 function isBlank(answer: SubmissionAnswer | undefined): boolean {

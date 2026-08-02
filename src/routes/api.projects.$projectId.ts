@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { z } from "zod"
 
-import { formSchemaValidator } from "#/domain/form.ts"
+import { draftFormSchemaValidator } from "#/domain/form.ts"
 import { jsonError, readJson } from "#/server/http.ts"
 import { deleteProject, getProject, updateProject } from "#/server/repository.ts"
 
+// PATCH is the builder's autosave, so it must accept a form that is still being written.
+// `publishProject` is what holds the line on completeness.
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   occasion: z.string().trim().max(200).nullable().optional(),
-  formSchema: formSchemaValidator.optional(),
+  formSchema: draftFormSchemaValidator.optional(),
   expectedRevision: z.number().int().nonnegative().optional(),
 })
 
