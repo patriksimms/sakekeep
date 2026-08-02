@@ -467,9 +467,6 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
               )}
               {status === "submitting" ? "Processing and submitting…" : "Submit once"}
             </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              Image files are stored in IndexedDB for draft recovery, never in localStorage.
-            </p>
           </div>
         </Card>
       </form>
