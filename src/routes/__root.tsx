@@ -5,6 +5,7 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import { useState } from "react"
 
 import { AppHeader } from "#/components/app-header.tsx"
+import { SiteFooter } from "#/components/site-footer.tsx"
 import { ThemeProvider } from "#/components/theme-provider.tsx"
 import { Toaster } from "#/components/ui/sonner.tsx"
 import { TooltipProvider } from "#/components/ui/tooltip.tsx"
@@ -64,8 +65,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             >
               Skip to content
             </a>
-            <AppHeader />
-            {children}
+            <div className="flex min-h-svh flex-col">
+              <AppHeader />
+              <div className="flex-1">{children}</div>
+              <SiteFooter />
+            </div>
             <Toaster closeButton />
           </TooltipProvider>
         </ThemeProvider>

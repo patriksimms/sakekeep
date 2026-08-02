@@ -69,16 +69,15 @@ function Privacy() {
           <p>
             The application is operated on infrastructure provided by Hetzner Online GmbH,
             Industriestr. 25, 91710 Gunzenhausen, Germany. When you access the service, technically
-            necessary connection data may be processed. This includes in particular your IP
-            address, date and time of access, the requested URL, the amount of data transferred,
-            the HTTP status, the referrer URL, and browser and operating system information.
+            necessary connection data may be processed. This includes in particular your IP address,
+            date and time of access, the requested URL, the amount of data transferred, the HTTP
+            status, the referrer URL, and browser and operating system information.
           </p>
           <p>
-            This processing serves the secure and reliable provision of the service, error
-            analysis, and the prevention of abusive access. The legal basis is Art. 6(1)(f) GDPR.
-            Our legitimate interest lies in the secure and uninterrupted operation of the
-            application. We have entered into a data processing agreement with Hetzner pursuant to
-            Art. 28 GDPR.
+            This processing serves the secure and reliable provision of the service, error analysis,
+            and the prevention of abusive access. The legal basis is Art. 6(1)(f) GDPR. Our
+            legitimate interest lies in the secure and uninterrupted operation of the application.
+            We have entered into a data processing agreement with Hetzner pursuant to Art. 28 GDPR.
           </p>
           <p>
             Security-related log data is stored only for as long as it is required for the purposes
@@ -92,8 +91,7 @@ function Privacy() {
             For the technical resolution of our domain we use DNS services provided by Cloudflare,
             Inc., 101 Townsend St., San Francisco, CA 94107, USA. Technically necessary DNS and
             connection information may be processed in this context. We do not use Cloudflare to
-            create usage profiles, and our website traffic is not routed through Cloudflare's
-            proxy.
+            create usage profiles, and our website traffic is not routed through Cloudflare's proxy.
           </p>
           <p>
             The legal basis is Art. 6(1)(f) GDPR. Our legitimate interest lies in the fast,
@@ -106,19 +104,19 @@ function Privacy() {
 
         <PrivacySection title="5. User accounts and sign-in with Clerk">
           <p>
-            For sign-in and the management of organizer accounts we use Clerk, a service provided
-            by Clerk, Inc., 660 King Street, Unit 345, San Francisco, CA 94107, USA. The data
-            processed may include in particular your email address, name, user ID, sign-in
-            timestamps, IP address, device and browser information, and session and security data.
-            Clerk sets technically necessary cookies and similar storage mechanisms to maintain
-            your session and to protect against abuse.
+            For sign-in and the management of organizer accounts we use Clerk, a service provided by
+            Clerk, Inc., 660 King Street, Unit 345, San Francisco, CA 94107, USA. The data processed
+            may include in particular your email address, name, user ID, sign-in timestamps, IP
+            address, device and browser information, and session and security data. Clerk sets
+            technically necessary cookies and similar storage mechanisms to maintain your session
+            and to protect against abuse.
           </p>
           <p>
-            This processing takes place to provide and secure your user account on the basis of
-            Art. 6(1)(b) and Art. 6(1)(f) GDPR. The legitimate interest lies in protecting accounts
-            and non-public project areas. Data processing by Clerk on our behalf is governed by
-            Clerk's Data Processing Addendum, which forms part of our agreement with Clerk. Where
-            Clerk processes certain data for its own purposes, such as managing its contractual
+            This processing takes place to provide and secure your user account on the basis of Art.
+            6(1)(b) and Art. 6(1)(f) GDPR. The legitimate interest lies in protecting accounts and
+            non-public project areas. Data processing by Clerk on our behalf is governed by Clerk's
+            Data Processing Addendum, which forms part of our agreement with Clerk. Where Clerk
+            processes certain data for its own purposes, such as managing its contractual
             relationship or complying with its own legal obligations, Clerk acts as an independent
             controller in that respect. Transfers of data to the USA are based in particular on the
             EU-US Data Privacy Framework and, where required, on Standard Contractual Clauses. For
@@ -151,8 +149,8 @@ function Privacy() {
             carried out before the withdrawal remains unaffected.
           </p>
           <p>
-            Contributors should not submit special categories of personal data within the meaning
-            of Art. 9 GDPR and should only upload photos of, or information about, other persons if
+            Contributors should not submit special categories of personal data within the meaning of
+            Art. 9 GDPR and should only upload photos of, or information about, other persons if
             they are entitled to do so. Contributions are made via a project-specific link. This
             link must be treated confidentially and shared only with the intended contributors.
             Where contributions contain personal data about third parties, such as persons shown in
@@ -163,9 +161,8 @@ function Privacy() {
           <p>
             Project content remains stored until it is deleted by the organizer, consent is
             effectively withdrawn, or the purpose of the project no longer applies, unless
-            overriding statutory grounds prevent deletion. When a project is deleted, the
-            associated answers, images, preview files, and exports are scheduled for deletion as
-            well.
+            overriding statutory grounds prevent deletion. When a project is deleted, the associated
+            answers, images, preview files, and exports are scheduled for deletion as well.
           </p>
         </PrivacySection>
 
