@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ImprintRouteImport } from './routes/imprint'
 import { Route as LayoutParityRouteImport } from './routes/layout-parity'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiProjectsRouteImport } from './routes/api.projects'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
@@ -47,6 +48,11 @@ const ImprintRoute = ImprintRouteImport.update({
 const LayoutParityRoute = LayoutParityRouteImport.update({
   id: '/layout-parity',
   path: '/layout-parity',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/imprint': typeof ImprintRoute
   '/layout-parity': typeof LayoutParityRoute
+  '/privacy': typeof PrivacyRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -195,6 +202,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/imprint': typeof ImprintRoute
   '/layout-parity': typeof LayoutParityRoute
+  '/privacy': typeof PrivacyRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/imprint': typeof ImprintRoute
   '/layout-parity': typeof LayoutParityRoute
+  '/privacy': typeof PrivacyRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/'
     | '/imprint'
     | '/layout-parity'
+    | '/privacy'
     | '/api/health'
     | '/api/projects'
     | '/projects/$projectId'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/'
     | '/imprint'
     | '/layout-parity'
+    | '/privacy'
     | '/api/health'
     | '/api/projects'
     | '/projects/$projectId'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/'
     | '/imprint'
     | '/layout-parity'
+    | '/privacy'
     | '/api/health'
     | '/api/projects'
     | '/projects/$projectId'
@@ -329,6 +341,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ImprintRoute: typeof ImprintRoute
   LayoutParityRoute: typeof LayoutParityRoute
+  PrivacyRoute: typeof PrivacyRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
@@ -362,6 +375,13 @@ declare module '@tanstack/react-router' {
       path: '/layout-parity'
       fullPath: '/layout-parity'
       preLoaderRoute: typeof LayoutParityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -573,6 +593,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ImprintRoute: ImprintRoute,
   LayoutParityRoute: LayoutParityRoute,
+  PrivacyRoute: PrivacyRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,

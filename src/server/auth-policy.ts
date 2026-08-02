@@ -8,6 +8,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/logo192.png",
   "/logo512.png",
   "/manifest.json",
+  "/privacy",
   "/robots.txt",
   "/layout-parity-decor.svg",
   "/layout-parity-landscape.svg",

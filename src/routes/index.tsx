@@ -180,12 +180,20 @@ function Home() {
       <footer className="border-t border-border/70">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:px-6">
           <p>© {new Date().getFullYear()} Sakekeep</p>
-          <Link
-            to="/imprint"
-            className="rounded-sm underline underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            Imprint
-          </Link>
+          <nav aria-label="Legal" className="flex items-center gap-4">
+            <Link
+              to="/privacy"
+              className="rounded-sm underline underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              Privacy
+            </Link>
+            <Link
+              to="/imprint"
+              className="rounded-sm underline underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              Imprint
+            </Link>
+          </nav>
         </div>
       </footer>
     </main>

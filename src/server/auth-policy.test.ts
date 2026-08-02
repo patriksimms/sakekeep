@@ -71,6 +71,8 @@ describe("organizer route policy", () => {
     "/favicon.ico",
     "/imprint",
     "/imprint/",
+    "/privacy",
+    "/privacy/",
     "/_build/app.js",
   ])("keeps %s public", (pathname) => {
     expect(routeAccess(pathname)).toBe("public")
