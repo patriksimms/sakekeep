@@ -12,7 +12,13 @@ import {
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 
 import { type FormQuestion, type FormSchema, type SubmissionAnswers } from "#/domain/types.ts"
-import { emptyAnswerForQuestion, validateSubmission, type ValidationIssue } from "#/domain/form.ts"
+import {
+  acceptedImageExtensions,
+  acceptedImageMimeTypes,
+  emptyAnswerForQuestion,
+  validateSubmission,
+  type ValidationIssue,
+} from "#/domain/form.ts"
 import {
   clearContributorDraft,
   loadContributorDraft,
@@ -24,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card.t
 import { Checkbox } from "#/components/ui/checkbox.tsx"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -82,6 +89,110 @@ function FilePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
         <Trash2Icon />
       </Button>
     </li>
+  )
+}
+
+function isAcceptedImage(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? ""
+  return (
+    acceptedImageMimeTypes.has(file.type.toLowerCase()) || acceptedImageExtensions.has(extension)
+  )
+}
+
+function ImagesField({
+  question,
+  files,
+  issue,
+  onFiles,
+}: {
+  question: Extract<FormQuestion, { type: "images" }>
+  files: File[]
+  issue?: string
+  onFiles: (files: File[]) => void
+}) {
+  const fieldId = `answer-${question.id}`
+  const [dragging, setDragging] = useState(false)
+  const [notice, setNotice] = useState("")
+
+  const addDroppedFiles = (candidates: File[]) => {
+    const images = candidates.filter(isAcceptedImage)
+    const free = Math.max(0, question.maxImages - files.length)
+    const accepted = images.slice(0, free)
+    onFiles([...files, ...accepted])
+    if (accepted.length === candidates.length) {
+      setNotice("")
+      return
+    }
+    setNotice(
+      images.length < candidates.length
+        ? "Only JPEG, PNG, WebP, HEIF, or HEIC images can be added."
+        : `Only ${question.maxImages} image${question.maxImages === 1 ? "" : "s"} can be added here.`
+    )
+  }
+
+  return (
+    <Field data-invalid={issue ? true : undefined}>
+      <FieldLabel htmlFor={fieldId}>
+        {question.prompt} {question.required && <span aria-hidden="true">*</span>}
+      </FieldLabel>
+      <label
+        htmlFor={fieldId}
+        data-dragging={dragging ? "true" : undefined}
+        className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/40 p-5 text-center hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50 data-[dragging=true]:border-primary data-[dragging=true]:bg-primary/5 data-[dragging=true]:ring-3 data-[dragging=true]:ring-primary/20"
+        onDragOver={(event) => {
+          event.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+          setDragging(false)
+        }}
+        onDrop={(event) => {
+          event.preventDefault()
+          setDragging(false)
+          addDroppedFiles(Array.from(event.dataTransfer?.files ?? []))
+        }}
+      >
+        <ImagePlusIcon aria-hidden="true" />
+        <span className="text-sm font-medium">
+          Drag and drop or choose up to {question.maxImages} image
+          {question.maxImages === 1 ? "" : "s"}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          JPEG, PNG, WebP, HEIF, or HEIC · 15 MB each
+        </span>
+        <input
+          id={fieldId}
+          className="sr-only"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/jpeg,image/png,image/webp,image/heif,image/heic"
+          multiple={question.maxImages > 1}
+          aria-invalid={issue ? true : undefined}
+          onChange={(event) => {
+            const selected = Array.from(event.target.files ?? [])
+            setNotice("")
+            onFiles([...files, ...selected].slice(0, question.maxImages))
+            event.target.value = ""
+          }}
+        />
+      </label>
+      {notice && <FieldDescription>{notice}</FieldDescription>}
+      {files.length > 0 && (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {files.map((file, index) => (
+            <FilePreview
+              key={`${file.name}-${file.lastModified}-${index}`}
+              file={file}
+              onRemove={() => {
+                setNotice("")
+                onFiles(files.filter((_candidate, itemIndex) => itemIndex !== index))
+              }}
+            />
+          ))}
+        </ul>
+      )}
+      <FieldError>{issue}</FieldError>
+    </Field>
   )
 }
 
@@ -152,53 +263,7 @@ function QuestionField({
     )
   }
   if (question.type === "images") {
-    return (
-      <Field data-invalid={issue ? true : undefined}>
-        <FieldLabel htmlFor={fieldId}>
-          {question.prompt} {question.required && <span aria-hidden="true">*</span>}
-        </FieldLabel>
-        <label
-          htmlFor={fieldId}
-          className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/40 p-5 text-center hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50"
-        >
-          <ImagePlusIcon aria-hidden="true" />
-          <span className="text-sm font-medium">
-            Choose up to {question.maxImages} image
-            {question.maxImages === 1 ? "" : "s"}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            JPEG, PNG, WebP, HEIF, or HEIC · 15 MB each
-          </span>
-          <input
-            id={fieldId}
-            className="sr-only"
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/jpeg,image/png,image/webp,image/heif,image/heic"
-            multiple={question.maxImages > 1}
-            aria-invalid={issue ? true : undefined}
-            onChange={(event) => {
-              const selected = Array.from(event.target.files ?? [])
-              onFiles([...files, ...selected].slice(0, question.maxImages))
-              event.target.value = ""
-            }}
-          />
-        </label>
-        {files.length > 0 && (
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {files.map((file, index) => (
-              <FilePreview
-                key={`${file.name}-${file.lastModified}-${index}`}
-                file={file}
-                onRemove={() =>
-                  onFiles(files.filter((_candidate, itemIndex) => itemIndex !== index))
-                }
-              />
-            ))}
-          </ul>
-        )}
-        <FieldError>{issue}</FieldError>
-      </Field>
-    )
+    return <ImagesField question={question} files={files} issue={issue} onFiles={onFiles} />
   }
 
   if (question.type !== "single-line" && question.type !== "multiline") {
@@ -249,6 +314,7 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
   const [loaded, setLoaded] = useState(false)
   const [recovered, setRecovered] = useState(false)
+  const [consented, setConsented] = useState(false)
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [status, setStatus] = useState<"editing" | "submitting" | "success" | "error">("editing")
   const [message, setMessage] = useState("")
@@ -317,6 +383,7 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (!consented) return
     const descriptors = Object.entries(files).flatMap(([questionId, values]) =>
       values.map((file, index) => ({
         questionId,
@@ -459,7 +526,32 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
                 <AlertDescription>{message}</AlertDescription>
               </Alert>
             )}
-            <Button type="submit" size="lg" className="w-full" disabled={status === "submitting"}>
+            <Field orientation="horizontal" className="mb-4">
+              <Checkbox
+                id="privacy-consent"
+                checked={consented}
+                onCheckedChange={(checked) => setConsented(checked === true)}
+              />
+              <FieldContent>
+                <FieldLabel htmlFor="privacy-consent" className="font-normal">
+                  I agree that my answers and any images I upload are processed for this book as
+                  described in the privacy policy.
+                </FieldLabel>
+                <FieldDescription>
+                  Read the{" "}
+                  <a href="/privacy" target="_blank" rel="noreferrer" className="text-primary">
+                    privacy policy
+                  </a>
+                  . Your consent is needed before this form can be submitted.
+                </FieldDescription>
+              </FieldContent>
+            </Field>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              disabled={status === "submitting" || !consented}
+            >
               {status === "submitting" ? (
                 <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
               ) : (

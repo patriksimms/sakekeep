@@ -20,10 +20,7 @@ export const Route = createFileRoute("/imprint")({
 
 function Imprint() {
   return (
-    <main
-      id="main-content"
-      className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 py-12 sm:px-6 sm:py-20"
-    >
+    <main id="main-content" className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-20">
       <div className="flex flex-col gap-10">
         <div className="flex flex-col items-start gap-5">
           <Badge variant="secondary">Legal notice</Badge>

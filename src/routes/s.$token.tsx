@@ -42,7 +42,7 @@ function SharePage() {
   const publicState = form.data
 
   return (
-    <main id="main-content" className="min-h-[calc(100vh-4rem)] px-4 py-10 sm:px-6 sm:py-16">
+    <main id="main-content" className="px-4 py-10 sm:px-6 sm:py-16">
       {form.isLoading ? (
         <div className="flex min-h-80 items-center justify-center">
           <LoaderCircleIcon className="animate-spin" aria-label="Loading form" />
