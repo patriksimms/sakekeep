@@ -54,6 +54,11 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(page.getByRole("radio", { name: "Making chaos feel calm" })).toBeChecked()
     await expect(page.getByRole("checkbox", { name: "A little travel" })).toBeChecked()
     await expect(page.getByRole("button", { name: "Remove logo512.png" })).toBeVisible()
+    await expect(page.getByRole("checkbox", { name: /I agree that my answers/ })).not.toBeChecked()
+
+    await expect(page.getByRole("button", { name: "Submit once" })).toBeDisabled()
+    await page.getByRole("checkbox", { name: /I agree that my answers/ }).click()
+    await expect(page.getByRole("button", { name: "Submit once" })).toBeEnabled()
 
     await page.getByRole("button", { name: "Submit once" }).click()
     await expect(page.getByText("Your response was submitted.")).toBeVisible()
@@ -73,6 +78,64 @@ test.describe.serial("critical local prototype workflows", () => {
       fullPage: true,
     })
     await expectAccessible(page)
+  })
+
+  test("contributor drops an image onto the photo question", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(`/s/${collectingToken}`)
+    const dropZone = page.locator("label:has(input[type=file])").first()
+    await expect(dropZone).toBeVisible()
+
+    await page.evaluate(async () => {
+      const response = await fetch("/logo512.png")
+      const file = new File([await response.blob()], "dropped.png", { type: "image/png" })
+      const transfer = new DataTransfer()
+      transfer.items.add(file)
+      const zone = document.querySelector<HTMLElement>("label:has(input[type=file])")
+      if (!zone) throw new Error("The image drop zone is missing.")
+      const dragOver = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      })
+      zone.dispatchEvent(dragOver)
+      if (!dragOver.defaultPrevented) {
+        throw new Error(
+          "The drop zone did not cancel dragover, so the browser would open the file."
+        )
+      }
+      zone.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }))
+    })
+
+    await expect(page.getByRole("button", { name: "Remove dropped.png" })).toBeVisible()
+  })
+
+  test("every route renders the legal footer and buttons show a pointer cursor", async ({
+    page,
+  }) => {
+    for (const path of ["/", "/imprint", "/privacy", "/projects", `/s/${collectingToken}`]) {
+      await page.goto(path)
+      const footer = page.getByRole("contentinfo")
+      await expect(footer).toHaveCount(1)
+      await expect(footer.getByRole("link", { name: "Privacy" })).toBeVisible()
+      await expect(footer.getByRole("link", { name: "Imprint" })).toBeVisible()
+    }
+
+    await page.goto(`/s/${collectingToken}`)
+    const submit = page.getByRole("button", { name: "Submit once" })
+    await expect(submit).toBeVisible()
+    const cursors = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("button")).map((element) => ({
+        disabled: element.disabled,
+        cursor: getComputedStyle(element).cursor,
+      }))
+    )
+    const enabled = cursors.filter((entry) => !entry.disabled)
+    const disabled = cursors.filter((entry) => entry.disabled)
+    expect(enabled.length).toBeGreaterThan(0)
+    expect(enabled.every((entry) => entry.cursor === "pointer")).toBe(true)
+    expect(disabled.length).toBeGreaterThan(0)
+    expect(disabled.every((entry) => entry.cursor !== "pointer")).toBe(true)
   })
 
   test("organizer creates, autosaves, reorders, and publishes every question type", async ({

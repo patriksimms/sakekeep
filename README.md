@@ -60,7 +60,8 @@ Re-running `bun run db:seed` resets only those two deterministic demo projects.
 2. Add, configure, reorder, and autosave all question types.
 3. Publish once to freeze the form and create an anonymous share link.
 4. Let a contributor recover a browser-local IndexedDB draft, including image
-   files, and submit with an idempotency key.
+   files dropped onto or picked for the photo questions, agree to the privacy
+   policy, and submit with an idempotency key.
 5. Review read-only submissions and permanently close collection.
 6. Create canonical millimetre-based layouts with the Fabric.js editor.
 7. Generate and review one page per response plus optional standalone pages.
