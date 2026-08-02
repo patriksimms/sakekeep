@@ -4,6 +4,7 @@ import {
   emptyFormSchema,
   formSchemaValidator,
   groupFormIssues,
+  questionIndexForIssue,
   validateFormForDraft,
   validateFormForPublish,
   validateSubmission,
@@ -233,6 +234,15 @@ describe("groupFormIssues", () => {
     expect(grouped.form).toEqual([])
     expect(grouped.byQuestion.get(0)!.prompt).toEqual(["Use no more than 500 characters."])
     expect(grouped.byQuestion.get(0)!.choices.get(1)).toEqual(["Enter a choice label."])
+  })
+
+  it("exposes the question index behind an issue, or null when there is none", () => {
+    expect(questionIndexForIssue({ path: "questions.2.prompt", message: "" })).toBe(2)
+    expect(questionIndexForIssue({ path: "formSchema.questions.2.prompt", message: "" })).toBe(2)
+    expect(questionIndexForIssue({ path: "questions.0", message: "" })).toBe(0)
+    expect(questionIndexForIssue({ path: "questions", message: "" })).toBeNull()
+    expect(questionIndexForIssue({ path: "version", message: "" })).toBeNull()
+    expect(questionIndexForIssue({ path: "", message: "" })).toBeNull()
   })
 
   it("falls back to the form level for issues that name no question", () => {

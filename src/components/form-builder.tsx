@@ -23,6 +23,7 @@ import {
 } from "#/domain/types.ts"
 import {
   groupFormIssues,
+  questionIndexForIssue,
   type QuestionIssues,
   type ValidationIssue,
   validateFormForPublish,
@@ -148,11 +149,8 @@ function describeIssues(issues: ValidationIssue[]): string {
  * for every question, so the message alone does not say which card to open.
  */
 function describePublishIssue(issue: ValidationIssue): string {
-  const [root, rawIndex] = issue.path.split(".")
-  const index = Number(rawIndex)
-  return root === "questions" && Number.isInteger(index)
-    ? `Question ${index + 1}: ${issue.message}`
-    : issue.message
+  const index = questionIndexForIssue(issue)
+  return index === null ? issue.message : `Question ${index + 1}: ${issue.message}`
 }
 
 /** Adapt our plain message strings to the shape `FieldError` renders. */

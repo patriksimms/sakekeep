@@ -189,6 +189,15 @@ export interface GroupedFormIssues {
  * Issues rejected by the API route are addressed against the request body and so arrive one level
  * deeper, as `formSchema.questions.…`; both roots must resolve to the same question.
  */
+export function questionIndexForIssue(issue: ValidationIssue): number | null {
+  const path = issue.path.startsWith("formSchema.")
+    ? issue.path.slice("formSchema.".length)
+    : issue.path
+  const [root, rawIndex] = path.split(".")
+  const index = Number(rawIndex)
+  return root === "questions" && Number.isInteger(index) ? index : null
+}
+
 export function groupFormIssues(issues: ValidationIssue[]): GroupedFormIssues {
   const byQuestion = new Map<number, QuestionIssues>()
   const form: string[] = []
