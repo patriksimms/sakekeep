@@ -32,6 +32,10 @@ export const projects = pgTable(
       .$type<"not-generated" | "current" | "stale">()
       .notNull()
       .default("not-generated"),
+    archivedAt: timestamp("archived_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "date",
@@ -48,6 +52,7 @@ export const projects = pgTable(
   (table) => [
     uniqueIndex("projects_share_token_hash_unique").on(table.shareTokenHash),
     index("projects_updated_at_index").on(table.updatedAt),
+    index("projects_archived_at_index").on(table.archivedAt),
   ]
 )
 

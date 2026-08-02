@@ -8,6 +8,9 @@ import { getProject, recordExport } from "./repository"
 
 export async function exportProject(projectId: string, marks: boolean): Promise<ExportArtifact> {
   const project = await getProject(projectId, true)
+  if (project.archivedAt) {
+    throw new HttpError(409, "This project is archived. Unarchive it before making changes.")
+  }
   if (!project.book || project.bookStatus === "not-generated") {
     throw new HttpError(409, "Generate the complete book before exporting.")
   }

@@ -1,4 +1,5 @@
 import {
+  ArchiveIcon,
   CheckIcon,
   ClockIcon,
   CopyIcon,
@@ -126,19 +127,25 @@ export function SubmissionsPanel({
         <Card className="bg-card/90">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {project.state === "collecting" ? (
+              {project.archivedAt ? (
+                <ArchiveIcon aria-hidden="true" />
+              ) : project.state === "collecting" ? (
                 <InboxIcon aria-hidden="true" />
               ) : (
                 <LockIcon aria-hidden="true" />
               )}
-              {project.state === "collecting"
-                ? "Collection is open"
-                : "Collection is permanently closed"}
+              {project.archivedAt
+                ? "Collection is paused by the archive"
+                : project.state === "collecting"
+                  ? "Collection is open"
+                  : "Collection is permanently closed"}
             </CardTitle>
             <CardDescription>
-              {project.state === "collecting"
-                ? "New valid submissions are accepted through the unguessable link."
-                : "The share link now returns a closed state and can never be reopened."}
+              {project.archivedAt
+                ? "While archived, the share link reports a closed collection. Unarchive the project to reopen it in its current state."
+                : project.state === "collecting"
+                  ? "New valid submissions are accepted through the unguessable link."
+                  : "The share link now returns a closed state and can never be reopened."}
             </CardDescription>
           </CardHeader>
           {project.shareUrl && (
@@ -257,7 +264,7 @@ export function SubmissionsPanel({
         </Accordion>
       )}
 
-      {project.state === "collecting" && (
+      {project.state === "collecting" && !project.archivedAt && (
         <div className="flex justify-end">
           <AlertDialog>
             <AlertDialogTrigger render={<Button variant="destructive" />}>

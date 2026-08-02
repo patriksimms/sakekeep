@@ -53,3 +53,16 @@
   application/build path uses patched esbuild 0.25.12; there are no high or
   critical findings. This dev-only residual is retained rather than forcing an
   incompatible transitive override.
+
+## 2026-07-30 — Project archiving
+
+- Archiving is a nullable `projects.archived_at` timestamp, not a fourth
+  lifecycle state. A project can be archived from `draft`, `collecting`, or
+  `closed`, and unarchiving restores exactly the state it was frozen in, so the
+  irreversible `draft → collecting → closed` machine stays intact.
+- An archived project is frozen rather than merely hidden. A single repository
+  guard rejects every organizer mutation with HTTP 409, and the public share
+  token reports a closed collection so no submission can land while archived.
+  Reads, existing exports, and duplication remain available.
+- Duplicating an archived project is deliberately allowed. The copy is a fresh
+  unarchived draft and the archived source is never modified.
