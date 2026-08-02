@@ -478,6 +478,10 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       // it has already queued its own save; let that one report the real state.
       if (version !== editVersion.current) {
         setSaveState("unsaved")
+        // That newer edit's own save was suppressed while this one was in flight, so retry it
+        // here the way the success path does; otherwise it waits for the next keystroke.
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = setTimeout(() => void save(), 400)
         return
       }
       setSaveState("failed")

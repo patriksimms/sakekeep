@@ -132,6 +132,33 @@ describe("FormBuilder inline validation errors", () => {
       expect(prompt.getAttribute("aria-invalid")).toBeNull()
     }
   })
+
+  it("still persists the edit that superseded a rejected save", async () => {
+    let rejectInFlight: ((error: unknown) => void) | undefined
+    update.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectInFlight = reject
+        })
+    )
+    render(<FormBuilder project={project()} onProjectChange={vi.fn()} />)
+
+    await editPrompt(1, "way too long")
+    // The reorder's own save is suppressed while the first request is still in flight.
+    fireEvent.click(screen.getAllByLabelText("Move question up")[1]!)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(update).toHaveBeenCalledTimes(1)
+
+    update.mockResolvedValue({ ...project(), formRevision: 1 })
+    rejectInFlight!(rejection("formSchema.questions.1.prompt", "Use no more than 500 characters."))
+    await vi.advanceTimersByTimeAsync(1000)
+
+    // Without a retry the reorder would sit unsaved until the next keystroke.
+    expect(update).toHaveBeenCalledTimes(2)
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toContain("Saved")
+    })
+  })
 })
 
 describe("FormBuilder pre-publish panel", () => {
