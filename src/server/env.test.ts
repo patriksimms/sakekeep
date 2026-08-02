@@ -29,6 +29,20 @@ describe("production environment", () => {
     expect(() => parseEnvironment(incomplete)).toThrow(/missing: CLERK_SECRET_KEY/)
   })
 
+  it("treats PostHog as optional and defaults its host to the EU region", () => {
+    const parsed = parseEnvironment(productionEnvironment)
+    expect(parsed.VITE_POSTHOG_PROJECT_TOKEN).toBeUndefined()
+    expect(parsed.POSTHOG_HOST).toBe("https://eu.i.posthog.com")
+
+    const withPosthog = parseEnvironment({
+      ...productionEnvironment,
+      POSTHOG_HOST: "https://us.i.posthog.com",
+      VITE_POSTHOG_PROJECT_TOKEN: "phc_production_token",
+    })
+    expect(withPosthog.VITE_POSTHOG_PROJECT_TOKEN).toBe("phc_production_token")
+    expect(withPosthog.POSTHOG_HOST).toBe("https://us.i.posthog.com")
+  })
+
   it("rejects demo mode, insecure origins, and local defaults", () => {
     expect(() =>
       parseEnvironment({

@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 
+import { setServerExceptionSinkForTesting } from "./error-tracking.ts"
 import { HttpError, jsonError } from "./http.ts"
+
+afterEach(() => {
+  setServerExceptionSinkForTesting(undefined)
+})
 
 describe("jsonError", () => {
   it("passes an HttpError through with its status and details", async () => {
@@ -39,5 +44,18 @@ describe("jsonError", () => {
     await expect(response.json()).resolves.toEqual({
       error: "An unexpected local server error occurred.",
     })
+  })
+
+  it("reports unexpected failures to the server exception sink", () => {
+    const captureException = vi.fn()
+    setServerExceptionSinkForTesting({ captureException })
+
+    const failure = new Error("connection reset")
+    jsonError(failure)
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(failure, "sakekeep-server")
+
+    captureException.mockClear()
+    jsonError(new HttpError(404, "Not found."))
+    expect(captureException).not.toHaveBeenCalled()
   })
 })

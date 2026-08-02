@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import { useState } from "react"
 
+import { Analytics } from "#/components/analytics.tsx"
 import { AppHeader } from "#/components/app-header.tsx"
 import { SiteFooter } from "#/components/site-footer.tsx"
 import { ThemeProvider } from "#/components/theme-provider.tsx"
@@ -71,6 +72,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               <SiteFooter />
             </div>
             <Toaster closeButton />
+            <Analytics />
           </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>

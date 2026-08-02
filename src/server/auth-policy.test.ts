@@ -68,6 +68,8 @@ describe("organizer route policy", () => {
     "/api/share/invalid-token",
     "/api/health",
     "/api/health/",
+    "/ingest/e",
+    "/ingest/static/array.js",
     "/favicon.ico",
     "/imprint",
     "/imprint/",
@@ -85,6 +87,7 @@ describe("organizer route policy", () => {
     "/s/token/private",
     "/api/new-organizer-resource",
     "/new-organizer-page",
+    "/ingest",
   ])("fails closed for unlisted or malformed route %s", (pathname) => {
     expect(routeAccess(pathname)).toBe("organizer")
   })
