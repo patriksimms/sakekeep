@@ -23,9 +23,10 @@ S3-compatible object store are required for application data.
 ```sh
 git clone <repository-url>
 cd sakekeep
-cp .env.example .env
-# Add development Clerk keys to .env, or set VITE_SAKEKEEP_DEMO_MODE=true for
+cp .envrc.example .envrc
+# Add development Clerk keys to .envrc, or set VITE_SAKEKEEP_DEMO_MODE=true for
 # local-only exploration.
+direnv allow
 bun run setup
 bun run dev
 ```
@@ -35,9 +36,9 @@ official PSO Coated v3 ICC profile, starts PostgreSQL and RustFS, applies Drizzl
 migrations, and seeds deterministic local data. Open
 <http://localhost:3000>.
 
-If you use direnv, run `direnv allow`; `.envrc` loads the documented local
-template and lets an ignored `.env` override it without containing credentials
-itself. Check service readiness with:
+The ignored `.envrc` is the single source for local environment overrides;
+`.envrc.example` documents the required shape without containing credentials.
+After changing `.envrc`, run `direnv allow` again. Check service readiness with:
 
 ```sh
 bun run health

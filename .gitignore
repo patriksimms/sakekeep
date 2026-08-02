@@ -1,5 +1,6 @@
 node_modules
 .env
+.envrc
 .local/
 coverage/
 playwright-report/
@@ -8,7 +9,6 @@ test-results/
 dist
 dist-ssr
 *.local
-.env
 .nitro
 .tanstack
 .wrangler

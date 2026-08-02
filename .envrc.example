@@ -1,0 +1,14 @@
+export DATABASE_URL=postgresql://sakekeep:sakekeep@127.0.0.1:54321/sakekeep
+export S3_ENDPOINT=http://127.0.0.1:19000
+export S3_REGION=us-east-1
+export S3_ACCESS_KEY_ID=sakekeep
+export S3_SECRET_ACCESS_KEY=sakekeep-local-only
+export S3_BUCKET=sakekeep
+export SHARE_TOKEN_SECRET=replace-this-local-development-secret-with-at-least-32-characters
+export APP_ORIGIN=http://localhost:3000
+export VITE_SAKEKEEP_DEMO_MODE=false
+
+# Required whenever demo mode is disabled. Use Clerk development keys locally
+# and production keys in a public deployment.
+export VITE_CLERK_PUBLISHABLE_KEY=
+export CLERK_SECRET_KEY=
