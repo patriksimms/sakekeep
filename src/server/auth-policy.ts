@@ -4,6 +4,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/",
   "/api/health",
   "/favicon.ico",
+  "/favicon.svg",
   "/imprint",
   "/logo192.png",
   "/logo512.png",
