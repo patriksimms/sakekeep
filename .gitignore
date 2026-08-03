@@ -16,3 +16,6 @@ dist-ssr
 .vinxi
 __unconfig*
 todos.json
+
+# clerk configuration (can include secrets)
+/.clerk/
