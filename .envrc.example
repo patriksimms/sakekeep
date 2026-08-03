@@ -12,3 +12,8 @@ export VITE_SAKEKEEP_DEMO_MODE=false
 # and production keys in a public deployment.
 export VITE_CLERK_PUBLISHABLE_KEY=
 export CLERK_SECRET_KEY=
+
+# Optional PostHog analytics. Leave the token unset to disable every PostHog
+# feature (consent banner, ingest proxy, server error reporting).
+export VITE_POSTHOG_PROJECT_TOKEN=
+export POSTHOG_HOST=https://eu.i.posthog.com

@@ -22,6 +22,9 @@ function serverExceptionSink(): ServerExceptionSink | null {
         ? new PostHog(configuration.VITE_POSTHOG_PROJECT_TOKEN, {
             host: configuration.POSTHOG_HOST,
             disableGeoip: true,
+            // Dispatch immediately: batched exceptions would be lost on SIGTERM because the
+            // process exits without a client shutdown, and server errors are rare anyway.
+            flushAt: 1,
           })
         : null
   }

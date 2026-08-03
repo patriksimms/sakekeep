@@ -16,21 +16,23 @@ the `app` service receives a Coolify domain.
 
 Configure these Coolify build-time and runtime values:
 
-| Variable                     | Scope         | Requirement                                  |
-| ---------------------------- | ------------- | -------------------------------------------- |
-| `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                    |
-| `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password |
-| `S3_ENDPOINT`                | Runtime       | Fixed to `https://eu2.contabostorage.com`    |
-| `S3_REGION`                  | Runtime       | Fixed to `default`                           |
-| `S3_ACCESS_KEY_ID`           | Runtime       | Contabo access key                           |
-| `S3_SECRET_ACCESS_KEY`       | Runtime       | Contabo secret key                           |
-| `S3_BUCKET`                  | Runtime       | Existing Contabo bucket name                 |
-| `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable   |
-| `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin            |
-| `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                             |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Build/runtime | Clerk production publishable key             |
-| `CLERK_SECRET_KEY`           | Runtime       | Clerk production secret key                  |
-| `NODE_ENV`, `HOST`, `PORT`   | Runtime       | Fixed to `production`, `0.0.0.0`, `3000`     |
+| Variable                     | Scope         | Requirement                                      |
+| ---------------------------- | ------------- | ------------------------------------------------ |
+| `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                        |
+| `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password     |
+| `S3_ENDPOINT`                | Runtime       | Fixed to `https://eu2.contabostorage.com`        |
+| `S3_REGION`                  | Runtime       | Fixed to `default`                               |
+| `S3_ACCESS_KEY_ID`           | Runtime       | Contabo access key                               |
+| `S3_SECRET_ACCESS_KEY`       | Runtime       | Contabo secret key                               |
+| `S3_BUCKET`                  | Runtime       | Existing Contabo bucket name                     |
+| `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable       |
+| `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin                |
+| `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                                 |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Build/runtime | Clerk production publishable key                 |
+| `CLERK_SECRET_KEY`           | Runtime       | Clerk production secret key                      |
+| `VITE_POSTHOG_PROJECT_TOKEN` | Build/runtime | Optional PostHog publishable project token       |
+| `POSTHOG_HOST`               | Runtime       | Optional; defaults to `https://eu.i.posthog.com` |
+| `NODE_ENV`, `HOST`, `PORT`   | Runtime       | Fixed to `production`, `0.0.0.0`, `3000`         |
 
 Compose uses required-variable expressions, so missing secrets stop
 configuration before deployment. The application also rejects local defaults,
@@ -39,6 +41,12 @@ starting with `VITE_` are public browser configuration; never put a secret in
 one. `DATABASE_URL` must use the same password as `POSTGRES_PASSWORD`, with
 reserved URL characters percent-encoded (for example, `#` becomes `%23` and
 `/` becomes `%2F`).
+
+`VITE_POSTHOG_PROJECT_TOKEN` enables PostHog analytics and must be provided
+both at build time (client bundle) and at runtime (ingest proxy and server
+error reporting); leave it unset to ship without any PostHog integration. A
+build with the token whose runtime lacks it serves 404s on `/ingest/*` and
+sends nothing.
 
 To validate the production definition without using real credentials:
 

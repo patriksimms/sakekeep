@@ -1,8 +1,13 @@
 import type { PostHog } from "posthog-js"
 
-export const posthogToken: string | undefined = import.meta.env.VITE_POSTHOG_PROJECT_TOKEN as
+import { isDemoMode } from "#/lib/demo-mode.ts"
+
+const configuredToken: string | undefined = import.meta.env.VITE_POSTHOG_PROJECT_TOKEN as
   | string
   | undefined
+
+// Demo builds must never send events, even when a token leaks into the build environment.
+export const posthogToken = isDemoMode ? undefined : configuredToken
 
 const ANALYTICS_CATEGORY = "analytics"
 const CONSENT_STORAGE_DAYS = 365
@@ -15,7 +20,7 @@ function applyAnalyticsUser() {
   if (!client) return
   if (desiredUserId) {
     if (client.get_distinct_id() !== desiredUserId) client.identify(desiredUserId)
-  } else if (userKnown && client._isIdentified()) {
+  } else if (userKnown && client.get_distinct_id() !== client.get_property("$device_id")) {
     client.reset()
   }
 }
