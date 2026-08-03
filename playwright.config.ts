@@ -67,6 +67,8 @@ export default defineConfig({
       env: {
         ...process.env,
         VITE_SAKEKEEP_DEMO_MODE: "true",
+        // Keep e2e deterministic: no PostHog init and no consent banner, even with a local token.
+        VITE_POSTHOG_PROJECT_TOKEN: "",
       },
       url: `http://localhost:${port}/api/health`,
       reuseExistingServer: !process.env.CI,
@@ -81,6 +83,7 @@ export default defineConfig({
         CLERK_SECRET_KEY: clerkSecretKey,
         VITE_CLERK_PUBLISHABLE_KEY: clerkPublishableKey,
         VITE_SAKEKEEP_DEMO_MODE: "false",
+        VITE_POSTHOG_PROJECT_TOKEN: "",
       },
       url: `${authBaseUrl}/api/health`,
       reuseExistingServer: false,

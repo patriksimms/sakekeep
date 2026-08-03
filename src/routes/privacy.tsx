@@ -196,7 +196,37 @@ function Privacy() {
           </p>
         </PrivacySection>
 
-        <PrivacySection title="9. Recipients and processors">
+        <PrivacySection title="9. Analytics and error reporting with PostHog">
+          <p>
+            With your consent, we use PostHog, an analytics service provided by PostHog, Inc., 2261
+            Market Street #4008, San Francisco, CA 94114, USA, with data processed on servers in the
+            European Union. PostHog helps us understand how the application is used (for example
+            pageviews and feature usage) and to detect errors that occur in your browser. When
+            analytics is active, PostHog stores identifiers in cookies and in your browser's
+            localStorage for up to 365 days. If you are signed in, your account ID is linked to your
+            analytics profile so that your usage can be attributed to one profile across devices; we
+            do not transmit your email address for this purpose. Analytics requests are routed
+            through our own servers, and we do not forward your IP address to PostHog.
+          </p>
+          <p>
+            Analytics only runs after you have given consent via the cookie banner. The legal basis
+            is your consent pursuant to Art. 6(1)(a) GDPR and Section 25(1) TDDDG. Your consent
+            decision is stored in your browser for 365 days. You can withdraw or change your consent
+            at any time with effect for the future via the &ldquo;Cookie settings&rdquo; link in the
+            page footer. A data processing agreement pursuant to Art. 28 GDPR is in place with
+            PostHog. For more information, see PostHog&rsquo;s{" "}
+            <PrivacyLink href="https://posthog.com/privacy">privacy policy</PrivacyLink> and{" "}
+            <PrivacyLink href="https://posthog.com/dpa">Data Processing Agreement</PrivacyLink>.
+          </p>
+          <p>
+            Independently of your consent, technical errors that occur on our servers are reported
+            to PostHog so that we can detect and fix faults. These server error reports do not
+            contain user IDs, email addresses, or IP addresses. The legal basis is Art. 6(1)(f)
+            GDPR; our legitimate interest lies in the reliable operation of the service.
+          </p>
+        </PrivacySection>
+
+        <PrivacySection title="10. Recipients and processors">
           <p>
             Personal data is shared only with those service providers that we need to operate the
             application and that are described above. Where these companies process data on our
@@ -205,7 +235,7 @@ function Privacy() {
           </p>
         </PrivacySection>
 
-        <PrivacySection title="10. Your rights">
+        <PrivacySection title="11. Your rights">
           <p>Subject to the statutory requirements, you have in particular the right to:</p>
           <ul className="list-disc space-y-2 pl-6">
             <li>access the personal data we process about you (Art. 15 GDPR),</li>
@@ -225,7 +255,7 @@ function Privacy() {
           </p>
         </PrivacySection>
 
-        <PrivacySection title="11. Right to object to processing based on legitimate interests">
+        <PrivacySection title="12. Right to object to processing based on legitimate interests">
           <div className="rounded-lg border border-border bg-muted/40 p-4">
             <p className="font-medium">
               Where we process personal data on the basis of Art. 6(1)(f) GDPR, you have the right
@@ -237,7 +267,7 @@ function Privacy() {
           </div>
         </PrivacySection>
 
-        <PrivacySection title="12. Updates to this privacy policy">
+        <PrivacySection title="13. Updates to this privacy policy">
           <p>
             We update this privacy policy when features, service providers, or legal requirements
             change. The version published on this page applies.

@@ -15,6 +15,7 @@ import { Route as LayoutParityRouteImport } from './routes/layout-parity'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiProjectsRouteImport } from './routes/api.projects'
+import { Route as IngestSplatRouteImport } from './routes/ingest.$'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as STokenRouteImport } from './routes/s.$token'
@@ -63,6 +64,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
 const ApiProjectsRoute = ApiProjectsRouteImport.update({
   id: '/api/projects',
   path: '/api/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IngestSplatRoute = IngestSplatRouteImport.update({
+  id: '/ingest/$',
+  path: '/ingest/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
@@ -178,6 +184,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
+  '/ingest/$': typeof IngestSplatRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
+  '/ingest/$': typeof IngestSplatRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -233,6 +241,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
+  '/ingest/$': typeof IngestSplatRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -262,6 +271,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/api/health'
     | '/api/projects'
+    | '/ingest/$'
     | '/projects/$projectId'
     | '/s/$token'
     | '/sign-in/$'
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/api/health'
     | '/api/projects'
+    | '/ingest/$'
     | '/projects/$projectId'
     | '/s/$token'
     | '/sign-in/$'
@@ -316,6 +327,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/api/health'
     | '/api/projects'
+    | '/ingest/$'
     | '/projects/$projectId'
     | '/s/$token'
     | '/sign-in/$'
@@ -344,6 +356,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
+  IngestSplatRoute: typeof IngestSplatRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
   STokenRoute: typeof STokenRoute
   SignInSplatRoute: typeof SignInSplatRoute
@@ -396,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/api/projects'
       fullPath: '/api/projects'
       preLoaderRoute: typeof ApiProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ingest/$': {
+      id: '/ingest/$'
+      path: '/ingest/$'
+      fullPath: '/ingest/$'
+      preLoaderRoute: typeof IngestSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/': {
@@ -596,6 +616,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
+  IngestSplatRoute: IngestSplatRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
   STokenRoute: STokenRoute,
   SignInSplatRoute: SignInSplatRoute,

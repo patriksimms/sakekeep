@@ -21,6 +21,12 @@ const commonEnvironmentSchema = z.object({
     .transform((value) => value === "true"),
   VITE_CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
+  POSTHOG_HOST: z.string().url().default("https://eu.i.posthog.com"),
+  // An empty string counts as unset so callers can explicitly disable PostHog.
+  VITE_POSTHOG_PROJECT_TOKEN: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().min(1).optional()
+  ),
 })
 
 export type Environment = z.infer<typeof commonEnvironmentSchema>

@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { captureServerException } from "#/server/error-tracking.ts"
+
 export class HttpError extends Error {
   constructor(
     public readonly status: number,
@@ -32,6 +34,7 @@ export function jsonError(error: unknown): Response {
     )
   }
   console.error(error)
+  captureServerException(error)
   return Response.json({ error: "An unexpected local server error occurred." }, { status: 500 })
 }
 
