@@ -90,6 +90,7 @@ import {
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
 import { BACKGROUND_PRESETS, type BackgroundPreset } from "#/domain/layout-backgrounds.ts"
+import { boundTextLabel } from "#/domain/layout-label.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
 import {
   boundQuestionLabel,
@@ -97,6 +98,7 @@ import {
   questionPrompt,
 } from "#/domain/layout-question-palette.ts"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
+import { enforceMinimumTextBoxHeight } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
   type LayoutElement,
@@ -844,10 +846,16 @@ function Editor({
   }
 
   const changeSelected = (nextElement: LayoutElement) => {
+    const question =
+      nextElement.type === "bound-text"
+        ? project.formSchema.questions.find((item) => item.id === nextElement.questionId)
+        : undefined
+    const label = nextElement.type === "bound-text" ? boundTextLabel(nextElement, question) : ""
+    const constrainedElement = enforceMinimumTextBoxHeight(nextElement, label)
     markChanged({
       ...schema,
       elements: schema.elements.map((element) =>
-        element.id === nextElement.id ? nextElement : element
+        element.id === constrainedElement.id ? constrainedElement : element
       ),
     })
   }

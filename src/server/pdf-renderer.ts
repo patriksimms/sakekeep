@@ -21,8 +21,9 @@ import {
   type PDFPage,
 } from "pdf-lib"
 
-import { effectivePpi, fitText } from "../domain/generation"
+import { effectivePpi } from "../domain/generation"
 import { gallerySlots, PAGE_SPEC } from "../domain/layout"
+import { layoutText, textRunsForElement, type TextLayoutRun } from "../domain/text-layout.ts"
 import {
   type BookPage,
   type FormSchema,
@@ -62,8 +63,8 @@ interface AssetResolutionMetadata {
   effectivePpi: number
 }
 
-function fontKey(settings: TextSettings): keyof EmbeddedFonts {
-  return `${settings.fontFamily}-${settings.fontStyle}-${settings.fontWeight}`
+function fontKey(settings: TextSettings, weight = settings.fontWeight): keyof EmbeddedFonts {
+  return `${settings.fontFamily}-${settings.fontStyle}-${weight}`
 }
 
 function pt(mm: number): number {
@@ -142,66 +143,33 @@ function wrapText(text: string, font: PDFFont, size: number, width: number) {
   return lines
 }
 
-function textContent(
-  element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
-  submission: SubmissionSummary,
-  form: FormSchema
-): string {
-  if (element.type === "static-text") return element.content
-  const answer = submission.answers[element.questionId]
-  if (typeof answer !== "string") return ""
-  if (!element.showLabel) return answer
-  const question = form.questions.find((candidate) => candidate.id === element.questionId)
-  const label = element.label?.trim() || question?.prompt || ""
-  return label ? `${label}\n${answer}` : answer
-}
-
 function drawTextElement(input: {
   page: PDFPage
-  font: PDFFont
-  content: string
+  fonts: EmbeddedFonts
+  runs: TextLayoutRun[]
   settings: TextSettings
   geometry: LayoutElement["geometry"]
   opacity: number
 }) {
-  if (!input.content.trim()) return
-  const fit = fitText(
-    input.content,
-    input.geometry.width,
-    input.geometry.height,
-    input.settings.fontSize,
-    input.settings.minFontSize,
-    input.settings.lineHeight,
-    input.settings.overflow
-  )
-  const size = fit.effectiveFontSize
+  if (!input.runs.some((run) => run.text.trim())) return
+  const layout = layoutText(input.runs, input.geometry.width, input.geometry.height, input.settings)
+  const size = layout.effectiveFontSize
   const width = pt(input.geometry.width)
-  const height = pt(input.geometry.height)
-  const lineHeight = pt(size * 0.3528 * input.settings.lineHeight)
-  let lines = wrapText(input.content, input.font, size, width)
-  const maxLines = Math.max(1, Math.floor(height / lineHeight))
-  if (input.settings.overflow === "truncate" && lines.length > maxLines) {
-    lines = lines.slice(0, maxLines)
-    let last = `${lines.at(-1) ?? ""}…`
-    while (last.length > 1 && input.font.widthOfTextAtSize(last, size) > width) {
-      last = `${last.slice(0, -2)}…`
-    }
-    lines[lines.length - 1] = last
-  }
+  const lineHeight = pt(layout.lineHeightMm)
   const top = pdfY(input.geometry.y, 0)
-  lines.slice(0, maxLines).forEach((line, index) => {
-    const textWidth = input.font.widthOfTextAtSize(line, size)
+  layout.renderedLines.forEach((line, index) => {
+    const textWidth = pt(line.widthMm)
     const offset =
       input.settings.alignment === "center"
         ? (width - textWidth) / 2
         : input.settings.alignment === "right"
           ? width - textWidth
           : 0
-    input.page.drawText(line, {
+    input.page.drawText(line.text, {
       x: pt(PAGE_SPEC.bleedMm + input.geometry.x) + offset,
       y: top - lineHeight * (index + 1),
       size,
-      font: input.font,
+      font: input.fonts[fontKey(input.settings, line.fontWeight)],
       color: color(input.settings.color),
       opacity: input.opacity,
       rotate: degrees(-input.geometry.rotation),
@@ -227,10 +195,18 @@ async function drawElement(input: {
   const height = pt(geometry.height)
 
   if (element.type === "bound-text" || element.type === "static-text") {
+    const question =
+      element.type === "bound-text"
+        ? input.form.questions.find((candidate) => candidate.id === element.questionId)
+        : undefined
     drawTextElement({
       page,
-      font: input.fonts[fontKey(element.text)],
-      content: textContent(element, input.submission, input.form),
+      fonts: input.fonts,
+      runs: textRunsForElement(
+        element,
+        question,
+        element.type === "bound-text" ? input.submission.answers[element.questionId] : undefined
+      ),
       settings: element.text,
       geometry,
       opacity: element.opacity,

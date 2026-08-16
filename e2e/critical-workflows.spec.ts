@@ -495,9 +495,14 @@ test.describe.serial("critical local prototype workflows", () => {
       await page.keyboard.press("Backspace")
       await page.getByRole("heading", { name: "Page layouts" }).click()
       await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")
-      await expect(page.locator('[data-layout-element-id="warm-name"]')).toContainText(
-        "{{ What should we call you in the book? }}"
-      )
+      await expect
+        .poll(async () =>
+          page
+            .locator('[data-layout-element-id="warm-name"] > span')
+            .allTextContents()
+            .then((lines) => lines.join(" "))
+        )
+        .toBe("{{ What should we call you in the book? }}")
       await expect(page.getByRole("status")).toHaveText("Saved")
 
       const canvasBounds = await renderedCanvas.boundingBox()

@@ -72,9 +72,12 @@ describe("book review problems", () => {
     render(<BookReview project={project} onProjectChange={() => undefined} />)
     fireEvent.click(screen.getByRole("button", { name: /A memory overflows on Response 2/ }))
 
-    expect(screen.getByTestId("preview-layout-elements").textContent).toContain(
-      "Second response memory"
+    const renderedLines = Array.from(
+      screen.getByTestId("preview-layout-elements").querySelectorAll("span")
     )
+      .map((line) => line.textContent)
+      .join(" ")
+    expect(renderedLines).toContain("Second response memory")
     expect(
       document.querySelector(`[data-layout-element-id="${textElement.id}"]`)?.getAttribute("style")
     ).toContain("outline: 2px solid var(--destructive)")

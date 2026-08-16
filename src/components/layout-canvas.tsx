@@ -5,6 +5,7 @@ import { LayoutPageElements, textElementStyle } from "#/components/layout-page.t
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
+import { enforceMinimumTextBoxHeight } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
   type LayoutElement,
@@ -89,11 +90,14 @@ export function applyInlineBoundLabelEdit(
     ...schema,
     elements: schema.elements.map((candidate) =>
       candidate.id === elementId && candidate.type === "bound-text"
-        ? {
-            ...candidate,
-            showLabel: content.trim().length > 0,
-            label: content,
-          }
+        ? enforceMinimumTextBoxHeight(
+            {
+              ...candidate,
+              showLabel: content.trim().length > 0,
+              label: content,
+            },
+            content
+          )
         : candidate
     ),
   }
@@ -301,19 +305,34 @@ export function LayoutCanvas({
       const object = canvas.getActiveObject() as SakekeepObject | undefined
       onSelectRef.current(object?.sakekeepElementId ?? null)
     }
-    const schemaWithObjectGeometry = (event: { target?: FabricObject }) => {
+    const schemaWithObjectGeometry = (
+      event: { target?: FabricObject },
+      enforceMinimumHeight = false
+    ) => {
       const object = event.target as SakekeepObject | undefined
       if (!object?.sakekeepElementId) return null
       return {
         ...schemaRef.current,
-        elements: schemaRef.current.elements.map((candidate) =>
-          candidate.id === object.sakekeepElementId
-            ? {
-                ...candidate,
-                geometry: geometryFromObject(object, width),
-              }
-            : candidate
-        ),
+        elements: schemaRef.current.elements.map((candidate) => {
+          if (candidate.id !== object.sakekeepElementId) return candidate
+          let geometry = geometryFromObject(object, width)
+          if (enforceMinimumHeight) {
+            const question =
+              candidate.type === "bound-text"
+                ? questions.find((item) => item.id === candidate.questionId)
+                : undefined
+            const label = candidate.type === "bound-text" ? boundTextLabel(candidate, question) : ""
+            const constrained = enforceMinimumTextBoxHeight({ ...candidate, geometry }, label)
+            if (constrained.geometry.height > geometry.height) {
+              object.set({
+                scaleY: (object.scaleY ?? 1) * (constrained.geometry.height / geometry.height),
+              })
+              object.setCoords()
+              geometry = geometryFromObject(object, width)
+            }
+          }
+          return { ...candidate, geometry }
+        }),
       }
     }
     const transforming = (event: { target?: FabricObject }) => {
@@ -322,7 +341,7 @@ export function LayoutCanvas({
     }
     const modified = (event: { target?: FabricObject; transform?: { action?: string } }) => {
       if (event.target instanceof IText && !event.transform?.action) return
-      const next = schemaWithObjectGeometry(event)
+      const next = schemaWithObjectGeometry(event, event.transform?.action?.startsWith("scale"))
       if (!next) return
       setDisplaySchema(next)
       changing.current = true
@@ -451,7 +470,10 @@ export function LayoutCanvas({
     canvas.on("selection:updated", select)
     canvas.on("selection:cleared", select)
     canvas.on("object:moving", transforming)
-    canvas.on("object:scaling", transforming)
+    canvas.on("object:scaling", (event) => {
+      const next = schemaWithObjectGeometry(event, true)
+      if (next) setDisplaySchema(next)
+    })
     canvas.on("object:rotating", transforming)
     canvas.on("object:modified", modified)
     const doubleClick = (event: MouseEvent) => {

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest"
 import {
   deterministicLayoutAssignments,
   effectivePpi,
-  fitText,
   generateBook,
   inspectSubmissionPage,
 } from "./generation.ts"
@@ -84,32 +83,8 @@ describe("book generation", () => {
     ).toMatchObject({ layoutId: layouts[1]!.id })
   })
 
-  it("implements overflow and effective resolution thresholds", () => {
-    expect(fitText("Short", 100, 30, 16, 8, 1.2, "flag")).toMatchObject({
-      fits: true,
-      requiredLines: 1,
-      availableLines: 4,
-    })
-    const long = "A very long memory ".repeat(80)
-    expect(fitText(long, 20, 8, 20, 8, 1.4, "flag")).toMatchObject({
-      fits: false,
-      effectiveFontSize: 20,
-      availableLines: 0,
-    })
-    expect(fitText(long, 20, 8, 20, 8, 1.4, "truncate")).toMatchObject({
-      fits: true,
-      truncated: true,
-    })
+  it("calculates effective resolution thresholds", () => {
     expect(effectivePpi(3000, 2000, 254, 127)).toBe(300)
-  })
-
-  it("tests the exact decimal minimum font size after stepped shrink candidates", () => {
-    expect(fitText("One line", 100, 2.9, 20, 8.1, 1, "shrink")).toMatchObject({
-      fits: true,
-      effectiveFontSize: 8.1,
-      requiredLines: 1,
-      availableLines: 1,
-    })
   })
 
   it.each([
