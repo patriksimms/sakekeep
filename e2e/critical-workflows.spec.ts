@@ -423,9 +423,28 @@ test.describe.serial("critical local prototype workflows", () => {
         },
       })
     }
+    const answerTop = (elementId: string) =>
+      page.locator(`[data-layout-element-id="${elementId}"]`).evaluate((element) => {
+        const answer = element.lastChild
+        if (!answer) throw new Error("The answer text is missing.")
+        const range = document.createRange()
+        range.selectNodeContents(answer)
+        return range.getBoundingClientRect().top - element.getBoundingClientRect().top
+      })
 
     try {
       await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")
+
+      const answerTopBeforeEditing = await answerTop("warm-memory")
+      await editLabel("warm-memory")
+      expect(await answerTop("warm-memory")).toBeCloseTo(answerTopBeforeEditing, 0)
+      await page.locator("[data-layout-canvas]").screenshot({
+        path: resolve("visual-artifacts/issues/48/after-selected-label.png"),
+      })
+      await page.keyboard.press("Escape")
+      await expect(page.locator('[data-layout-element-id="warm-memory"] strong')).toHaveText(
+        "A memory worth keeping"
+      )
 
       await editLabel("warm-name")
       await page.keyboard.type("Name in this book")

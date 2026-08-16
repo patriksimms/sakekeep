@@ -116,7 +116,11 @@ function ElementContent({
         data-layout-element-type={element.type}
         style={textElementStyle(element)}
       >
-        {element.type === "bound-text" && label && <strong className="block">{label}</strong>}
+        {element.type === "bound-text" && (label || editingElementId === element.id) && (
+          <strong className={editingElementId === element.id ? "invisible block" : "block"}>
+            {label || "\u00a0"}
+          </strong>
+        )}
         {element.type === "bound-text" &&
           !label &&
           showEditorPlaceholders &&
