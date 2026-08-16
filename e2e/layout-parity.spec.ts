@@ -1,5 +1,8 @@
-import { expect, test, type Locator } from "@playwright/test"
+import { expect, test, type Locator, type Page } from "@playwright/test"
+import { type FabricObject } from "fabric"
 import sharp from "sharp"
+
+type SakekeepInteraction = FabricObject & { sakekeepElementId?: string }
 
 const elementIds = [
   "bleed-panel",
@@ -56,6 +59,72 @@ async function pixelDifference(first: Buffer, second: Buffer): Promise<number> {
     }
   }
   return different / ((left.info.width - 16) * (left.info.height - 16))
+}
+
+async function expectInteractionsToMatchHtml(page: Page) {
+  const geometries = await page.evaluate((ids) => {
+    const canvas = window.__sakekeepLayoutParityCanvas
+    const surface = document.querySelector<HTMLElement>('[data-testid="editor-layout-elements"]')
+    if (!canvas || !surface) throw new Error("Layout parity fixture is not ready")
+    const surfaceBox = surface.getBoundingClientRect()
+
+    return ids.map((id) => {
+      const object = canvas
+        .getObjects()
+        .find((candidate) => (candidate as SakekeepInteraction).sakekeepElementId === id) as
+        | SakekeepInteraction
+        | undefined
+      const element = surface.querySelector<HTMLElement>(`[data-layout-element-id="${id}"]`)
+      if (!object || !element) throw new Error(`Missing parity element ${id}`)
+      const rotation = element.style.transform.match(/rotate\(([-\d.]+)deg\)/)?.[1]
+      return {
+        id,
+        fabric: {
+          x: object.left,
+          y: object.top,
+          width: object.getScaledWidth(),
+          height: object.getScaledHeight(),
+          rotation: object.angle,
+        },
+        html: {
+          x: (Number.parseFloat(element.style.left) / 100) * surfaceBox.width,
+          y: (Number.parseFloat(element.style.top) / 100) * surfaceBox.height,
+          width: (Number.parseFloat(element.style.width) / 100) * surfaceBox.width,
+          height: (Number.parseFloat(element.style.height) / 100) * surfaceBox.height,
+          rotation: Number(rotation),
+        },
+      }
+    })
+  }, elementIds)
+
+  for (const { id, fabric, html } of geometries) {
+    for (const key of ["x", "y", "width", "height", "rotation"] as const) {
+      expect(fabric[key], `${id} interaction ${key}`).toBeCloseTo(html[key], 3)
+    }
+  }
+}
+
+async function transformStaticText(
+  page: Page,
+  values: { left?: number; top?: number; scaleX?: number; scaleY?: number; angle?: number },
+  eventName: "object:moving" | "object:scaling" | "object:rotating" | "object:modified"
+) {
+  await page.evaluate(
+    ({ nextValues, nextEventName }) => {
+      const canvas = window.__sakekeepLayoutParityCanvas
+      const object = canvas
+        ?.getObjects()
+        .find(
+          (candidate) => (candidate as SakekeepInteraction).sakekeepElementId === "static-heading"
+        ) as SakekeepInteraction | undefined
+      if (!canvas || !object) throw new Error("Static text interaction object is not ready")
+      object.set(nextValues)
+      object.setCoords()
+      canvas.fire(nextEventName, { target: object })
+    },
+    { nextValues: values, nextEventName: eventName }
+  )
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
 }
 
 test("Fabric editor and book preview preserve canonical rendering parity", async ({ page }) => {
@@ -150,6 +219,30 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
   expect(await pixelDifference(await editor.screenshot(), await preview.screenshot())).toBeLessThan(
     0.025
   )
+})
+
+test("Fabric interactions track real HTML geometry through every transform", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 })
+  await page.goto("/layout-parity")
+  await expect(page.locator("canvas.upper-canvas")).toBeVisible()
+  await page.waitForFunction(
+    (count) => window.__sakekeepLayoutParityCanvas?.getObjects().length === count,
+    elementIds.length
+  )
+
+  await expectInteractionsToMatchHtml(page)
+
+  await transformStaticText(page, { left: 210, top: 54 }, "object:moving")
+  await expectInteractionsToMatchHtml(page)
+
+  await transformStaticText(page, { scaleX: 0.8, scaleY: 1.5 }, "object:scaling")
+  await expectInteractionsToMatchHtml(page)
+
+  await transformStaticText(page, { angle: 17 }, "object:rotating")
+  await expectInteractionsToMatchHtml(page)
+
+  await transformStaticText(page, {}, "object:modified")
+  await expectInteractionsToMatchHtml(page)
 })
 
 test("static text remains editable on the HTML layer", async ({ page }) => {

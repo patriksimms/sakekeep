@@ -235,7 +235,6 @@ export function LayoutCanvas({
         (candidate) => candidate.id === object?.sakekeepElementId
       )
       if (!object || source?.type !== "static-text") return
-      canvas.discardActiveObject()
       setDisplaySchema({
         ...schemaRef.current,
         elements: schemaRef.current.elements.map((candidate) =>

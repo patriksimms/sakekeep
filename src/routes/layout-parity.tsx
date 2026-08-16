@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { type Canvas } from "fabric"
+import { useEffect, useRef, useState } from "react"
 
 import { PagePreview } from "#/components/book-review.tsx"
 import { LayoutCanvas } from "#/components/layout-canvas.tsx"
@@ -11,6 +13,12 @@ import {
   type SubmissionBookPage,
   type SubmissionSummary,
 } from "#/domain/types.ts"
+
+declare global {
+  interface Window {
+    __sakekeepLayoutParityCanvas?: Canvas | null
+  }
+}
 
 export const Route = createFileRoute("/layout-parity")({
   component: LayoutParityFixture,
@@ -200,6 +208,19 @@ const project: Project = {
 
 function LayoutParityFixture() {
   const decorativeAssetUrl = () => "/layout-parity-decor.svg"
+  const canvasRef = useRef<Canvas | null>(null)
+  const [editorSchema, setEditorSchema] = useState(schema)
+
+  useEffect(() => {
+    Object.defineProperty(window, "__sakekeepLayoutParityCanvas", {
+      configurable: true,
+      get: () => canvasRef.current,
+    })
+    return () => {
+      delete window.__sakekeepLayoutParityCanvas
+    }
+  }, [])
+
   return (
     <main className="mx-auto flex w-fit flex-col gap-5 p-8">
       <div>
@@ -212,11 +233,12 @@ function LayoutParityFixture() {
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Fabric editor</h2>
           <LayoutCanvas
-            schema={schema}
+            schema={editorSchema}
             width={648}
             selectedId={null}
             onSelect={() => undefined}
-            onChange={() => undefined}
+            onChange={setEditorSchema}
+            canvasRef={canvasRef}
             questions={project.formSchema.questions}
             previewSubmission={submission}
             decorativeAssetUrl={decorativeAssetUrl}
