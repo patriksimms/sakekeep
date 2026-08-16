@@ -138,6 +138,17 @@ test.describe.serial("critical local prototype workflows", () => {
     expect(disabled.every((entry) => entry.cursor !== "pointer")).toBe(true)
   })
 
+  test("project cards open their workspace from the full card surface", async ({ page }) => {
+    await page.goto("/projects")
+    const projectCard = page.getByRole("link", {
+      name: "Open Lea’s farewell book workspace",
+    })
+
+    await expect(projectCard).toBeVisible()
+    await projectCard.click({ position: { x: 20, y: 20 } })
+    await expect(page).toHaveURL(`/projects/${closedProjectId}`)
+  })
+
   test("organizer creates, autosaves, reorders, and publishes every question type", async ({
     page,
     request,

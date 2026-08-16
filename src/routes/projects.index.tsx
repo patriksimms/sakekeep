@@ -212,57 +212,66 @@ function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projectList.map((project) => (
-            <Card
+            <Link
               key={project.id}
-              className={project.archivedAt ? "min-h-56 bg-card/60" : "min-h-56 bg-card/90"}
+              to="/projects/$projectId"
+              params={{ projectId: project.id }}
+              aria-label={`Open ${project.title} workspace`}
+              className="group/project-card rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <CardHeader>
-                <CardTitle className="text-xl">{project.title}</CardTitle>
-                <CardDescription>{project.occasion || "No occasion added"}</CardDescription>
-                <CardAction className="flex items-center gap-2">
-                  {project.archivedAt && (
-                    <Badge variant="outline">
-                      <ArchiveIcon data-icon="inline-start" />
-                      Archived
+              <Card
+                className={
+                  project.archivedAt
+                    ? "min-h-56 bg-card/60 transition-colors group-hover/project-card:bg-muted/50"
+                    : "min-h-56 bg-card/90 transition-colors group-hover/project-card:bg-muted/50"
+                }
+              >
+                <CardHeader>
+                  <CardTitle className="text-xl">{project.title}</CardTitle>
+                  <CardDescription>{project.occasion || "No occasion added"}</CardDescription>
+                  <CardAction className="flex items-center gap-2">
+                    {project.archivedAt && (
+                      <Badge variant="outline">
+                        <ArchiveIcon data-icon="inline-start" />
+                        Archived
+                      </Badge>
+                    )}
+                    <Badge
+                      variant={
+                        project.state === "collecting" && !project.archivedAt
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {statusLabel(project.state)}
                     </Badge>
-                  )}
-                  <Badge
-                    variant={
-                      project.state === "collecting" && !project.archivedAt
-                        ? "default"
-                        : "secondary"
-                    }
+                  </CardAction>
+                </CardHeader>
+                <CardContent className="mt-auto grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-2xl font-semibold">{project.submissionCount}</p>
+                    <p className="text-xs text-muted-foreground">responses</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium capitalize">
+                      {project.bookStatus.replace("-", " ")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">book status</p>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <span
+                    className={buttonVariants({
+                      variant: "ghost",
+                      className: "ml-auto",
+                    })}
                   >
-                    {statusLabel(project.state)}
-                  </Badge>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="mt-auto grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-2xl font-semibold">{project.submissionCount}</p>
-                  <p className="text-xs text-muted-foreground">responses</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium capitalize">
-                    {project.bookStatus.replace("-", " ")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">book status</p>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Link
-                  to="/projects/$projectId"
-                  params={{ projectId: project.id }}
-                  className={buttonVariants({
-                    variant: "ghost",
-                    className: "ml-auto",
-                  })}
-                >
-                  Open workspace
-                  <ArrowRightIcon data-icon="inline-end" />
-                </Link>
-              </CardFooter>
-            </Card>
+                    Open workspace
+                    <ArrowRightIcon data-icon="inline-end" />
+                  </span>
+                </CardFooter>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
