@@ -12,10 +12,12 @@ import {
   type RelativeGeometry,
   type SubmissionSummary,
 } from "#/domain/types.ts"
+import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 
 type SakekeepObject = FabricObject & {
   sakekeepElementId?: string
   sakekeepConfiguredHeight?: number
+  sakekeepEditMethod?: "double_click" | "keyboard"
   sakekeepOriginalText?: string
 }
 
@@ -288,6 +290,12 @@ export function LayoutCanvas({
         canvas.requestRenderAll()
         return
       }
+      if (source?.type === "bound-text") {
+        captureAnalyticsEvent("layout_editor:answer_label_edit", {
+          cleared: object.text.trim().length === 0,
+          input_method: object.sakekeepEditMethod ?? "keyboard",
+        })
+      }
       schemaRef.current = next
       setDisplaySchema(next)
       changing.current = true
@@ -296,7 +304,10 @@ export function LayoutCanvas({
         changing.current = false
       })
     }
-    const startInlineEditing = (event?: Parameters<IText["enterEditing"]>[0]) => {
+    const startInlineEditing = (
+      inputMethod: "double_click" | "keyboard",
+      event?: Parameters<IText["enterEditing"]>[0]
+    ) => {
       const object = canvas.getActiveObject() as (IText & SakekeepObject) | undefined
       const source = schemaRef.current.elements.find(
         (candidate) => candidate.id === object?.sakekeepElementId
@@ -312,6 +323,7 @@ export function LayoutCanvas({
       const content =
         source.type === "static-text" ? source.content : boundTextLabel(source, question)
       object.sakekeepOriginalText = content
+      object.sakekeepEditMethod = inputMethod
       setEditingElementId(source.id)
       setDisplaySchema({
         ...schemaRef.current,
@@ -332,7 +344,7 @@ export function LayoutCanvas({
       return true
     }
     const editableCanvas = canvas as InlineEditableCanvas
-    editableCanvas.startInlineEditing = () => startInlineEditing()
+    editableCanvas.startInlineEditing = () => startInlineEditing("keyboard")
     const keyDown = (event: KeyboardEvent) => {
       const object = canvas.getActiveObject() as (IText & SakekeepObject) | undefined
       if (!object?.isEditing || !object.sakekeepElementId || event.key !== "Escape") return
@@ -395,7 +407,7 @@ export function LayoutCanvas({
       if (!object) return
       event.stopImmediatePropagation()
       canvas.setActiveObject(object)
-      startInlineEditing(event)
+      startInlineEditing("double_click", event)
     }
     canvas.upperCanvasEl.addEventListener("dblclick", doubleClick, true)
     canvas.on("text:editing:exited", textEdited)
