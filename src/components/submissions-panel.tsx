@@ -265,15 +265,15 @@ export function SubmissionsPanel({
       )}
 
       {project.state === "collecting" && !project.archivedAt && (
-        <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-1.5">
           <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="destructive" />}>
+            <AlertDialogTrigger render={<Button variant="outline" />}>
               <LockIcon data-icon="inline-start" />
-              Close collection permanently
+              Lock collection
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Close collection forever?</AlertDialogTitle>
+                <AlertDialogTitle>Lock collection permanently?</AlertDialogTitle>
                 <AlertDialogDescription>
                   New submissions will be rejected immediately, including any contributor currently
                   filling the form. Existing responses remain read-only. This transition cannot be
@@ -283,22 +283,22 @@ export function SubmissionsPanel({
               <AlertDialogFooter>
                 <AlertDialogCancel>Keep collecting</AlertDialogCancel>
                 <AlertDialogAction
-                  variant="destructive"
                   onClick={async () => {
                     try {
                       const updated = await projectApi.action(project.id, "close")
                       onProjectChange(updated)
-                      toast.success("Collection closed permanently")
+                      toast.success("Collection locked permanently")
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Close failed")
+                      toast.error(error instanceof Error ? error.message : "Lock failed")
                     }
                   }}
                 >
-                  Close permanently
+                  Lock collection
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <p className="text-xs text-muted-foreground">Stops new responses permanently</p>
         </div>
       )}
     </div>
