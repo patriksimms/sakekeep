@@ -23,3 +23,17 @@ describe("empty decorative image rendering", () => {
     expect(preview).not.toContain("layout-decorative-placeholder.svg")
   })
 })
+
+describe("selected element rendering", () => {
+  it("visibly outlines the selected text bounding box", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+
+    const preview = renderToStaticMarkup(
+      <LayoutPageElements schema={schema} selectedElementId={element.id} />
+    )
+
+    expect(preview).toContain(`data-layout-element-id="${element.id}"`)
+    expect(preview).toContain("outline:2px solid var(--destructive)")
+  })
+})

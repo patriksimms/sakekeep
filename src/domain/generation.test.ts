@@ -85,14 +85,152 @@ describe("book generation", () => {
   })
 
   it("implements overflow and effective resolution thresholds", () => {
-    expect(fitText("Short", 100, 30, 16, 8, 1.2, "flag").fits).toBe(true)
+    expect(fitText("Short", 100, 30, 16, 8, 1.2, "flag")).toMatchObject({
+      fits: true,
+      requiredLines: 1,
+      availableLines: 4,
+    })
     const long = "A very long memory ".repeat(80)
-    expect(fitText(long, 20, 8, 20, 8, 1.4, "flag").fits).toBe(false)
+    expect(fitText(long, 20, 8, 20, 8, 1.4, "flag")).toMatchObject({
+      fits: false,
+      effectiveFontSize: 20,
+      availableLines: 0,
+    })
     expect(fitText(long, 20, 8, 20, 8, 1.4, "truncate")).toMatchObject({
       fits: true,
       truncated: true,
     })
     expect(effectivePpi(3000, 2000, 254, 127)).toBe(300)
+  })
+
+  it("tests the exact decimal minimum font size after stepped shrink candidates", () => {
+    expect(fitText("One line", 100, 2.9, 20, 8.1, 1, "shrink")).toMatchObject({
+      fits: true,
+      effectiveFontSize: 8.1,
+      requiredLines: 1,
+      availableLines: 1,
+    })
+  })
+
+  it.each([
+    [
+      "shrink",
+      true,
+      "A memory overflows on Response 1. It needs 4 lines at the 8 pt minimum, but only 2 lines fit.",
+    ],
+    [
+      "flag",
+      true,
+      "A memory overflows on Response 1. It needs 4 lines at the configured 20 pt size, but only 1 line fits.",
+    ],
+    [
+      "truncate",
+      false,
+      "A memory is truncated on Response 1. It needs 4 lines at the configured 20 pt size, but only 1 line fits.",
+    ],
+  ] as const)("describes %s overflow with its relevant constraint", (policy, blocking, message) => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.geometry = { ...element.geometry, width: 100, height: 8 }
+    element.text = {
+      ...element.text,
+      fontSize: 20,
+      minFontSize: 8,
+      lineHeight: 1,
+      overflow: policy,
+    }
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.memory = "one\ntwo\nthree"
+
+    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect.objectContaining({
+        code: "text-overflow",
+        elementId: element.id,
+        blocking,
+        message,
+      })
+    )
+  })
+
+  it("distinguishes a text bounding box that is too short for one line", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.geometry = { ...element.geometry, width: 100, height: 5 }
+    element.text = { ...element.text, fontSize: 20, lineHeight: 1, overflow: "flag" }
+    element.showLabel = true
+    element.label = "Best memory"
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.memory = "one"
+
+    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect.objectContaining({
+        message:
+          "Best memory overflows on Response 1. Its text bounding box is too short for one line at the configured 20 pt size (needs 7.06 mm, has 5.00 mm).",
+      })
+    )
+  })
+
+  it("includes the fallback question label when measuring bound text", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.geometry = { ...element.geometry, width: 100, height: 8 }
+    element.text = { ...element.text, fontSize: 20, lineHeight: 1, overflow: "flag" }
+    element.showLabel = true
+    element.label = ""
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.memory = "one"
+
+    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect.objectContaining({
+        code: "text-overflow",
+        message:
+          "A memory overflows on Response 1. It needs 2 lines at the configured 20 pt size, but only 1 line fits.",
+      })
+    )
+  })
+
+  it("still reports a missing required answer when a fallback label is visible", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.showLabel = true
+    element.label = ""
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.memory = ""
+
+    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect.objectContaining({
+        code: "missing-required-answer",
+        elementId: element.id,
+        blocking: true,
+      })
+    )
+  })
+
+  it("distinguishes repeated text bounding boxes bound to the same question", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.geometry = { ...element.geometry, width: 100, height: 5 }
+    element.text = { ...element.text, fontSize: 20, lineHeight: 1, overflow: "flag" }
+    layout.schema.elements.push({ ...element, id: "repeated-memory" })
+
+    const problems = inspectSubmissionPage(
+      "page",
+      layout,
+      submissionFixture(submissionIds[0]!, 1),
+      completeForm,
+      []
+    ).filter((problem) => problem.code === "text-overflow")
+
+    expect(problems.map((problem) => problem.message)).toEqual([
+      expect.stringContaining("A memory (text bounding box 1) overflows"),
+      expect.stringContaining("A memory (text bounding box 2) overflows"),
+    ])
+    expect(new Set(problems.map((problem) => problem.message))).toHaveLength(2)
   })
 
   it("reports blocking low-resolution images and honors explicit overrides", () => {

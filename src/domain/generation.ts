@@ -12,6 +12,7 @@ import {
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
+import { boundTextLabel } from "./layout-label"
 
 function hashString(value: string): number {
   let hash = 2166136261
@@ -70,6 +71,10 @@ export interface TextFit {
   fits: boolean
   effectiveFontSize: number
   truncated: boolean
+  requiredLines: number
+  availableLines: number
+  requiredHeightMm: number
+  lineHeightMm: number
 }
 
 export function fitText(
@@ -82,46 +87,133 @@ export function fitText(
   policy: "shrink" | "truncate" | "flag"
 ): TextFit {
   const normalize = content.replace(/\r\n/g, "\n")
-  const fitsAt = (size: number) => {
+  const measureAt = (size: number) => {
     const averageGlyphWidthMm = size * 0.3528 * 0.52
     const charsPerLine = Math.max(1, Math.floor(widthMm / averageGlyphWidthMm))
     const explicitLines = normalize.split("\n")
-    const wrappedLines = explicitLines.reduce(
+    const requiredLines = explicitLines.reduce(
       (count, line) => count + Math.max(1, Math.ceil(line.length / charsPerLine)),
       0
     )
     const lineHeightMm = size * 0.3528 * lineHeight
-    return wrappedLines * lineHeightMm <= heightMm
+    return {
+      requiredLines,
+      availableLines: Math.floor(heightMm / lineHeightMm),
+      requiredHeightMm: requiredLines * lineHeightMm,
+      lineHeightMm,
+    }
   }
 
-  if (fitsAt(fontSize)) {
-    return { fits: true, effectiveFontSize: fontSize, truncated: false }
+  const configured = measureAt(fontSize)
+  if (configured.requiredHeightMm <= heightMm) {
+    return {
+      fits: true,
+      effectiveFontSize: fontSize,
+      truncated: false,
+      ...configured,
+    }
   }
   if (policy === "shrink") {
-    for (let size = fontSize - 0.5; size >= minFontSize; size -= 0.5) {
-      if (fitsAt(size)) {
-        return { fits: true, effectiveFontSize: size, truncated: false }
+    for (let size = fontSize - 0.5; size > minFontSize; size -= 0.5) {
+      const measurement = measureAt(size)
+      if (measurement.requiredHeightMm <= heightMm) {
+        return {
+          fits: true,
+          effectiveFontSize: size,
+          truncated: false,
+          ...measurement,
+        }
+      }
+    }
+    const minimum = measureAt(minFontSize)
+    if (minimum.requiredHeightMm <= heightMm) {
+      return {
+        fits: true,
+        effectiveFontSize: minFontSize,
+        truncated: false,
+        ...minimum,
       }
     }
   }
+  const effectiveFontSize = policy === "shrink" ? minFontSize : fontSize
   return {
     fits: policy === "truncate",
-    effectiveFontSize: policy === "shrink" ? minFontSize : fontSize,
+    effectiveFontSize,
     truncated: policy === "truncate",
+    ...measureAt(effectiveFontSize),
   }
+}
+
+function lineCount(count: number): string {
+  return `${count} ${count === 1 ? "line" : "lines"}`
+}
+
+function textElementName(
+  element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
+  form: FormSchema
+): string {
+  if (element.type === "bound-text") {
+    if (element.showLabel && element.label?.trim()) return element.label.trim()
+    return form.questions.find((question) => question.id === element.questionId)?.prompt ?? "Text"
+  }
+  const firstLine = element.content.trim().split("\n")[0]?.trim()
+  if (!firstLine) return "Static text"
+  return firstLine.length > 50 ? `${firstLine.slice(0, 47)}…` : firstLine
+}
+
+function textOverflowMessage(
+  name: string,
+  response: number,
+  policy: "shrink" | "truncate" | "flag",
+  fit: TextFit,
+  heightMm: number
+): string {
+  const action = policy === "truncate" ? "is truncated" : "overflows"
+  const size =
+    policy === "shrink"
+      ? `${fit.effectiveFontSize} pt minimum`
+      : `configured ${fit.effectiveFontSize} pt size`
+  if (fit.availableLines === 0) {
+    return `${name} ${action} on Response ${response}. Its text bounding box is too short for one line at the ${size} (needs ${fit.lineHeightMm.toFixed(2)} mm, has ${heightMm.toFixed(2)} mm).`
+  }
+  return `${name} ${action} on Response ${response}. It needs ${lineCount(fit.requiredLines)} at the ${size}, but only ${lineCount(fit.availableLines)} ${fit.availableLines === 1 ? "fits" : "fit"}.`
 }
 
 function textForElement(
   element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
-  answers: SubmissionAnswers
+  answers: SubmissionAnswers,
+  form: FormSchema
 ): string {
   if (element.type === "static-text") return element.content
   const answer = answers[element.questionId]
   if (typeof answer !== "string") return ""
-  const label = element.showLabel
-    ? `${element.label?.trim() || ""}${element.label?.trim() ? "\n" : ""}`
-    : ""
+  const question = form.questions.find((candidate) => candidate.id === element.questionId)
+  const displayedLabel = boundTextLabel(element, question)
+  const label = displayedLabel ? `${displayedLabel}\n` : ""
   return `${label}${answer}`
+}
+
+function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<string, string> {
+  const textElements = elements.filter(
+    (element): element is Extract<LayoutElement, { type: "bound-text" | "static-text" }> =>
+      element.type === "bound-text" || element.type === "static-text"
+  )
+  const names = textElements.map((element) => textElementName(element, form))
+  const counts = new Map<string, number>()
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
+
+  const occurrences = new Map<string, number>()
+  return new Map(
+    textElements.map((element, index) => {
+      const name = names[index]!
+      const occurrence = (occurrences.get(name) ?? 0) + 1
+      occurrences.set(name, occurrence)
+      return [
+        element.id,
+        counts.get(name) === 1 ? name : `${name} (text bounding box ${occurrence})`,
+      ]
+    })
+  )
 }
 
 function imagesForElement(
@@ -164,6 +256,7 @@ export function inspectSubmissionPage(
 ): PageProblem[] {
   const problems: PageProblem[] = []
   const overrides = new Set(resolutionOverrides)
+  const problemNames = textProblemNames(layout.schema.elements, form)
   const requiredQuestions = new Map(
     form.questions
       .filter((question) => question.required)
@@ -206,11 +299,13 @@ export function inspectSubmissionPage(
     }
 
     if (element.type === "bound-text" || element.type === "static-text") {
-      const content = textForElement(element, submission.answers)
+      const content = textForElement(element, submission.answers, form)
+      const answer =
+        element.type === "bound-text" ? submission.answers[element.questionId] : undefined
       if (
         element.type === "bound-text" &&
         requiredQuestions.has(element.questionId) &&
-        !content.trim()
+        (typeof answer !== "string" || !answer.trim())
       ) {
         problems.push(
           problem(
@@ -232,13 +327,19 @@ export function inspectSubmissionPage(
         element.text.lineHeight,
         element.text.overflow
       )
-      if (!fit.fits) {
+      if (!fit.fits || fit.truncated) {
         problems.push(
           problem(
             pageId,
             "text-overflow",
-            "Text does not fit at the configured minimum size.",
-            true,
+            textOverflowMessage(
+              problemNames.get(element.id)!,
+              submission.sequence,
+              element.text.overflow,
+              fit,
+              element.geometry.height
+            ),
+            !fit.fits,
             element.id
           )
         )
