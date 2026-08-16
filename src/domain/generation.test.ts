@@ -192,6 +192,24 @@ describe("book generation", () => {
     )
   })
 
+  it("still reports a missing required answer when a fallback label is visible", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.showLabel = true
+    element.label = ""
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.memory = ""
+
+    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect.objectContaining({
+        code: "missing-required-answer",
+        elementId: element.id,
+        blocking: true,
+      })
+    )
+  })
+
   it("distinguishes repeated text bounding boxes bound to the same question", () => {
     const layout = layoutFixture()
     const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!

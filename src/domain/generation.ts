@@ -300,10 +300,12 @@ export function inspectSubmissionPage(
 
     if (element.type === "bound-text" || element.type === "static-text") {
       const content = textForElement(element, submission.answers, form)
+      const answer =
+        element.type === "bound-text" ? submission.answers[element.questionId] : undefined
       if (
         element.type === "bound-text" &&
         requiredQuestions.has(element.questionId) &&
-        !content.trim()
+        (typeof answer !== "string" || !answer.trim())
       ) {
         problems.push(
           problem(
