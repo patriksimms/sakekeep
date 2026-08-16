@@ -1,7 +1,7 @@
-import { Canvas, FabricObject, IText, Rect, Textbox } from "fabric"
+import { Canvas, FabricObject, Rect } from "fabric"
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
-import { LayoutPageElements } from "#/components/layout-page.tsx"
+import { LayoutPageElements, textElementStyle } from "#/components/layout-page.tsx"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
 import {
@@ -94,6 +94,47 @@ function elementName(element: LayoutElement) {
   return names[element.type]
 }
 
+function InlineStaticTextEditor({
+  element,
+  onCommit,
+}: {
+  element: Extract<LayoutElement, { type: "static-text" }>
+  onCommit: (content: string) => void
+}) {
+  const editor = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const node = editor.current
+    if (!node) return
+    node.focus()
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }, [])
+
+  return (
+    <div
+      ref={editor}
+      data-layout-element-id={element.id}
+      data-layout-element-type={element.type}
+      data-layout-inline-editor="true"
+      contentEditable
+      suppressContentEditableWarning
+      onBlur={(event) => onCommit(event.currentTarget.innerText)}
+      style={{
+        ...textElementStyle(element),
+        zIndex: 2,
+        cursor: "text",
+        outline: "2px solid var(--primary)",
+      }}
+    >
+      {element.content}
+    </div>
+  )
+}
+
 export function objectForElement(element: LayoutElement, canvasWidth: number): SakekeepObject {
   const geometry = canonicalToCanvasGeometry(element.geometry, canvasWidth)
   const common = {
@@ -115,20 +156,7 @@ export function objectForElement(element: LayoutElement, canvasWidth: number): S
     lockScalingY: element.locked,
     objectCaching: false,
   }
-  const object: SakekeepObject =
-    element.type === "static-text"
-      ? new Textbox(element.content, {
-          ...common,
-          editable: true,
-          fontFamily: element.text.fontFamily,
-          fontSize: element.text.fontSize * 0.3528 * (canvasWidth / PAGE_SPEC.mediaWidthMm),
-          fontStyle: element.text.fontStyle,
-          fontWeight: element.text.fontWeight,
-          textAlign: element.text.alignment,
-          lineHeight: element.text.lineHeight,
-          fill: element.text.color,
-        })
-      : new Rect(common)
+  const object: SakekeepObject = new Rect(common)
   object.sakekeepElementId = element.id
   object.set({
     name: `${elementName(element)} · ${element.id.slice(0, 5)}`,
@@ -181,6 +209,7 @@ export function LayoutCanvas({
   const onChangeRef = useRef(onChange)
   const changing = useRef(false)
   const [displaySchema, setDisplaySchema] = useState(schema)
+  const [editingElementId, setEditingElementId] = useState<string | null>(null)
   const [isDropTarget, setIsDropTarget] = useState(false)
   schemaRef.current = schema
   onSelectRef.current = onSelect
@@ -221,32 +250,9 @@ export function LayoutCanvas({
       const next = schemaWithObjectGeometry(event)
       if (next) setDisplaySchema(next)
     }
-    const modified = (event: { target?: FabricObject; transform?: { action?: string } }) => {
-      if (event.target instanceof IText && !event.transform?.action) return
+    const modified = (event: { target?: FabricObject }) => {
       const next = schemaWithObjectGeometry(event)
       if (!next) return
-      setDisplaySchema(next)
-      changing.current = true
-      onChangeRef.current(next)
-      requestAnimationFrame(() => {
-        changing.current = false
-      })
-    }
-    const textEdited = (event: { target: IText }) => {
-      const object = event.target as IText & SakekeepObject
-      if (!object.sakekeepElementId) return
-      object.set({ opacity: 0 })
-      const next = applyInlineStaticTextEdit(
-        schemaRef.current,
-        object.sakekeepElementId,
-        object.text
-      )
-      if (!next) {
-        setDisplaySchema(schemaRef.current)
-        canvas.requestRenderAll()
-        return
-      }
-      schemaRef.current = next
       setDisplaySchema(next)
       changing.current = true
       onChangeRef.current(next)
@@ -262,24 +268,20 @@ export function LayoutCanvas({
     canvas.on("object:rotating", transforming)
     canvas.on("object:modified", modified)
     canvas.on("mouse:dblclick", (event) => {
-      const object = event.target as (IText & SakekeepObject) | undefined
+      const object = event.target as SakekeepObject | undefined
       const source = schemaRef.current.elements.find(
         (candidate) => candidate.id === object?.sakekeepElementId
       )
-      if (!object || source?.type !== "static-text" || object.isEditing) return
+      if (!object || source?.type !== "static-text") return
       setDisplaySchema({
         ...schemaRef.current,
         elements: schemaRef.current.elements.map((candidate) =>
           candidate.id === source.id ? { ...source, content: "" } : candidate
         ),
       })
-      object.set({ opacity: source.opacity })
-      canvas.setActiveObject(object)
-      object.enterEditing(event.e)
-      object.selectAll()
+      setEditingElementId(source.id)
       canvas.requestRenderAll()
     })
-    canvas.on("text:editing:exited", textEdited)
 
     return () => {
       if (canvasRef) canvasRef.current = null
@@ -316,6 +318,30 @@ export function LayoutCanvas({
     }
     canvas.requestRenderAll()
   }, [schema, selectedId, width])
+
+  const editingElement = editingElementId
+    ? schema.elements.find(
+        (candidate): candidate is Extract<LayoutElement, { type: "static-text" }> =>
+          candidate.id === editingElementId && candidate.type === "static-text"
+      )
+    : undefined
+
+  const commitInlineEdit = (content: string) => {
+    if (!editingElementId) return
+    setEditingElementId(null)
+    const next = applyInlineStaticTextEdit(schemaRef.current, editingElementId, content)
+    if (!next) {
+      setDisplaySchema(schemaRef.current)
+      return
+    }
+    schemaRef.current = next
+    setDisplaySchema(next)
+    changing.current = true
+    onChangeRef.current(next)
+    requestAnimationFrame(() => {
+      changing.current = false
+    })
+  }
 
   const acceptsPaletteDrop = (event: DragEvent<HTMLDivElement>) =>
     event.dataTransfer.types.includes(LAYOUT_ELEMENT_DRAG_TYPE)
@@ -380,6 +406,9 @@ export function LayoutCanvas({
         ariaHidden
       />
       <canvas ref={element} aria-label="Visual DIN A5 landscape layout canvas" />
+      {editingElement && (
+        <InlineStaticTextEditor element={editingElement} onCommit={commitInlineEdit} />
+      )}
       {showGuides && (
         <>
           <div
