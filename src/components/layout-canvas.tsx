@@ -59,7 +59,7 @@ function elementName(element: LayoutElement) {
   return names[element.type]
 }
 
-function objectForElement(element: LayoutElement, canvasWidth: number): SakekeepObject {
+export function objectForElement(element: LayoutElement, canvasWidth: number): SakekeepObject {
   const geometry = canonicalToCanvasGeometry(element.geometry, canvasWidth)
   const common = {
     left: geometry.x,
@@ -67,6 +67,8 @@ function objectForElement(element: LayoutElement, canvasWidth: number): Sakekeep
     width: geometry.width,
     height: geometry.height,
     angle: geometry.rotation,
+    originX: "left" as const,
+    originY: "top" as const,
     fill: "transparent",
     stroke: "transparent",
     strokeWidth: 0,
@@ -99,7 +101,7 @@ function objectForElement(element: LayoutElement, canvasWidth: number): Sakekeep
   return object
 }
 
-function geometryFromObject(object: FabricObject, canvasWidth: number): RelativeGeometry {
+export function geometryFromObject(object: FabricObject, canvasWidth: number): RelativeGeometry {
   return canvasToCanonicalGeometry(
     {
       x: object.left ?? 0,
