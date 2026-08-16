@@ -631,6 +631,8 @@ export function BookReview({
                           },
                         })
                         replaceBook(updated, true)
+                        setSelectedProblemId(null)
+                        setSelectedElementId(null)
                       }}
                     >
                       <SelectTrigger className="w-full" aria-label="Page layout">

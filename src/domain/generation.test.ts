@@ -103,21 +103,30 @@ describe("book generation", () => {
     expect(effectivePpi(3000, 2000, 254, 127)).toBe(300)
   })
 
+  it("tests the exact decimal minimum font size after stepped shrink candidates", () => {
+    expect(fitText("One line", 100, 2.9, 20, 8.1, 1, "shrink")).toMatchObject({
+      fits: true,
+      effectiveFontSize: 8.1,
+      requiredLines: 1,
+      availableLines: 1,
+    })
+  })
+
   it.each([
     [
       "shrink",
       true,
-      "A memory overflows on Response 1. It needs 3 lines at the 8 pt minimum, but only 2 lines fit.",
+      "A memory overflows on Response 1. It needs 4 lines at the 8 pt minimum, but only 2 lines fit.",
     ],
     [
       "flag",
       true,
-      "A memory overflows on Response 1. It needs 3 lines at the configured 20 pt size, but only 1 line fits.",
+      "A memory overflows on Response 1. It needs 4 lines at the configured 20 pt size, but only 1 line fits.",
     ],
     [
       "truncate",
       false,
-      "A memory is truncated on Response 1. It needs 3 lines at the configured 20 pt size, but only 1 line fits.",
+      "A memory is truncated on Response 1. It needs 4 lines at the configured 20 pt size, but only 1 line fits.",
     ],
   ] as const)("describes %s overflow with its relevant constraint", (policy, blocking, message) => {
     const layout = layoutFixture()
@@ -161,6 +170,49 @@ describe("book generation", () => {
           "Best memory overflows on Response 1. Its text bounding box is too short for one line at the configured 20 pt size (needs 7.06 mm, has 5.00 mm).",
       })
     )
+  })
+
+  it("includes the fallback question label when measuring bound text", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.geometry = { ...element.geometry, width: 100, height: 8 }
+    element.text = { ...element.text, fontSize: 20, lineHeight: 1, overflow: "flag" }
+    element.showLabel = true
+    element.label = ""
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.memory = "one"
+
+    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect.objectContaining({
+        code: "text-overflow",
+        message:
+          "A memory overflows on Response 1. It needs 2 lines at the configured 20 pt size, but only 1 line fits.",
+      })
+    )
+  })
+
+  it("distinguishes repeated text bounding boxes bound to the same question", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+    element.geometry = { ...element.geometry, width: 100, height: 5 }
+    element.text = { ...element.text, fontSize: 20, lineHeight: 1, overflow: "flag" }
+    layout.schema.elements.push({ ...element, id: "repeated-memory" })
+
+    const problems = inspectSubmissionPage(
+      "page",
+      layout,
+      submissionFixture(submissionIds[0]!, 1),
+      completeForm,
+      []
+    ).filter((problem) => problem.code === "text-overflow")
+
+    expect(problems.map((problem) => problem.message)).toEqual([
+      expect.stringContaining("A memory (text bounding box 1) overflows"),
+      expect.stringContaining("A memory (text bounding box 2) overflows"),
+    ])
+    expect(new Set(problems.map((problem) => problem.message))).toHaveLength(2)
   })
 
   it("reports blocking low-resolution images and honors explicit overrides", () => {

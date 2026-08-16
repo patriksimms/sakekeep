@@ -12,6 +12,7 @@ import {
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
+import { boundTextLabel } from "./layout-label"
 
 function hashString(value: string): number {
   let hash = 2166136261
@@ -113,7 +114,7 @@ export function fitText(
     }
   }
   if (policy === "shrink") {
-    for (let size = fontSize - 0.5; size >= minFontSize; size -= 0.5) {
+    for (let size = fontSize - 0.5; size > minFontSize; size -= 0.5) {
       const measurement = measureAt(size)
       if (measurement.requiredHeightMm <= heightMm) {
         return {
@@ -122,6 +123,15 @@ export function fitText(
           truncated: false,
           ...measurement,
         }
+      }
+    }
+    const minimum = measureAt(minFontSize)
+    if (minimum.requiredHeightMm <= heightMm) {
+      return {
+        fits: true,
+        effectiveFontSize: minFontSize,
+        truncated: false,
+        ...minimum,
       }
     }
   }
@@ -171,15 +181,39 @@ function textOverflowMessage(
 
 function textForElement(
   element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
-  answers: SubmissionAnswers
+  answers: SubmissionAnswers,
+  form: FormSchema
 ): string {
   if (element.type === "static-text") return element.content
   const answer = answers[element.questionId]
   if (typeof answer !== "string") return ""
-  const label = element.showLabel
-    ? `${element.label?.trim() || ""}${element.label?.trim() ? "\n" : ""}`
-    : ""
+  const question = form.questions.find((candidate) => candidate.id === element.questionId)
+  const displayedLabel = boundTextLabel(element, question)
+  const label = displayedLabel ? `${displayedLabel}\n` : ""
   return `${label}${answer}`
+}
+
+function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<string, string> {
+  const textElements = elements.filter(
+    (element): element is Extract<LayoutElement, { type: "bound-text" | "static-text" }> =>
+      element.type === "bound-text" || element.type === "static-text"
+  )
+  const names = textElements.map((element) => textElementName(element, form))
+  const counts = new Map<string, number>()
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
+
+  const occurrences = new Map<string, number>()
+  return new Map(
+    textElements.map((element, index) => {
+      const name = names[index]!
+      const occurrence = (occurrences.get(name) ?? 0) + 1
+      occurrences.set(name, occurrence)
+      return [
+        element.id,
+        counts.get(name) === 1 ? name : `${name} (text bounding box ${occurrence})`,
+      ]
+    })
+  )
 }
 
 function imagesForElement(
@@ -222,6 +256,7 @@ export function inspectSubmissionPage(
 ): PageProblem[] {
   const problems: PageProblem[] = []
   const overrides = new Set(resolutionOverrides)
+  const problemNames = textProblemNames(layout.schema.elements, form)
   const requiredQuestions = new Map(
     form.questions
       .filter((question) => question.required)
@@ -264,7 +299,7 @@ export function inspectSubmissionPage(
     }
 
     if (element.type === "bound-text" || element.type === "static-text") {
-      const content = textForElement(element, submission.answers)
+      const content = textForElement(element, submission.answers, form)
       if (
         element.type === "bound-text" &&
         requiredQuestions.has(element.questionId) &&
@@ -296,7 +331,7 @@ export function inspectSubmissionPage(
             pageId,
             "text-overflow",
             textOverflowMessage(
-              textElementName(element, form),
+              problemNames.get(element.id)!,
               submission.sequence,
               element.text.overflow,
               fit,
