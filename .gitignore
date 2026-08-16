@@ -19,3 +19,7 @@ todos.json
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Local Coolify production tooling
+/scripts/dump-production-db.sh
+/production.dump
