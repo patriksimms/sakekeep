@@ -595,19 +595,8 @@ export async function deleteLayout(projectId: string, layoutId: string): Promise
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    const [book] = await tx.select().from(books).where(eq(books.projectId, projectId))
     if (!project) throw new HttpError(404, "Project not found.")
     assertNotArchived(project)
-    if (
-      book?.generatedBook.pages.some(
-        (page) => page.kind === "submission" && page.layoutId === layoutId
-      )
-    ) {
-      throw new HttpError(
-        409,
-        "This layout is assigned to generated pages. Reassign and regenerate before deleting it."
-      )
-    }
     const deleted = await tx
       .delete(layouts)
       .where(and(eq(layouts.id, layoutId), eq(layouts.projectId, projectId)))

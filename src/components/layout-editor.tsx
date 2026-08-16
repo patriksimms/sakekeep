@@ -1510,8 +1510,8 @@ export function LayoutsPanel({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete this layout?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Referenced layouts cannot be deleted until generated page assignments are
-                      resolved.
+                      If this layout is used in the generated book, you must regenerate before
+                      export.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

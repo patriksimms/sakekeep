@@ -188,8 +188,8 @@ needed. Missing optional text or images leave an accepted empty gap and do not
 produce a warning.
 
 Layouts are project-specific. The organizer may create, name, duplicate, edit,
-reorder, and delete any number of layouts, provided a referenced layout cannot
-be deleted without first resolving its page assignments.
+reorder, and delete any number of layouts. Deleting a layout referenced by the
+generated book marks the book as stale and requires complete regeneration.
 
 ## Book generation and review
 

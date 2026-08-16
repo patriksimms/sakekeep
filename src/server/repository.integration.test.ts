@@ -7,9 +7,11 @@ import {
   createLayout,
   createProject,
   createSubmissionRecord,
+  deleteLayout,
   deleteProject,
   duplicateProject,
   findPublicProject,
+  generateProjectBook,
   getProject,
   listProjects,
   publishProject,
@@ -107,6 +109,56 @@ describe("repository state machine", () => {
       submissionCount: 0,
       shareUrl: null,
     })
+  })
+
+  it("deletes a layout assigned to generated pages and requires regeneration", async () => {
+    const project = await createProject({ title: "Delete assigned layout" })
+    createdProjectIds.add(project.id)
+    await updateProject({
+      projectId: project.id,
+      formSchema: completeForm,
+      expectedRevision: 0,
+    })
+    await publishProject(project.id)
+    await createSubmissionRecord({
+      projectId: project.id,
+      idempotencyKey: crypto.randomUUID(),
+      answers: {
+        name: "Nora",
+        memory: "A memory",
+        role: ["friend"],
+        traits: ["kind"],
+      },
+      pendingAssets: [],
+    })
+    await closeProject(project.id)
+    const assignedLayout = await createLayout(project.id)
+    const remainingLayout = await createLayout(project.id)
+    const settings = {
+      mode: "cycle" as const,
+      seed: "delete-layout",
+      manualAssignments: {},
+      resolutionOverrides: [],
+    }
+    const generated = await generateProjectBook(project.id, settings)
+    expect(generated.pages).toEqual([
+      expect.objectContaining({ kind: "submission", layoutId: assignedLayout.id }),
+    ])
+
+    await deleteLayout(project.id, assignedLayout.id)
+
+    const staleProject = await getProject(project.id)
+    expect(staleProject.bookStatus).toBe("stale")
+    expect(staleProject.layouts.map((layout) => layout.id)).toEqual([remainingLayout.id])
+    expect(staleProject.book?.pages).toEqual([
+      expect.objectContaining({ kind: "submission", layoutId: assignedLayout.id }),
+    ])
+
+    const regenerated = await generateProjectBook(project.id, settings)
+    expect(regenerated.pages).toEqual([
+      expect.objectContaining({ kind: "submission", layoutId: remainingLayout.id }),
+    ])
+    expect((await getProject(project.id)).bookStatus).toBe("current")
   })
 })
 
