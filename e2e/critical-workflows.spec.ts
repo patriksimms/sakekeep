@@ -537,30 +537,29 @@ test.describe.serial("critical local prototype workflows", () => {
 
       await expect(page.getByRole("heading", { name: "Choose a background" })).toBeVisible()
       await expect(page.getByRole("button", { name: "Create Blank background" })).toBeVisible()
-      await expect(page.getByRole("button", { name: "Create Warm quote background" })).toBeVisible()
       await expect(
-        page.getByRole("button", { name: "Create Playful note background" })
+        page.getByRole("button", { name: "Create Geometric collage background" })
       ).toBeVisible()
 
-      await page.getByRole("button", { name: "Create Warm quote background" }).click()
+      await page.getByRole("button", { name: "Create Geometric collage background" }).click()
       await expect(page.getByRole("heading", { name: "Choose a background" })).not.toBeVisible()
 
       const project = (await (
         await request.get(`/api/projects/${closedProjectId}`)
       ).json()) as Project
-      const created = project.layouts.find((layout) => layout.name === "Warm quote background")
+      const created = project.layouts.find(
+        (layout) => layout.name === "Geometric collage background"
+      )
       expect(created).toBeDefined()
       createdLayoutId = created!.id
-      expect(created!.schema).toMatchObject({
-        background: "#fff9ef",
-        elements: [
-          {
-            type: "rectangle",
-            locked: true,
-            fill: "#dfe8d8",
-            geometry: { x: -3, y: -3, width: 78, height: 154 },
-          },
-        ],
+      expect(created!.schema.background).toBe("#fbf3e7")
+      expect(created!.schema.elements).toHaveLength(20)
+      expect(created!.schema.elements.every(({ locked }) => locked)).toBe(true)
+      expect(created!.schema.elements[0]).toMatchObject({
+        type: "rectangle",
+        locked: true,
+        fill: "#cddfd7",
+        geometry: { x: -3, y: -3, width: 57, height: 154 },
       })
     } finally {
       if (createdLayoutId) {

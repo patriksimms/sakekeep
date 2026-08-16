@@ -18,7 +18,7 @@ let userKnown = false
 
 interface AnalyticsEvents {
   "layout_editor:background_created": {
-    background_id: "blank" | "warm-quote" | "playful-note"
+    background_id: "blank" | "geometric-collage"
   }
   "layout_editor:answer_label_edit": {
     cleared: boolean
