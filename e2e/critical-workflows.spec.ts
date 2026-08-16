@@ -430,7 +430,7 @@ test.describe.serial("critical local prototype workflows", () => {
       await editLabel("warm-name")
       await page.keyboard.type("Name in this book")
       await page.getByRole("heading", { name: "Page layouts" }).click()
-      await expect(page.locator('[data-layout-element-id="warm-name"] strong')).toHaveText(
+      await expect(page.locator('[data-layout-element-id="warm-name"] > span').first()).toHaveText(
         "Name in this book"
       )
       await expect(page.getByRole("status")).toHaveText("Saved")
@@ -467,7 +467,7 @@ test.describe.serial("critical local prototype workflows", () => {
       await nameLayer.press("Enter")
       await page.keyboard.type("Cancelled label")
       await page.keyboard.press("Escape")
-      await expect(page.locator('[data-layout-element-id="warm-name"] strong')).toHaveText(
+      await expect(page.locator('[data-layout-element-id="warm-name"] > span').first()).toHaveText(
         "Name in this book"
       )
 
@@ -476,9 +476,14 @@ test.describe.serial("critical local prototype workflows", () => {
       await page.keyboard.press("Backspace")
       await page.getByRole("heading", { name: "Page layouts" }).click()
       await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")
-      await expect(page.locator('[data-layout-element-id="warm-name"]')).toContainText(
-        "{{ What should we call you in the book? }}"
-      )
+      await expect
+        .poll(async () =>
+          page
+            .locator('[data-layout-element-id="warm-name"] > span')
+            .allTextContents()
+            .then((lines) => lines.join(" "))
+        )
+        .toBe("{{ What should we call you in the book? }}")
       await expect(page.getByRole("status")).toHaveText("Saved")
 
       const canvasBounds = await renderedCanvas.boundingBox()

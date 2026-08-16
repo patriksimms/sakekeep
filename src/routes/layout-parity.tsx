@@ -76,7 +76,7 @@ const schema: LayoutSchema = {
     {
       id: "bound-memory",
       type: "bound-text",
-      geometry: { x: 62, y: 35, width: 118, height: 34, rotation: -3 },
+      geometry: { x: 62, y: 35, width: 118, height: 8, rotation: -3 },
       opacity: 0.88,
       questionId: "memory",
       showLabel: true,

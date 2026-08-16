@@ -1,11 +1,11 @@
 import { gallerySlots } from "#/domain/layout.ts"
-import { boundTextLabel } from "#/domain/layout-label.ts"
 import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
 import {
   canonicalToPercentageGeometry,
   millimetresToContainerWidth,
   pointsToContainerWidth,
 } from "#/domain/layout-rendering.ts"
+import { layoutText, textRunsForElement } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
   type ImageAnswer,
@@ -29,22 +29,6 @@ function answerImages(answer: SubmissionAnswer | undefined): ImageAnswer[] {
   )
 }
 
-function answerText(
-  answer: SubmissionAnswer | undefined,
-  question: FormQuestion | undefined
-): string {
-  if (typeof answer === "string") return answer
-  if (!Array.isArray(answer) || answer.length === 0 || typeof answer[0] !== "string") return ""
-  if (question?.type === "radio" || question?.type === "checkboxes") {
-    const labels = new Map(question.choices.map((choice) => [choice.id, choice.label]))
-    return answer
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => labels.get(value) ?? value)
-      .join(", ")
-  }
-  return answer.filter((value): value is string => typeof value === "string").join(", ")
-}
-
 function elementStyle(element: LayoutElement): React.CSSProperties {
   const geometry = canonicalToPercentageGeometry(element.geometry)
   return {
@@ -61,17 +45,18 @@ function elementStyle(element: LayoutElement): React.CSSProperties {
 }
 
 export function textElementStyle(
-  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
+  effectiveFontSize = element.text.fontSize
 ): React.CSSProperties {
   return {
     ...elementStyle(element),
     color: element.text.color,
     fontFamily: element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
-    fontSize: pointsToContainerWidth(element.text.fontSize),
+    fontSize: pointsToContainerWidth(effectiveFontSize),
     fontStyle: element.text.fontStyle,
     fontWeight: element.text.fontWeight,
     lineHeight: element.text.lineHeight,
-    overflow: "hidden",
+    overflow: "visible",
     textAlign: element.text.alignment,
     whiteSpace: "pre-wrap",
   }
@@ -103,22 +88,32 @@ function ElementContent({
       : undefined
 
   if (element.type === "static-text" || element.type === "bound-text") {
-    const label = element.type === "bound-text" ? boundTextLabel(element, question) : ""
-    const value =
-      element.type === "static-text"
-        ? element.content
-        : content.submission
-          ? answerText(content.submission.answers[element.questionId], question)
-          : boundQuestionPlaceholder(content.questions ?? [], element.questionId)
+    const answer =
+      element.type === "bound-text" && content.submission
+        ? (content.submission.answers[element.questionId] ?? "")
+        : undefined
+    const placeholder =
+      element.type === "bound-text" && !content.submission
+        ? boundQuestionPlaceholder(content.questions ?? [], element.questionId)
+        : ""
+    const runs = textRunsForElement(element, question, answer, placeholder)
+    const layout = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
+    const hasLabel = element.type === "bound-text" && element.showLabel
     return (
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
-        style={textElementStyle(element)}
+        data-text-overflow={!layout.fits || undefined}
+        style={{
+          ...textElementStyle(element, layout.effectiveFontSize),
+          outline: !layout.fits ? "1px solid var(--destructive)" : undefined,
+          background: !layout.fits
+            ? "color-mix(in srgb, var(--destructive) 8%, transparent)"
+            : undefined,
+        }}
       >
-        {element.type === "bound-text" && label && <strong className="block">{label}</strong>}
         {element.type === "bound-text" &&
-          !label &&
+          !hasLabel &&
           showEditorPlaceholders &&
           editingElementId !== element.id && (
             <strong
@@ -128,7 +123,11 @@ function ElementContent({
               Add label…
             </strong>
           )}
-        {value}
+        {layout.renderedLines.map((line, index) => (
+          <span key={index} className="block" style={{ fontWeight: line.fontWeight }}>
+            {line.text || "\u00a0"}
+          </span>
+        ))}
       </div>
     )
   }

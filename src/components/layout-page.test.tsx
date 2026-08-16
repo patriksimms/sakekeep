@@ -23,3 +23,33 @@ describe("empty decorative image rendering", () => {
     expect(preview).not.toContain("layout-decorative-placeholder.svg")
   })
 })
+
+describe("canonical text rendering", () => {
+  it("renders canonical lines and visibly marks flagged overflow", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "A memory with enough words to wrap onto several lines"
+    element.geometry = { ...element.geometry, width: 30, height: 8 }
+
+    const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+
+    expect(markup).toContain('data-text-overflow="true"')
+    expect(markup).toContain("outline:1px solid var(--destructive)")
+    expect(markup).toContain('<span class="block"')
+  })
+
+  it("renders the canonical truncation ellipsis instead of browser clipping", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "A memory with enough words to wrap onto several lines"
+    element.geometry = { ...element.geometry, width: 30, height: 8 }
+    element.text = { ...element.text, overflow: "truncate" }
+
+    const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+
+    expect(markup).not.toContain("data-text-overflow")
+    expect(markup).toContain("…")
+  })
+})

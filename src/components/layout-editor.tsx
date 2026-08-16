@@ -87,6 +87,7 @@ import {
   questionPrompt,
 } from "#/domain/layout-question-palette.ts"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
+import { enforceMinimumTextBoxHeight } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
   type LayoutElement,
@@ -773,10 +774,11 @@ function Editor({
   }
 
   const changeSelected = (nextElement: LayoutElement) => {
+    const constrainedElement = enforceMinimumTextBoxHeight(nextElement)
     markChanged({
       ...schema,
       elements: schema.elements.map((element) =>
-        element.id === nextElement.id ? nextElement : element
+        element.id === constrainedElement.id ? constrainedElement : element
       ),
     })
   }

@@ -178,6 +178,14 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
   const editor = page.getByTestId("editor-layout-elements")
   const preview = page.getByTestId("preview-layout-elements")
   await expect(editor).toBeVisible()
+  await expect(editor.locator('[data-layout-element-id="bound-memory"]')).toHaveAttribute(
+    "data-text-overflow",
+    "true"
+  )
+  await expect(preview.locator('[data-layout-element-id="bound-memory"]')).toHaveAttribute(
+    "data-text-overflow",
+    "true"
+  )
   await expect(preview).toBeVisible()
   await expect(editor).toHaveAttribute("aria-hidden", "true")
   await expect(preview).not.toHaveAttribute("aria-hidden")

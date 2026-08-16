@@ -12,6 +12,7 @@ import {
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
+import { layoutText, textRunsForElement } from "./text-layout.ts"
 
 function hashString(value: string): number {
   let hash = 2166136261
@@ -64,64 +65,6 @@ export function effectivePpi(
   const ppiX = pixelWidth / (placedWidthMm / 25.4)
   const ppiY = pixelHeight / (placedHeightMm / 25.4)
   return Math.floor(Math.min(ppiX, ppiY))
-}
-
-export interface TextFit {
-  fits: boolean
-  effectiveFontSize: number
-  truncated: boolean
-}
-
-export function fitText(
-  content: string,
-  widthMm: number,
-  heightMm: number,
-  fontSize: number,
-  minFontSize: number,
-  lineHeight: number,
-  policy: "shrink" | "truncate" | "flag"
-): TextFit {
-  const normalize = content.replace(/\r\n/g, "\n")
-  const fitsAt = (size: number) => {
-    const averageGlyphWidthMm = size * 0.3528 * 0.52
-    const charsPerLine = Math.max(1, Math.floor(widthMm / averageGlyphWidthMm))
-    const explicitLines = normalize.split("\n")
-    const wrappedLines = explicitLines.reduce(
-      (count, line) => count + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
-    )
-    const lineHeightMm = size * 0.3528 * lineHeight
-    return wrappedLines * lineHeightMm <= heightMm
-  }
-
-  if (fitsAt(fontSize)) {
-    return { fits: true, effectiveFontSize: fontSize, truncated: false }
-  }
-  if (policy === "shrink") {
-    for (let size = fontSize - 0.5; size >= minFontSize; size -= 0.5) {
-      if (fitsAt(size)) {
-        return { fits: true, effectiveFontSize: size, truncated: false }
-      }
-    }
-  }
-  return {
-    fits: policy === "truncate",
-    effectiveFontSize: policy === "shrink" ? minFontSize : fontSize,
-    truncated: policy === "truncate",
-  }
-}
-
-function textForElement(
-  element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
-  answers: SubmissionAnswers
-): string {
-  if (element.type === "static-text") return element.content
-  const answer = answers[element.questionId]
-  if (typeof answer !== "string") return ""
-  const label = element.showLabel
-    ? `${element.label?.trim() || ""}${element.label?.trim() ? "\n" : ""}`
-    : ""
-  return `${label}${answer}`
 }
 
 function imagesForElement(
@@ -206,11 +149,20 @@ export function inspectSubmissionPage(
     }
 
     if (element.type === "bound-text" || element.type === "static-text") {
-      const content = textForElement(element, submission.answers)
+      const question =
+        element.type === "bound-text"
+          ? form.questions.find((candidate) => candidate.id === element.questionId)
+          : undefined
+      const answer =
+        element.type === "bound-text" ? submission.answers[element.questionId] : undefined
+      const runs = textRunsForElement(element, question, answer)
+      const content = runs.map((run) => run.text).join("\n")
       if (
         element.type === "bound-text" &&
         requiredQuestions.has(element.questionId) &&
-        !content.trim()
+        (typeof answer === "string"
+          ? !answer.trim()
+          : !Array.isArray(answer) || answer.length === 0)
       ) {
         problems.push(
           problem(
@@ -223,15 +175,7 @@ export function inspectSubmissionPage(
         )
       }
       if (!content.trim()) continue
-      const fit = fitText(
-        content,
-        element.geometry.width,
-        element.geometry.height,
-        element.text.fontSize,
-        element.text.minFontSize,
-        element.text.lineHeight,
-        element.text.overflow
-      )
+      const fit = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
       if (!fit.fits) {
         problems.push(
           problem(

@@ -4,6 +4,7 @@
   "trailingComma": "es5",
   "ignorePatterns": [
     "src/routeTree.gen.ts",
+    "src/domain/font-metrics.generated.ts",
     "drizzle/**",
     "test-results/**",
     "playwright-report/**"
