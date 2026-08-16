@@ -27,19 +27,17 @@ import {
   Undo2Icon,
   UnlockIcon,
   XCircleIcon,
+  type LucideIcon,
 } from "lucide-react"
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-  type ReactElement,
-} from "react"
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactElement } from "react"
 import { toast } from "sonner"
 
-import { LayoutCanvas, type InlineEditableCanvas } from "#/components/layout-canvas.tsx"
+import {
+  LAYOUT_ELEMENT_DRAG_TYPE,
+  LayoutCanvas,
+  type InlineEditableCanvas,
+  type LayoutElementDragData,
+} from "#/components/layout-canvas.tsx"
 import { NumericField } from "#/components/numeric-field.tsx"
 import {
   AlertDialog,
@@ -170,6 +168,49 @@ function SaveIndicator({ state }: { state: SaveState }) {
       <value.icon className={state === "saving" ? "animate-spin" : undefined} />
       {value.label}
     </span>
+  )
+}
+
+function PaletteAction({
+  label,
+  addLabel,
+  icon: Icon,
+  dragData,
+  onAdd,
+}: {
+  label: string
+  addLabel: string
+  icon: LucideIcon
+  dragData: LayoutElementDragData
+  onAdd: () => void
+}) {
+  return (
+    <div className="flex min-w-0 items-center rounded-lg border bg-background">
+      <span
+        draggable
+        data-palette-element-type={dragData.type}
+        data-palette-question-id={dragData.questionId}
+        title={`Drag ${label} to the canvas`}
+        className="flex h-7 min-w-0 cursor-grab items-center gap-1.5 px-2 text-[0.8rem] font-medium select-none active:cursor-grabbing"
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = "copy"
+          event.dataTransfer.setData(LAYOUT_ELEMENT_DRAG_TYPE, JSON.stringify(dragData))
+        }}
+      >
+        <Icon className="size-4" aria-hidden="true" />
+        <span className="truncate">{label}</span>
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="rounded-l-none border-l"
+        aria-label={addLabel}
+        onClick={onAdd}
+      >
+        <PlusIcon />
+      </Button>
+    </div>
   )
 }
 
@@ -331,10 +372,14 @@ function ElementInspector({
   element,
   questions,
   onChange,
+  onChooseDecorative,
+  decorativeUploading,
 }: {
   element: LayoutElement
   questions: FormQuestion[]
   onChange: (element: LayoutElement) => void
+  onChooseDecorative: (file: File) => void
+  decorativeUploading: boolean
 }) {
   const updateGeometry = (key: keyof LayoutElement["geometry"], value: number) =>
     onChange({
@@ -510,6 +555,43 @@ function ElementInspector({
           />
         </>
       )}
+      {element.type === "decorative-image" && (
+        <>
+          <Separator />
+          <Field>
+            <FieldLabel>{element.assetId ? "Replace image" : "Choose image"}</FieldLabel>
+            <Input
+              type="file"
+              aria-label={element.assetId ? "Replace decorative image" : "Choose decorative image"}
+              accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
+              disabled={decorativeUploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ""
+                if (file) onChooseDecorative(file)
+              }}
+            />
+            <FieldDescription>
+              {decorativeUploading
+                ? "Uploading image…"
+                : element.assetId
+                  ? "Replacing or removing it keeps this element’s size and position."
+                  : "The placeholder appears only in the layout editor."}
+            </FieldDescription>
+          </Field>
+          {element.assetId && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={decorativeUploading}
+              onClick={() => onChange({ ...element, assetId: undefined })}
+            >
+              <Trash2Icon data-icon="inline-start" />
+              Remove image
+            </Button>
+          )}
+        </>
+      )}
       {(element.type === "decorative-image" ||
         element.type === "image-frame" ||
         element.type === "gallery-frame") && (
@@ -567,6 +649,7 @@ function Editor({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("saved")
   const [canvasWidth, setCanvasWidth] = useState(700)
+  const [decorativeUploadingId, setDecorativeUploadingId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: DropEdge } | null>(null)
   const container = useRef<HTMLDivElement>(null)
@@ -678,8 +761,12 @@ function Editor({
   const selected = schema.elements.find((element) => element.id === selectedId)
   const questionPalette = layoutQuestionPalette(project.formSchema.questions)
 
-  const add = (type: LayoutElement["type"], questionId?: string) => {
-    const next = addElement(schema, type, questionId)
+  const add = (
+    type: LayoutElement["type"],
+    questionId?: string,
+    center?: { x: number; y: number }
+  ) => {
+    const next = addElement(schemaRef.current, type, questionId, center)
     const added = next.elements.at(-1)!
     markChanged(next)
     setSelectedId(added.id)
@@ -750,10 +837,8 @@ function Editor({
     resetDrag()
   }
 
-  const uploadDecorative = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ""
-    if (!file) return
+  const uploadDecorative = async (elementId: string, file: File) => {
+    setDecorativeUploadingId(elementId)
     const body = new FormData()
     body.set("file", file)
     try {
@@ -761,15 +846,24 @@ function Editor({
         method: "POST",
         body,
       })
-      const next = addElement(schema, "decorative-image")
-      const added = next.elements.at(-1)!
-      if (added.type !== "decorative-image") return
-      added.assetId = uploaded.id
+      const current = schemaRef.current
+      let changed = false
+      const next = {
+        ...current,
+        elements: current.elements.map((element) => {
+          if (element.id !== elementId || element.type !== "decorative-image") return element
+          changed = true
+          return { ...element, assetId: uploaded.id }
+        }),
+      }
+      if (!changed) return
       markChanged(next)
-      setSelectedId(added.id)
-      toast.success("Decorative image added")
+      setSelectedId(elementId)
+      toast.success("Decorative image updated")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed")
+    } finally {
+      setDecorativeUploadingId(null)
     }
   }
 
@@ -875,24 +969,22 @@ function Editor({
                   <span className="min-w-0 truncate text-sm font-medium" title={item.prompt}>
                     {item.prompt}
                   </span>
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
                     {item.actions.map((action) => (
-                      <Button
+                      <PaletteAction
                         key={action.elementType}
-                        variant="outline"
-                        size="sm"
-                        aria-label={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
-                        onClick={() => add(action.elementType, item.questionId)}
-                      >
-                        {action.elementType === "bound-text" ? (
-                          <TypeIcon data-icon="inline-start" />
-                        ) : action.elementType === "image-frame" ? (
-                          <ImageIcon data-icon="inline-start" />
-                        ) : (
-                          <GalleryHorizontalIcon data-icon="inline-start" />
-                        )}
-                        {action.label}
-                      </Button>
+                        label={action.label}
+                        addLabel={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
+                        icon={
+                          action.elementType === "bound-text"
+                            ? TypeIcon
+                            : action.elementType === "image-frame"
+                              ? ImageIcon
+                              : GalleryHorizontalIcon
+                        }
+                        dragData={{ type: action.elementType, questionId: item.questionId }}
+                        onAdd={() => add(action.elementType, item.questionId)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -900,52 +992,41 @@ function Editor({
             </div>
             <Separator />
             <div className="flex flex-wrap items-center gap-1.5">
-              <Button variant="outline" size="sm" onClick={() => add("static-text")}>
-                <TypeIcon data-icon="inline-start" />
-                Static text
-              </Button>
-              <IconAction label="Add rectangle">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={() => add("rectangle")}
-                  aria-label="Add rectangle"
-                >
-                  <RectangleHorizontalIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Add circle">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={() => add("circle")}
-                  aria-label="Add circle"
-                >
-                  <CircleIcon />
-                </Button>
-              </IconAction>
-              <IconAction label="Add line">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={() => add("line")}
-                  aria-label="Add line"
-                >
-                  <MinusIcon />
-                </Button>
-              </IconAction>
-              <label className="inline-flex">
-                <input
-                  type="file"
-                  className="sr-only"
-                  accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
-                  onChange={uploadDecorative}
-                />
-                <span className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm font-medium hover:bg-muted focus-within:ring-3 focus-within:ring-ring/50">
-                  <ImagePlusIcon aria-hidden="true" />
-                  Decor
-                </span>
-              </label>
+              <PaletteAction
+                label="Static text"
+                addLabel="Add static text"
+                icon={TypeIcon}
+                dragData={{ type: "static-text" }}
+                onAdd={() => add("static-text")}
+              />
+              <PaletteAction
+                label="Rectangle"
+                addLabel="Add rectangle"
+                icon={RectangleHorizontalIcon}
+                dragData={{ type: "rectangle" }}
+                onAdd={() => add("rectangle")}
+              />
+              <PaletteAction
+                label="Circle"
+                addLabel="Add circle"
+                icon={CircleIcon}
+                dragData={{ type: "circle" }}
+                onAdd={() => add("circle")}
+              />
+              <PaletteAction
+                label="Line"
+                addLabel="Add line"
+                icon={MinusIcon}
+                dragData={{ type: "line" }}
+                onAdd={() => add("line")}
+              />
+              <PaletteAction
+                label="Decorative image"
+                addLabel="Add decorative image"
+                icon={ImagePlusIcon}
+                dragData={{ type: "decorative-image" }}
+                onAdd={() => add("decorative-image")}
+              />
               <Separator orientation="vertical" className="mx-1 h-6" />
               <IconAction label="Undo" disabled={historyIndex.current <= 0}>
                 <Button
@@ -1124,6 +1205,7 @@ function Editor({
             onChange={markChanged}
             canvasRef={canvas}
             questions={project.formSchema.questions}
+            onDropElement={(data, center) => add(data.type, data.questionId, center)}
           />
         </div>
       </div>
@@ -1171,6 +1253,8 @@ function Editor({
                 element={selected}
                 questions={project.formSchema.questions}
                 onChange={changeSelected}
+                onChooseDecorative={(file) => void uploadDecorative(selected.id, file)}
+                decorativeUploading={decorativeUploadingId === selected.id}
               />
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">

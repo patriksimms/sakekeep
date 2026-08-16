@@ -193,6 +193,18 @@ export function inspectSubmissionPage(
       )
     }
 
+    if (element.type === "decorative-image" && !element.assetId) {
+      problems.push(
+        problem(
+          pageId,
+          "empty-decorative-image",
+          "A decorative image has no image selected and will be omitted from preview and export.",
+          false,
+          element.id
+        )
+      )
+    }
+
     if (element.type === "bound-text" || element.type === "static-text") {
       const content = textForElement(element, submission.answers)
       if (

@@ -1,5 +1,11 @@
-import { expect, test, type Locator } from "@playwright/test"
+import { expect, test, type Locator, type Page } from "@playwright/test"
+import { type FabricObject } from "fabric"
 import sharp from "sharp"
+
+type SakekeepInteraction = FabricObject & {
+  sakekeepElementId?: string
+  parityPersistenceMarker?: boolean
+}
 
 const elementIds = [
   "bleed-panel",
@@ -56,6 +62,98 @@ async function pixelDifference(first: Buffer, second: Buffer): Promise<number> {
     }
   }
   return different / ((left.info.width - 16) * (left.info.height - 16))
+}
+
+async function expectInteractionsToMatchHtml(page: Page) {
+  const geometries = await page.evaluate((ids) => {
+    const canvas = window.__sakekeepLayoutParityCanvas
+    const surface = document.querySelector<HTMLElement>('[data-testid="editor-layout-elements"]')
+    if (!canvas || !surface) throw new Error("Layout parity fixture is not ready")
+    const surfaceBox = surface.getBoundingClientRect()
+
+    return ids.map((id) => {
+      const object = canvas
+        .getObjects()
+        .find((candidate) => (candidate as SakekeepInteraction).sakekeepElementId === id) as
+        | SakekeepInteraction
+        | undefined
+      const element = surface.querySelector<HTMLElement>(`[data-layout-element-id="${id}"]`)
+      if (!object || !element) throw new Error(`Missing parity element ${id}`)
+      object.setCoords()
+      const fabricBox = object.getBoundingRect()
+      const htmlBox = element.getBoundingClientRect()
+      const rotation = element.style.transform.match(/rotate\(([-\d.]+)deg\)/)?.[1]
+      return {
+        id,
+        fabric: {
+          x: fabricBox.left,
+          y: fabricBox.top,
+          width: fabricBox.width,
+          height: fabricBox.height,
+          rotation: object.angle,
+        },
+        html: {
+          x: htmlBox.left - surfaceBox.left,
+          y: htmlBox.top - surfaceBox.top,
+          width: htmlBox.width,
+          height: htmlBox.height,
+          rotation: Number(rotation),
+        },
+      }
+    })
+  }, elementIds)
+
+  for (const { id, fabric, html } of geometries) {
+    for (const key of ["x", "y", "width", "height"] as const) {
+      expect(fabric[key], `${id} interaction ${key}`).toBeCloseTo(html[key], 1)
+    }
+    expect(fabric.rotation, `${id} interaction rotation`).toBeCloseTo(html.rotation, 3)
+  }
+}
+
+async function transformInteraction(
+  page: Page,
+  id: string,
+  eventName: "object:moving" | "object:scaling" | "object:rotating" | "object:modified"
+) {
+  await page.evaluate(
+    ({ elementId, nextEventName }) => {
+      const canvas = window.__sakekeepLayoutParityCanvas
+      const object = canvas
+        ?.getObjects()
+        .find((candidate) => (candidate as SakekeepInteraction).sakekeepElementId === elementId) as
+        | SakekeepInteraction
+        | undefined
+      if (!canvas || !object) throw new Error(`Interaction object ${elementId} is not ready`)
+      if (nextEventName === "object:moving") {
+        object.set({ left: object.left + 6, top: object.top + 4 })
+      } else if (nextEventName === "object:scaling") {
+        object.set({ scaleX: object.scaleX * 0.92, scaleY: object.scaleY * 1.08 })
+      } else if (nextEventName === "object:rotating") {
+        object.set({ angle: object.angle + 7 })
+      } else {
+        object.parityPersistenceMarker = true
+      }
+      object.setCoords()
+      canvas.fire(nextEventName, { target: object })
+    },
+    { elementId: id, nextEventName: eventName }
+  )
+  if (eventName === "object:modified") {
+    await page.evaluate(() => window.__sakekeepRemountLayoutParityCanvas?.())
+    await page.waitForFunction((elementId) => {
+      const object = window.__sakekeepLayoutParityCanvas
+        ?.getObjects()
+        .find((candidate) => (candidate as SakekeepInteraction).sakekeepElementId === elementId) as
+        | SakekeepInteraction
+        | undefined
+      return object && !object.parityPersistenceMarker
+    }, id)
+  } else {
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    )
+  }
 }
 
 test("Fabric editor and book preview preserve canonical rendering parity", async ({ page }) => {
@@ -150,4 +248,59 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
   expect(await pixelDifference(await editor.screenshot(), await preview.screenshot())).toBeLessThan(
     0.025
   )
+})
+
+test("Fabric interactions track real HTML geometry through every transform", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 })
+  await page.goto("/layout-parity")
+  await expect(page.locator("canvas.upper-canvas")).toBeVisible()
+  await page.waitForFunction(
+    (count) => window.__sakekeepLayoutParityCanvas?.getObjects().length === count,
+    elementIds.length
+  )
+
+  await expectInteractionsToMatchHtml(page)
+
+  for (const id of elementIds) {
+    await transformInteraction(page, id, "object:moving")
+    await expectInteractionsToMatchHtml(page)
+
+    await transformInteraction(page, id, "object:scaling")
+    await expectInteractionsToMatchHtml(page)
+
+    await transformInteraction(page, id, "object:rotating")
+    await expectInteractionsToMatchHtml(page)
+
+    await transformInteraction(page, id, "object:modified")
+    await expectInteractionsToMatchHtml(page)
+  }
+})
+
+test("static text remains editable on the HTML layer", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 })
+  await page.goto("/layout-parity")
+
+  const editor = page.getByTestId("editor-layout-elements")
+  await expect(page.locator("canvas.upper-canvas")).toBeVisible()
+  const boundText = editor.locator('[data-layout-element-id="bound-memory"]')
+  const boundBox = await boundText.boundingBox()
+  expect(boundBox).not.toBeNull()
+  await page.mouse.dblclick(boundBox!.x + boundBox!.width / 2, boundBox!.y + boundBox!.height / 2)
+  await expect(page.locator('[data-layout-inline-editor="true"]')).toHaveCount(0)
+
+  const staticText = editor.locator('[data-layout-element-id="static-heading"]')
+  const box = await staticText.boundingBox()
+  expect(box).not.toBeNull()
+
+  await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2)
+  const inlineEditor = page.locator(
+    '[data-layout-inline-editor="true"][data-layout-element-id="static-heading"]'
+  )
+  await expect(inlineEditor).toBeVisible()
+  await expect(inlineEditor).toBeFocused()
+  await inlineEditor.fill("Edited directly on the page")
+  await page.keyboard.press("Tab")
+
+  await expect(inlineEditor).toHaveCount(0)
+  await expect(staticText).toHaveText("Edited directly on the page")
 })

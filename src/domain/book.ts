@@ -10,6 +10,7 @@ const problemSchema = z.object({
     z.literal("gallery-overflow"),
     z.literal("outside-print-area"),
     z.literal("missing-required-answer"),
+    z.literal("empty-decorative-image"),
   ]),
   pageId: z.string().min(1),
   elementId: z.string().optional(),

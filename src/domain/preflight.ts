@@ -16,6 +16,9 @@ export function createPreflightReport(input: {
   now?: string
 }): ExportReport {
   const problems = blockingProblems(input.book)
+  const emptyDecorativeImages = input.book.pages.flatMap((page) =>
+    page.problems.filter((problem) => problem.code === "empty-decorative-image")
+  )
   const checks: PreflightCheck[] = [
     {
       id: "generation-current",
@@ -78,6 +81,15 @@ export function createPreflightReport(input: {
       detail: input.assetResolutionMetadata
         ? `${input.assetResolutionCount} placed raster asset(s) carry pixel dimensions, placed dimensions, and effective PPI metadata. Images below 300 PPI are reported; images below 150 PPI require an explicit recorded override.`
         : "The PDF is missing machine-readable effective-resolution metadata.",
+    },
+    {
+      id: "empty-decorative-images",
+      label: "Decorative images selected",
+      status: emptyDecorativeImages.length > 0 ? "warning" : "pass",
+      detail:
+        emptyDecorativeImages.length > 0
+          ? `${emptyDecorativeImages.length} empty decorative image placement(s) were omitted from the PDF.`
+          : "Every decorative image placement has an image selected.",
     },
   ]
 

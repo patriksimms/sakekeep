@@ -235,7 +235,7 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(page.getByRole("button", { name: /^Add text for / }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: /^Add image for / }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: /^Add gallery for / }).first()).toBeVisible()
-    for (const name of ["Static text", "Add rectangle", "Add circle", "Add line"]) {
+    for (const name of ["Add static text", "Add rectangle", "Add circle", "Add line"]) {
       await expect(page.getByRole("button", { name })).toBeVisible()
     }
 
@@ -522,6 +522,163 @@ test.describe.serial("critical local prototype workflows", () => {
           })
         ).ok()
       ).toBe(true)
+    }
+  })
+
+  test("organizer places palette elements on the canvas and manages an empty decorative image", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000)
+    await page.setViewportSize({ width: 1365, height: 900 })
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")!
+
+    try {
+      await page.goto(`/projects/${closedProjectId}?tab=layouts`)
+      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+      const canvas = page.locator("[data-layout-canvas]")
+      const droppedTypes = [
+        "bound-text",
+        "image-frame",
+        "gallery-frame",
+        "static-text",
+        "rectangle",
+        "circle",
+        "line",
+        "decorative-image",
+      ] as const
+
+      const firstPaletteItem = page.locator('[data-palette-element-type="bound-text"]').first()
+      await firstPaletteItem.evaluate((element) => {
+        const transfer = new DataTransfer()
+        transfer.setData("application/x-sakekeep-layout-element", '{"type":"bound-text"}')
+        element.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: transfer }))
+        document
+          .querySelector("[data-layout-canvas]")!
+          .dispatchEvent(new DragEvent("dragenter", { bubbles: true, dataTransfer: transfer }))
+      })
+      await expect(canvas).toHaveAttribute("data-layout-drop-target", "true")
+      await canvas.dispatchEvent("dragleave")
+      await expect(canvas).not.toHaveAttribute("data-layout-drop-target")
+
+      let layerCount = await page.locator("[data-layer-row]").count()
+      for (const type of droppedTypes) {
+        await page
+          .locator(`[data-palette-element-type="${type}"]`)
+          .first()
+          .evaluate((element) => {
+            const transfer = new DataTransfer()
+            element.dispatchEvent(
+              new DragEvent("dragstart", { bubbles: true, dataTransfer: transfer })
+            )
+            const target = document.querySelector("[data-layout-canvas]")!
+            const bounds = target.getBoundingClientRect()
+            for (const name of ["dragenter", "dragover", "drop"]) {
+              target.dispatchEvent(
+                new DragEvent(name, {
+                  bubbles: true,
+                  clientX: bounds.left + bounds.width * 0.72,
+                  clientY: bounds.top + bounds.height * 0.3,
+                  dataTransfer: transfer,
+                })
+              )
+            }
+            element.dispatchEvent(
+              new DragEvent("dragend", { bubbles: true, dataTransfer: transfer })
+            )
+          })
+        await expect(page.locator("[data-layer-row]")).toHaveCount(++layerCount)
+      }
+
+      await expect(page.getByLabel("Choose decorative image")).toBeVisible()
+      await expect(
+        page.locator(
+          '[data-testid="editor-layout-elements"] img[src="/layout-decorative-placeholder.svg"]'
+        )
+      ).toBeVisible()
+
+      const beforeInvalidDrop = await page.locator("[data-layer-row]").count()
+      await page
+        .locator('[data-palette-element-type="rectangle"]')
+        .dragTo(page.getByRole("heading", { name: "Page layouts" }))
+      await expect(page.locator("[data-layer-row]")).toHaveCount(beforeInvalidDrop)
+
+      await page.getByRole("button", { name: "Add static text" }).click()
+      await expect(page.getByLabel("Content")).toBeVisible()
+      await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+
+      let currentProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      let currentLayout = currentProject.layouts.find((layout) => layout.id === originalLayout.id)!
+      const added = currentLayout.schema.elements.slice(originalLayout.schema.elements.length)
+      expect(new Set(added.map((element) => element.type))).toEqual(new Set(droppedTypes))
+      expect(added.at(-1)).toMatchObject({
+        type: "static-text",
+        geometry: { x: 20, y: 20 },
+      })
+      const decorative = added.find((element) => element.type === "decorative-image")!
+      expect(decorative.geometry.x).toBeGreaterThanOrEqual(-3)
+      expect(decorative.geometry.y).toBeGreaterThanOrEqual(-3)
+      expect(decorative.geometry.x + decorative.geometry.width).toBeLessThanOrEqual(213)
+      expect(decorative.geometry.y + decorative.geometry.height).toBeLessThanOrEqual(151)
+
+      await page.reload()
+      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+      await page.getByRole("button", { name: "Decorative image", exact: true }).click()
+      await page.getByLabel("Choose decorative image").setInputFiles(resolve("public/logo512.png"))
+      await expect(page.getByRole("button", { name: "Remove image" })).toBeVisible()
+      await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+      currentProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      currentLayout = currentProject.layouts.find((layout) => layout.id === originalLayout.id)!
+      const withImage = currentLayout.schema.elements.find(
+        (element) => element.id === decorative.id && element.type === "decorative-image"
+      )
+      expect(withImage).toMatchObject({ geometry: decorative.geometry })
+      expect(withImage).toHaveProperty("assetId")
+
+      await page.getByRole("button", { name: "Remove image" }).click()
+      await expect(page.getByLabel("Choose decorative image")).toBeVisible()
+      await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+      currentProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      currentLayout = currentProject.layouts.find((layout) => layout.id === originalLayout.id)!
+      expect(currentLayout.schema.elements.find((element) => element.id === decorative.id)).toEqual(
+        decorative
+      )
+    } finally {
+      const changedProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const changedLayout = changedProject.layouts.find(
+        (layout) => layout.id === originalLayout.id
+      )!
+      const restored = await request.patch(
+        `/api/projects/${closedProjectId}/layouts/${originalLayout.id}`,
+        {
+          data: {
+            expectedRevision: changedLayout.revision,
+            name: originalLayout.name,
+            schema: originalLayout.schema,
+          },
+        }
+      )
+      expect(restored.ok()).toBe(true)
+      const regenerated = await request.post(`/api/projects/${closedProjectId}/book`, {
+        data: {
+          mode: "cycle",
+          seed: "demo-seed",
+          manualAssignments: {},
+          resolutionOverrides: [],
+        },
+      })
+      expect(regenerated.ok()).toBe(true)
     }
   })
 

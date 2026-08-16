@@ -19,6 +19,7 @@ export interface LayoutPageContent {
   questions?: FormQuestion[]
   submission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
+  decorativePlaceholderUrl?: string
 }
 
 function answerImages(answer: SubmissionAnswer | undefined): ImageAnswer[] {
@@ -59,6 +60,23 @@ function elementStyle(element: LayoutElement): React.CSSProperties {
   }
 }
 
+export function textElementStyle(
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
+): React.CSSProperties {
+  return {
+    ...elementStyle(element),
+    color: element.text.color,
+    fontFamily: element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
+    fontSize: pointsToContainerWidth(element.text.fontSize),
+    fontStyle: element.text.fontStyle,
+    fontWeight: element.text.fontWeight,
+    lineHeight: element.text.lineHeight,
+    overflow: "hidden",
+    textAlign: element.text.alignment,
+    whiteSpace: "pre-wrap",
+  }
+}
+
 function imagePosition(
   element: Extract<LayoutElement, { type: "image-frame" | "gallery-frame" }>,
   image: ImageAnswer
@@ -96,19 +114,7 @@ function ElementContent({
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
-        style={{
-          ...style,
-          color: element.text.color,
-          fontFamily:
-            element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
-          fontSize: pointsToContainerWidth(element.text.fontSize),
-          fontStyle: element.text.fontStyle,
-          fontWeight: element.text.fontWeight,
-          lineHeight: element.text.lineHeight,
-          overflow: "hidden",
-          textAlign: element.text.alignment,
-          whiteSpace: "pre-wrap",
-        }}
+        style={textElementStyle(element)}
       >
         {element.type === "bound-text" && label && <strong className="block">{label}</strong>}
         {element.type === "bound-text" &&
@@ -174,26 +180,26 @@ function ElementContent({
   }
 
   if (element.type === "decorative-image") {
+    const source = element.assetId
+      ? (content.decorativeAssetUrl?.(element.assetId) ??
+        `/api/assets/${element.assetId}?variant=preview`)
+      : content.decorativePlaceholderUrl
+    if (!source) return null
     return (
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
         style={{ ...style, overflow: "hidden" }}
       >
-        {element.assetId && (
-          <img
-            src={
-              content.decorativeAssetUrl?.(element.assetId) ??
-              `/api/assets/${element.assetId}?variant=preview`
-            }
-            alt=""
-            aria-hidden="true"
-            className="size-full object-cover"
-            style={{
-              objectPosition: `${element.focalPoint.x * 100}% ${element.focalPoint.y * 100}%`,
-            }}
-          />
-        )}
+        <img
+          src={source}
+          alt=""
+          aria-hidden="true"
+          className="size-full object-cover"
+          style={{
+            objectPosition: `${element.focalPoint.x * 100}% ${element.focalPoint.y * 100}%`,
+          }}
+        />
       </div>
     )
   }
