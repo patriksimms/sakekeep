@@ -17,6 +17,7 @@ import {
 declare global {
   interface Window {
     __sakekeepLayoutParityCanvas?: Canvas | null
+    __sakekeepRemountLayoutParityCanvas?: () => void
   }
 }
 
@@ -210,14 +211,17 @@ function LayoutParityFixture() {
   const decorativeAssetUrl = () => "/layout-parity-decor.svg"
   const canvasRef = useRef<Canvas | null>(null)
   const [editorSchema, setEditorSchema] = useState(schema)
+  const [canvasKey, setCanvasKey] = useState(0)
 
   useEffect(() => {
     Object.defineProperty(window, "__sakekeepLayoutParityCanvas", {
       configurable: true,
       get: () => canvasRef.current,
     })
+    window.__sakekeepRemountLayoutParityCanvas = () => setCanvasKey((value) => value + 1)
     return () => {
       delete window.__sakekeepLayoutParityCanvas
+      delete window.__sakekeepRemountLayoutParityCanvas
     }
   }, [])
 
@@ -233,6 +237,7 @@ function LayoutParityFixture() {
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Fabric editor</h2>
           <LayoutCanvas
+            key={canvasKey}
             schema={editorSchema}
             width={648}
             selectedId={null}

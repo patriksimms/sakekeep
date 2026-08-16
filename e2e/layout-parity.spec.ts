@@ -2,7 +2,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test"
 import { type FabricObject } from "fabric"
 import sharp from "sharp"
 
-type SakekeepInteraction = FabricObject & { sakekeepElementId?: string }
+type SakekeepInteraction = FabricObject & {
+  sakekeepElementId?: string
+  parityPersistenceMarker?: boolean
+}
 
 const elementIds = [
   "bleed-panel",
@@ -76,21 +79,24 @@ async function expectInteractionsToMatchHtml(page: Page) {
         | undefined
       const element = surface.querySelector<HTMLElement>(`[data-layout-element-id="${id}"]`)
       if (!object || !element) throw new Error(`Missing parity element ${id}`)
+      object.setCoords()
+      const fabricBox = object.getBoundingRect()
+      const htmlBox = element.getBoundingClientRect()
       const rotation = element.style.transform.match(/rotate\(([-\d.]+)deg\)/)?.[1]
       return {
         id,
         fabric: {
-          x: object.left,
-          y: object.top,
-          width: object.getScaledWidth(),
-          height: object.getScaledHeight(),
+          x: fabricBox.left,
+          y: fabricBox.top,
+          width: fabricBox.width,
+          height: fabricBox.height,
           rotation: object.angle,
         },
         html: {
-          x: (Number.parseFloat(element.style.left) / 100) * surfaceBox.width,
-          y: (Number.parseFloat(element.style.top) / 100) * surfaceBox.height,
-          width: (Number.parseFloat(element.style.width) / 100) * surfaceBox.width,
-          height: (Number.parseFloat(element.style.height) / 100) * surfaceBox.height,
+          x: htmlBox.left - surfaceBox.left,
+          y: htmlBox.top - surfaceBox.top,
+          width: htmlBox.width,
+          height: htmlBox.height,
           rotation: Number(rotation),
         },
       }
@@ -98,33 +104,56 @@ async function expectInteractionsToMatchHtml(page: Page) {
   }, elementIds)
 
   for (const { id, fabric, html } of geometries) {
-    for (const key of ["x", "y", "width", "height", "rotation"] as const) {
-      expect(fabric[key], `${id} interaction ${key}`).toBeCloseTo(html[key], 3)
+    for (const key of ["x", "y", "width", "height"] as const) {
+      expect(fabric[key], `${id} interaction ${key}`).toBeCloseTo(html[key], 1)
     }
+    expect(fabric.rotation, `${id} interaction rotation`).toBeCloseTo(html.rotation, 3)
   }
 }
 
-async function transformStaticText(
+async function transformInteraction(
   page: Page,
-  values: { left?: number; top?: number; scaleX?: number; scaleY?: number; angle?: number },
+  id: string,
   eventName: "object:moving" | "object:scaling" | "object:rotating" | "object:modified"
 ) {
   await page.evaluate(
-    ({ nextValues, nextEventName }) => {
+    ({ elementId, nextEventName }) => {
       const canvas = window.__sakekeepLayoutParityCanvas
       const object = canvas
         ?.getObjects()
-        .find(
-          (candidate) => (candidate as SakekeepInteraction).sakekeepElementId === "static-heading"
-        ) as SakekeepInteraction | undefined
-      if (!canvas || !object) throw new Error("Static text interaction object is not ready")
-      object.set(nextValues)
+        .find((candidate) => (candidate as SakekeepInteraction).sakekeepElementId === elementId) as
+        | SakekeepInteraction
+        | undefined
+      if (!canvas || !object) throw new Error(`Interaction object ${elementId} is not ready`)
+      if (nextEventName === "object:moving") {
+        object.set({ left: object.left + 6, top: object.top + 4 })
+      } else if (nextEventName === "object:scaling") {
+        object.set({ scaleX: object.scaleX * 0.92, scaleY: object.scaleY * 1.08 })
+      } else if (nextEventName === "object:rotating") {
+        object.set({ angle: object.angle + 7 })
+      } else {
+        object.parityPersistenceMarker = true
+      }
       object.setCoords()
       canvas.fire(nextEventName, { target: object })
     },
-    { nextValues: values, nextEventName: eventName }
+    { elementId: id, nextEventName: eventName }
   )
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  if (eventName === "object:modified") {
+    await page.evaluate(() => window.__sakekeepRemountLayoutParityCanvas?.())
+    await page.waitForFunction((elementId) => {
+      const object = window.__sakekeepLayoutParityCanvas
+        ?.getObjects()
+        .find((candidate) => (candidate as SakekeepInteraction).sakekeepElementId === elementId) as
+        | SakekeepInteraction
+        | undefined
+      return object && !object.parityPersistenceMarker
+    }, id)
+  } else {
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    )
+  }
 }
 
 test("Fabric editor and book preview preserve canonical rendering parity", async ({ page }) => {
@@ -232,17 +261,19 @@ test("Fabric interactions track real HTML geometry through every transform", asy
 
   await expectInteractionsToMatchHtml(page)
 
-  await transformStaticText(page, { left: 210, top: 54 }, "object:moving")
-  await expectInteractionsToMatchHtml(page)
+  for (const id of elementIds) {
+    await transformInteraction(page, id, "object:moving")
+    await expectInteractionsToMatchHtml(page)
 
-  await transformStaticText(page, { scaleX: 0.8, scaleY: 1.5 }, "object:scaling")
-  await expectInteractionsToMatchHtml(page)
+    await transformInteraction(page, id, "object:scaling")
+    await expectInteractionsToMatchHtml(page)
 
-  await transformStaticText(page, { angle: 17 }, "object:rotating")
-  await expectInteractionsToMatchHtml(page)
+    await transformInteraction(page, id, "object:rotating")
+    await expectInteractionsToMatchHtml(page)
 
-  await transformStaticText(page, {}, "object:modified")
-  await expectInteractionsToMatchHtml(page)
+    await transformInteraction(page, id, "object:modified")
+    await expectInteractionsToMatchHtml(page)
+  }
 })
 
 test("static text remains editable on the HTML layer", async ({ page }) => {
