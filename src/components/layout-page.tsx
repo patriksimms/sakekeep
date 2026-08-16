@@ -1,4 +1,5 @@
 import { gallerySlots } from "#/domain/layout.ts"
+import { boundTextLabel } from "#/domain/layout-label.ts"
 import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
 import {
   canonicalToPercentageGeometry,
@@ -77,13 +78,23 @@ function ElementContent({
   content,
   showEditorPlaceholders,
   editingElementId,
+  selectedElementId,
 }: {
   element: LayoutElement
   content: LayoutPageContent
   showEditorPlaceholders: boolean
   editingElementId?: string
+  selectedElementId?: string
 }) {
-  const style = elementStyle(element)
+  const selectedStyle: React.CSSProperties =
+    selectedElementId === element.id
+      ? {
+          outline: "2px solid var(--destructive)",
+          outlineOffset: "2px",
+          zIndex: 1,
+        }
+      : {}
+  const style: React.CSSProperties = { ...elementStyle(element), ...selectedStyle }
   const question =
     "questionId" in element
       ? content.questions?.find((candidate) => candidate.id === element.questionId)
@@ -101,6 +112,18 @@ function ElementContent({
     const runs = textRunsForElement(element, question, answer, placeholder)
     const layout = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
     const hasLabel = element.type === "bound-text" && element.showLabel
+    const labelLineCount = hasLabel
+      ? layoutText(runs.slice(0, 1), element.geometry.width, Number.POSITIVE_INFINITY, {
+          ...element.text,
+          fontSize: layout.effectiveFontSize,
+          minFontSize: layout.effectiveFontSize,
+          overflow: "flag",
+        }).renderedLines.length
+      : 0
+    const editedLabel =
+      element.type === "bound-text" && editingElementId === element.id
+        ? boundTextLabel({ ...element, showLabel: true }, question)
+        : ""
     return (
       <div
         data-layout-element-id={element.id}
@@ -112,8 +135,10 @@ function ElementContent({
           background: !layout.fits
             ? "color-mix(in srgb, var(--destructive) 8%, transparent)"
             : undefined,
+          ...selectedStyle,
         }}
       >
+        {editedLabel && <strong className="invisible block">{editedLabel}</strong>}
         {element.type === "bound-text" &&
           !hasLabel &&
           showEditorPlaceholders &&
@@ -125,11 +150,14 @@ function ElementContent({
               Add label…
             </strong>
           )}
-        {layout.renderedLines.map((line, index) => (
-          <span key={index} className="block" style={{ fontWeight: line.fontWeight }}>
-            {line.text || "\u00a0"}
-          </span>
-        ))}
+        {layout.renderedLines.map((line, index) => {
+          const Line = index < labelLineCount ? "strong" : "span"
+          return (
+            <Line key={index} className="block" style={{ fontWeight: line.fontWeight }}>
+              {line.text || "\u00a0"}
+            </Line>
+          )
+        })}
       </div>
     )
   }
@@ -285,6 +313,7 @@ export function LayoutPageElements({
   ariaHidden = false,
   showEditorPlaceholders = false,
   editingElementId,
+  selectedElementId,
 }: {
   schema: LayoutSchema
   content?: LayoutPageContent
@@ -292,6 +321,7 @@ export function LayoutPageElements({
   ariaHidden?: boolean
   showEditorPlaceholders?: boolean
   editingElementId?: string
+  selectedElementId?: string
 }) {
   return (
     <div
@@ -306,6 +336,7 @@ export function LayoutPageElements({
           content={content}
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
+          selectedElementId={selectedElementId}
         />
       ))}
     </div>

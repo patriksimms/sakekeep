@@ -12,7 +12,7 @@ import {
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
-import { layoutText, textRunsForElement } from "./text-layout.ts"
+import { layoutText, textRunsForElement, type TextLayoutResult } from "./text-layout.ts"
 
 function hashString(value: string): number {
   let hash = 2166136261
@@ -67,6 +67,64 @@ export function effectivePpi(
   return Math.floor(Math.min(ppiX, ppiY))
 }
 
+function lineCount(count: number): string {
+  return `${count} ${count === 1 ? "line" : "lines"}`
+}
+
+function textElementName(
+  element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
+  form: FormSchema
+): string {
+  if (element.type === "bound-text") {
+    if (element.showLabel && element.label?.trim()) return element.label.trim()
+    return form.questions.find((question) => question.id === element.questionId)?.prompt ?? "Text"
+  }
+  const firstLine = element.content.trim().split("\n")[0]?.trim()
+  if (!firstLine) return "Static text"
+  return firstLine.length > 50 ? `${firstLine.slice(0, 47)}…` : firstLine
+}
+
+function textOverflowMessage(
+  name: string,
+  response: number,
+  policy: "shrink" | "truncate" | "flag",
+  fit: TextLayoutResult,
+  heightMm: number
+): string {
+  const action = policy === "truncate" ? "is truncated" : "overflows"
+  const size =
+    policy === "shrink"
+      ? `${fit.effectiveFontSize} pt minimum`
+      : `configured ${fit.effectiveFontSize} pt size`
+  if (fit.availableLines === 0) {
+    return `${name} ${action} on Response ${response}. Its text bounding box is too short for one line at the ${size} (needs ${fit.lineHeightMm.toFixed(2)} mm, has ${heightMm.toFixed(2)} mm).`
+  }
+  return `${name} ${action} on Response ${response}. It needs ${lineCount(fit.requiredLines)} at the ${size}, but only ${lineCount(fit.availableLines)} ${fit.availableLines === 1 ? "fits" : "fit"}.`
+}
+
+function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<string, string> {
+  const textElements = elements.filter(
+    (element): element is Extract<LayoutElement, { type: "bound-text" | "static-text" }> =>
+      element.type === "bound-text" || element.type === "static-text"
+  )
+  const names = textElements.map((element) => textElementName(element, form))
+  const counts = new Map<string, number>()
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
+
+  const occurrences = new Map<string, number>()
+  return new Map(
+    textElements.map((element, index) => {
+      const name = names[index]!
+      const occurrence = (occurrences.get(name) ?? 0) + 1
+      occurrences.set(name, occurrence)
+      return [
+        element.id,
+        counts.get(name) === 1 ? name : `${name} (text bounding box ${occurrence})`,
+      ]
+    })
+  )
+}
+
 function imagesForElement(
   element: Extract<LayoutElement, { type: "image-frame" | "gallery-frame" }>,
   answers: SubmissionAnswers
@@ -107,6 +165,7 @@ export function inspectSubmissionPage(
 ): PageProblem[] {
   const problems: PageProblem[] = []
   const overrides = new Set(resolutionOverrides)
+  const problemNames = textProblemNames(layout.schema.elements, form)
   const requiredQuestions = new Map(
     form.questions
       .filter((question) => question.required)
@@ -176,13 +235,19 @@ export function inspectSubmissionPage(
       }
       if (!content.trim()) continue
       const fit = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
-      if (!fit.fits) {
+      if (!fit.fits || fit.truncated) {
         problems.push(
           problem(
             pageId,
             "text-overflow",
-            "Text does not fit at the configured minimum size.",
-            true,
+            textOverflowMessage(
+              problemNames.get(element.id)!,
+              submission.sequence,
+              element.text.overflow,
+              fit,
+              element.geometry.height
+            ),
+            !fit.fits,
             element.id
           )
         )

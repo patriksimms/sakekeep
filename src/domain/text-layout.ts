@@ -29,6 +29,8 @@ export interface TextLayoutResult {
   truncated: boolean
   requiredHeightMm: number
   lineHeightMm: number
+  requiredLines: number
+  availableLines: number
 }
 
 function answerText(answer: SubmissionAnswer | undefined, question: FormQuestion | undefined) {
@@ -166,6 +168,11 @@ export function layoutText(
     }
   }
 
+  const lineCounts = {
+    requiredLines: layout.lines.length,
+    availableLines: Math.floor(heightMm / layout.lineHeightMm),
+  }
+
   if (layout.fits) {
     return {
       renderedLines: layout.lines,
@@ -174,6 +181,7 @@ export function layoutText(
       truncated: false,
       requiredHeightMm: layout.requiredHeightMm,
       lineHeightMm: layout.lineHeightMm,
+      ...lineCounts,
     }
   }
 
@@ -186,6 +194,7 @@ export function layoutText(
       truncated: true,
       requiredHeightMm: layout.requiredHeightMm,
       lineHeightMm: layout.lineHeightMm,
+      ...lineCounts,
     }
   }
 
@@ -196,6 +205,7 @@ export function layoutText(
     truncated: false,
     requiredHeightMm: layout.requiredHeightMm,
     lineHeightMm: layout.lineHeightMm,
+    ...lineCounts,
   }
 }
 

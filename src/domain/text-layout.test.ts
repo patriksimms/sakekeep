@@ -71,6 +71,23 @@ describe("canonical text layout", () => {
     expect(result.renderedLines.length * result.lineHeightMm).toBe(result.requiredHeightMm)
   })
 
+  it("tests the exact decimal minimum after stepped shrink candidates", () => {
+    const result = layoutText([{ text: "One line" }], 100, 2.9, {
+      ...DEFAULT_TEXT_SETTINGS,
+      fontSize: 20,
+      minFontSize: 8.1,
+      lineHeight: 1,
+      overflow: "shrink",
+    })
+
+    expect(result).toMatchObject({
+      fits: true,
+      effectiveFontSize: 8.1,
+      requiredLines: 1,
+      availableLines: 1,
+    })
+  })
+
   it("truncates with an ellipsis and flags unresolved overflow", () => {
     const content = [{ text: "A memory with enough words to wrap onto several lines" }]
     const truncated = layoutText(content, 30, 8, {
