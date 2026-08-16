@@ -8,6 +8,7 @@ import {
   inspectSubmissionPage,
 } from "./generation.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
+import { addElement } from "./layout.ts"
 
 const submissionIds = [
   "10000000-0000-4000-8000-000000000001",
@@ -147,6 +148,25 @@ describe("book generation", () => {
         assetId: "asset-legacy",
         code: "unsupported-asset",
         blocking: true,
+      })
+    )
+  })
+
+  it("warns about empty decorative images without blocking generation", () => {
+    const layout = layoutFixture()
+    layout.schema = addElement(layout.schema, "decorative-image")
+    expect(
+      inspectSubmissionPage(
+        "page",
+        layout,
+        submissionFixture(submissionIds[0]!, 0),
+        completeForm,
+        []
+      )
+    ).toContainEqual(
+      expect.objectContaining({
+        code: "empty-decorative-image",
+        blocking: false,
       })
     )
   })
