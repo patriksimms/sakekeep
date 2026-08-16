@@ -1,5 +1,5 @@
 import { Canvas, FabricObject, IText, Rect, Textbox } from "fabric"
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
 import { LayoutPageElements } from "#/components/layout-page.tsx"
 import { PAGE_SPEC } from "#/domain/layout.ts"
@@ -11,6 +11,41 @@ import {
   type RelativeGeometry,
   type SubmissionSummary,
 } from "#/domain/types.ts"
+import { cn } from "#/lib/utils.ts"
+
+export const LAYOUT_ELEMENT_DRAG_TYPE = "application/x-sakekeep-layout-element"
+
+export interface LayoutElementDragData {
+  type: LayoutElement["type"]
+  questionId?: string
+}
+
+const layoutElementTypes = new Set<LayoutElement["type"]>([
+  "bound-text",
+  "static-text",
+  "image-frame",
+  "gallery-frame",
+  "rectangle",
+  "circle",
+  "line",
+  "decorative-image",
+])
+
+export function parseLayoutElementDragData(value: string): LayoutElementDragData | null {
+  try {
+    const data: unknown = JSON.parse(value)
+    if (!data || typeof data !== "object" || !("type" in data)) return null
+    const type = data.type
+    if (typeof type !== "string" || !layoutElementTypes.has(type as LayoutElement["type"])) {
+      return null
+    }
+    const questionId = "questionId" in data ? data.questionId : undefined
+    if (questionId !== undefined && typeof questionId !== "string") return null
+    return { type: type as LayoutElement["type"], questionId }
+  } catch {
+    return null
+  }
+}
 
 type SakekeepObject = FabricObject & { sakekeepElementId?: string }
 
@@ -123,6 +158,7 @@ export function LayoutCanvas({
   previewSubmission,
   decorativeAssetUrl,
   showGuides = true,
+  onDropElement,
 }: {
   schema: LayoutSchema
   width: number
@@ -134,6 +170,7 @@ export function LayoutCanvas({
   previewSubmission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
   showGuides?: boolean
+  onDropElement?: (data: LayoutElementDragData, center: { x: number; y: number }) => void
 }) {
   const element = useRef<HTMLCanvasElement>(null)
   const instance = useRef<Canvas | null>(null)
@@ -142,6 +179,7 @@ export function LayoutCanvas({
   const onChangeRef = useRef(onChange)
   const changing = useRef(false)
   const [displaySchema, setDisplaySchema] = useState(schema)
+  const [isDropTarget, setIsDropTarget] = useState(false)
   schemaRef.current = schema
   onSelectRef.current = onSelect
   onChangeRef.current = onChange
@@ -277,9 +315,50 @@ export function LayoutCanvas({
     canvas.requestRenderAll()
   }, [schema, selectedId, width])
 
+  const acceptsPaletteDrop = (event: DragEvent<HTMLDivElement>) =>
+    event.dataTransfer.types.includes(LAYOUT_ELEMENT_DRAG_TYPE)
+
+  const dropElement = (event: DragEvent<HTMLDivElement>) => {
+    setIsDropTarget(false)
+    if (!onDropElement || !acceptsPaletteDrop(event)) return
+    event.preventDefault()
+    const data = parseLayoutElementDragData(event.dataTransfer.getData(LAYOUT_ELEMENT_DRAG_TYPE))
+    if (!data) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    onDropElement(data, {
+      x:
+        ((event.clientX - bounds.left) / bounds.width) * PAGE_SPEC.mediaWidthMm - PAGE_SPEC.bleedMm,
+      y:
+        ((event.clientY - bounds.top) / bounds.height) * PAGE_SPEC.mediaHeightMm -
+        PAGE_SPEC.bleedMm,
+    })
+  }
+
   return (
     <div
-      className="relative overflow-hidden rounded-lg bg-background shadow-2xl ring-1 ring-foreground/15"
+      className={cn(
+        "relative overflow-hidden rounded-lg bg-background shadow-2xl ring-1 ring-foreground/15",
+        isDropTarget && "ring-3 ring-primary"
+      )}
+      data-layout-drop-target={isDropTarget || undefined}
+      data-layout-canvas
+      onDragEnter={(event) => {
+        if (!onDropElement || !acceptsPaletteDrop(event)) return
+        event.preventDefault()
+        setIsDropTarget(true)
+      }}
+      onDragOver={(event) => {
+        if (!onDropElement || !acceptsPaletteDrop(event)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = "copy"
+        setIsDropTarget(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsDropTarget(false)
+        }
+      }}
+      onDrop={dropElement}
       style={{
         width,
         height: width * (PAGE_SPEC.mediaHeightMm / PAGE_SPEC.mediaWidthMm),
@@ -293,6 +372,7 @@ export function LayoutCanvas({
           questions,
           submission: previewSubmission,
           decorativeAssetUrl,
+          decorativePlaceholderUrl: "/layout-decorative-placeholder.svg",
         }}
         testId="editor-layout-elements"
         ariaHidden

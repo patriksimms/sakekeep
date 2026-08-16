@@ -6,11 +6,7 @@ const svg = readFileSync(new URL("../public/favicon.svg", import.meta.url))
 
 // At 16/24px the heart cutout muddies into the bookmark, so the smallest ICO
 // entries drop it.
-const simpleSvg = Buffer.from(
-  svg
-    .toString()
-    .replace(/<path\s+d="M32 34\.6[\s\S]*?\/>/, "")
-)
+const simpleSvg = Buffer.from(svg.toString().replace(/<path\s+d="M32 34\.6[\s\S]*?\/>/, ""))
 
 async function png(size: number, source: Buffer = svg): Promise<Buffer> {
   return sharp(source, { density: (72 * size) / 64 })

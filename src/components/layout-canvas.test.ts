@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { addElement, emptyLayoutSchema } from "#/domain/layout.ts"
 
-import { applyInlineStaticTextEdit } from "./layout-canvas.tsx"
+import { applyInlineStaticTextEdit, parseLayoutElementDragData } from "./layout-canvas.tsx"
 
 describe("inline layout text editing", () => {
   it("updates only static-text content", () => {
@@ -34,5 +34,15 @@ describe("inline layout text editing", () => {
         staticText.type === "static-text" ? staticText.content : ""
       )
     ).toBeNull()
+  })
+})
+
+describe("layout element drag data", () => {
+  it("accepts palette data and rejects invalid or external data", () => {
+    expect(
+      parseLayoutElementDragData(JSON.stringify({ type: "gallery-frame", questionId: "photos" }))
+    ).toEqual({ type: "gallery-frame", questionId: "photos" })
+    expect(parseLayoutElementDragData(JSON.stringify({ type: "unknown" }))).toBeNull()
+    expect(parseLayoutElementDragData("not json")).toBeNull()
   })
 })
