@@ -2,7 +2,8 @@ import { and, asc, count, desc, eq, inArray, max, sql } from "drizzle-orm"
 
 import { emptyFormSchema, validateFormForDraft, validateFormForPublish } from "../domain/form"
 import { generateBook } from "../domain/generation"
-import { emptyLayoutSchema, layoutSchemaValidator } from "../domain/layout"
+import { type BackgroundPresetId, backgroundSchema } from "../domain/layout-backgrounds"
+import { layoutSchemaValidator } from "../domain/layout"
 import {
   type BookPage,
   type FormSchema,
@@ -401,7 +402,8 @@ function markBookStaleSet(status: "not-generated" | "current" | "stale") {
 
 export async function createLayout(
   projectId: string,
-  name = "Untitled layout"
+  name = "Untitled layout",
+  backgroundPresetId: BackgroundPresetId = "blank"
 ): Promise<LayoutRecord> {
   const record = await db.transaction(async (tx) => {
     const [project] = await tx
@@ -425,7 +427,7 @@ export async function createLayout(
         projectId,
         name: name.trim() || "Untitled layout",
         position: (positionRow?.value ?? -1) + 1,
-        schema: emptyLayoutSchema(),
+        schema: backgroundSchema(backgroundPresetId),
       })
       .returning()
     await tx
