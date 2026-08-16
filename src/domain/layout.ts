@@ -90,7 +90,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
   }),
   baseElement.extend({
     type: z.literal("decorative-image"),
-    assetId: z.string().min(1),
+    assetId: z.string().min(1).optional(),
     focalPoint: focalPointSchema,
   }),
 ])
@@ -271,7 +271,8 @@ export function isCriticalElementOutsideSafeArea(element: LayoutElement): boolea
 export function addElement(
   schema: LayoutSchema,
   type: LayoutElement["type"],
-  questionId?: string
+  questionId?: string,
+  center?: { x: number; y: number }
 ): LayoutSchema {
   const id = crypto.randomUUID()
   const geometry = { x: 20, y: 20, width: 70, height: 35, rotation: 0 }
@@ -340,10 +341,23 @@ export function addElement(
         type,
         geometry,
         opacity: 1,
-        assetId: "",
         focalPoint: { x: 0.5, y: 0.5 },
       }
       break
+  }
+  if (center) {
+    const { width, height } = element.geometry
+    element.geometry = {
+      ...element.geometry,
+      x: Math.min(
+        PAGE_SPEC.trimWidthMm + PAGE_SPEC.bleedMm - width,
+        Math.max(-PAGE_SPEC.bleedMm, center.x - width / 2)
+      ),
+      y: Math.min(
+        PAGE_SPEC.trimHeightMm + PAGE_SPEC.bleedMm - height,
+        Math.max(-PAGE_SPEC.bleedMm, center.y - height / 2)
+      ),
+    }
   }
   return { ...schema, elements: [...schema.elements, element] }
 }

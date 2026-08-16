@@ -144,7 +144,7 @@ export interface ShapeElement extends LayoutElementBase {
 
 export interface DecorativeImageElement extends LayoutElementBase {
   type: "decorative-image"
-  assetId: string
+  assetId?: string
   focalPoint: { x: number; y: number }
 }
 
@@ -193,6 +193,7 @@ export type ProblemCode =
   | "gallery-overflow"
   | "outside-print-area"
   | "missing-required-answer"
+  | "empty-decorative-image"
 
 export interface PageProblem {
   id: string
