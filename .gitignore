@@ -22,4 +22,5 @@ todos.json
 
 # Local Coolify production tooling
 /scripts/dump-production-db.sh
+/scripts/dump-production-media.sh
 /production.dump
