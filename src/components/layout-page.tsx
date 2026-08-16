@@ -1,4 +1,5 @@
 import { gallerySlots } from "#/domain/layout.ts"
+import { boundTextLabel } from "#/domain/layout-label.ts"
 import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
 import {
   canonicalToPercentageGeometry,
@@ -87,9 +88,13 @@ function imagePosition(
 function ElementContent({
   element,
   content,
+  showEditorPlaceholders,
+  editingElementId,
 }: {
   element: LayoutElement
   content: LayoutPageContent
+  showEditorPlaceholders: boolean
+  editingElementId?: string
 }) {
   const style = elementStyle(element)
   const question =
@@ -98,6 +103,7 @@ function ElementContent({
       : undefined
 
   if (element.type === "static-text" || element.type === "bound-text") {
+    const label = element.type === "bound-text" ? boundTextLabel(element, question) : ""
     const value =
       element.type === "static-text"
         ? element.content
@@ -110,9 +116,18 @@ function ElementContent({
         data-layout-element-type={element.type}
         style={textElementStyle(element)}
       >
-        {element.type === "bound-text" && element.showLabel && (
-          <strong className="block">{element.label || question?.prompt || "Question"}</strong>
-        )}
+        {element.type === "bound-text" && label && <strong className="block">{label}</strong>}
+        {element.type === "bound-text" &&
+          !label &&
+          showEditorPlaceholders &&
+          editingElementId !== element.id && (
+            <strong
+              data-editor-empty-label
+              className="absolute top-0 left-0 z-10 bg-background/90 px-1 py-0.5 font-sans text-[10px] leading-none font-normal text-muted-foreground italic"
+            >
+              Add label…
+            </strong>
+          )}
         {value}
       </div>
     )
@@ -267,11 +282,15 @@ export function LayoutPageElements({
   content = {},
   testId,
   ariaHidden = false,
+  showEditorPlaceholders = false,
+  editingElementId,
 }: {
   schema: LayoutSchema
   content?: LayoutPageContent
   testId?: string
   ariaHidden?: boolean
+  showEditorPlaceholders?: boolean
+  editingElementId?: string
 }) {
   return (
     <div
@@ -280,7 +299,13 @@ export function LayoutPageElements({
       aria-hidden={ariaHidden || undefined}
     >
       {schema.elements.map((element) => (
-        <ElementContent key={element.id} element={element} content={content} />
+        <ElementContent
+          key={element.id}
+          element={element}
+          content={content}
+          showEditorPlaceholders={showEditorPlaceholders}
+          editingElementId={editingElementId}
+        />
       ))}
     </div>
   )

@@ -16,6 +16,20 @@ let client: PostHog | undefined
 let desiredUserId: string | undefined
 let userKnown = false
 
+interface AnalyticsEvents {
+  "layout_editor:answer_label_edit": {
+    cleared: boolean
+    input_method: "double_click" | "keyboard"
+  }
+}
+
+export function captureAnalyticsEvent<EventName extends keyof AnalyticsEvents>(
+  event: EventName,
+  properties: AnalyticsEvents[EventName]
+) {
+  client?.capture(event, properties)
+}
+
 function applyAnalyticsUser() {
   if (!client) return
   if (desiredUserId) {

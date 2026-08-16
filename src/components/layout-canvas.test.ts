@@ -6,6 +6,7 @@ import { canonicalToMediaGeometry } from "#/domain/layout-rendering.ts"
 import { type RelativeGeometry } from "#/domain/types.ts"
 
 import {
+  applyInlineBoundLabelEdit,
   applyInlineStaticTextEdit,
   geometryFromObject,
   objectForElement,
@@ -117,6 +118,48 @@ describe("inline layout text editing", () => {
         staticText.id,
         staticText.type === "static-text" ? staticText.content : ""
       )
+    ).toBeNull()
+  })
+
+  it("updates or clears only a bound-text label", () => {
+    let schema = addElement(emptyLayoutSchema(), "bound-text", "memory")
+    schema = addElement(schema, "rectangle")
+    const original = schema.elements[0]!
+    const renamed = applyInlineBoundLabelEdit(
+      schema,
+      original.id,
+      "A favourite memory",
+      "Question prompt"
+    )
+
+    expect(renamed?.elements[0]).toEqual({
+      ...original,
+      showLabel: true,
+      label: "A favourite memory",
+    })
+    expect(renamed?.elements[1]).toBe(schema.elements[1])
+
+    const cleared = applyInlineBoundLabelEdit(renamed!, original.id, "", "A favourite memory")
+    expect(cleared?.elements[0]).toEqual({
+      ...original,
+      showLabel: false,
+      label: "",
+    })
+  })
+
+  it("ignores unchanged or non-bound labels", () => {
+    let schema = addElement(emptyLayoutSchema(), "bound-text", "memory")
+    schema = addElement(schema, "static-text")
+    expect(
+      applyInlineBoundLabelEdit(
+        schema,
+        schema.elements[0]!.id,
+        "Question prompt",
+        "Question prompt"
+      )
+    ).toBeNull()
+    expect(
+      applyInlineBoundLabelEdit(schema, schema.elements[1]!.id, "Label", "Static text")
     ).toBeNull()
   })
 })
