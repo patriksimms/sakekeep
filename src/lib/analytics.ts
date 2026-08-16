@@ -1,5 +1,6 @@
 import type { PostHog } from "posthog-js"
 
+import type { PageProblem } from "#/domain/types.ts"
 import { isDemoMode } from "#/lib/demo-mode.ts"
 
 const configuredToken: string | undefined = import.meta.env.VITE_POSTHOG_PROJECT_TOKEN as
@@ -20,6 +21,11 @@ interface AnalyticsEvents {
   "layout_editor:answer_label_edit": {
     cleared: boolean
     input_method: "double_click" | "keyboard"
+  }
+  "book_review:problem_select": {
+    problem_code: PageProblem["code"]
+    blocking: boolean
+    focuses_element: boolean
   }
 }
 

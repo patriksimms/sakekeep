@@ -90,13 +90,23 @@ function ElementContent({
   content,
   showEditorPlaceholders,
   editingElementId,
+  selectedElementId,
 }: {
   element: LayoutElement
   content: LayoutPageContent
   showEditorPlaceholders: boolean
   editingElementId?: string
+  selectedElementId?: string
 }) {
-  const style = elementStyle(element)
+  const selectedStyle: React.CSSProperties =
+    selectedElementId === element.id
+      ? {
+          outline: "2px solid var(--destructive)",
+          outlineOffset: "2px",
+          zIndex: 1,
+        }
+      : {}
+  const style: React.CSSProperties = { ...elementStyle(element), ...selectedStyle }
   const question =
     "questionId" in element
       ? content.questions?.find((candidate) => candidate.id === element.questionId)
@@ -114,7 +124,7 @@ function ElementContent({
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
-        style={textElementStyle(element)}
+        style={{ ...textElementStyle(element), ...selectedStyle }}
       >
         {element.type === "bound-text" && label && <strong className="block">{label}</strong>}
         {element.type === "bound-text" &&
@@ -284,6 +294,7 @@ export function LayoutPageElements({
   ariaHidden = false,
   showEditorPlaceholders = false,
   editingElementId,
+  selectedElementId,
 }: {
   schema: LayoutSchema
   content?: LayoutPageContent
@@ -291,6 +302,7 @@ export function LayoutPageElements({
   ariaHidden?: boolean
   showEditorPlaceholders?: boolean
   editingElementId?: string
+  selectedElementId?: string
 }) {
   return (
     <div
@@ -305,6 +317,7 @@ export function LayoutPageElements({
           content={content}
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
+          selectedElementId={selectedElementId}
         />
       ))}
     </div>
