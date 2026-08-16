@@ -9,6 +9,7 @@ import {
   applyInlineStaticTextEdit,
   geometryFromObject,
   objectForElement,
+  parseLayoutElementDragData,
 } from "./layout-canvas.tsx"
 
 function htmlBoundingBox(geometry: RelativeGeometry, canvasWidth: number) {
@@ -87,7 +88,6 @@ describe("layout interaction geometry", () => {
     expectFabricToMatchHtml(object, canvasWidth)
   })
 })
-
 describe("inline layout text editing", () => {
   it("updates only static-text content", () => {
     let schema = addElement(emptyLayoutSchema(), "static-text")
@@ -118,5 +118,15 @@ describe("inline layout text editing", () => {
         staticText.type === "static-text" ? staticText.content : ""
       )
     ).toBeNull()
+  })
+})
+
+describe("layout element drag data", () => {
+  it("accepts palette data and rejects invalid or external data", () => {
+    expect(
+      parseLayoutElementDragData(JSON.stringify({ type: "gallery-frame", questionId: "photos" }))
+    ).toEqual({ type: "gallery-frame", questionId: "photos" })
+    expect(parseLayoutElementDragData(JSON.stringify({ type: "unknown" }))).toBeNull()
+    expect(parseLayoutElementDragData("not json")).toBeNull()
   })
 })

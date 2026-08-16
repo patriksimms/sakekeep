@@ -18,6 +18,7 @@ export interface LayoutPageContent {
   questions?: FormQuestion[]
   submission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
+  decorativePlaceholderUrl?: string
 }
 
 function answerImages(answer: SubmissionAnswer | undefined): ImageAnswer[] {
@@ -164,26 +165,26 @@ function ElementContent({
   }
 
   if (element.type === "decorative-image") {
+    const source = element.assetId
+      ? (content.decorativeAssetUrl?.(element.assetId) ??
+        `/api/assets/${element.assetId}?variant=preview`)
+      : content.decorativePlaceholderUrl
+    if (!source) return null
     return (
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
         style={{ ...style, overflow: "hidden" }}
       >
-        {element.assetId && (
-          <img
-            src={
-              content.decorativeAssetUrl?.(element.assetId) ??
-              `/api/assets/${element.assetId}?variant=preview`
-            }
-            alt=""
-            aria-hidden="true"
-            className="size-full object-cover"
-            style={{
-              objectPosition: `${element.focalPoint.x * 100}% ${element.focalPoint.y * 100}%`,
-            }}
-          />
-        )}
+        <img
+          src={source}
+          alt=""
+          aria-hidden="true"
+          className="size-full object-cover"
+          style={{
+            objectPosition: `${element.focalPoint.x * 100}% ${element.focalPoint.y * 100}%`,
+          }}
+        />
       </div>
     )
   }

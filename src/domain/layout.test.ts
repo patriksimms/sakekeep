@@ -86,4 +86,28 @@ describe("canonical layout schema", () => {
       expect(frame.focalPoint).toEqual({ x: 0.5, y: 0.5 })
     }
   })
+
+  it("centres dropped elements beneath the pointer and keeps them inside the bleed", () => {
+    const centered = addElement(emptyLayoutSchema(), "rectangle", undefined, { x: 108, y: 77 })
+    expect(centered.elements[0]?.geometry).toMatchObject({ x: 73, y: 59.5 })
+
+    const topLeft = addElement(emptyLayoutSchema(), "gallery-frame", "photos", { x: -3, y: -3 })
+    expect(topLeft.elements[0]?.geometry).toMatchObject({ x: -3, y: -3 })
+
+    const bottomRight = addElement(emptyLayoutSchema(), "gallery-frame", "photos", {
+      x: 213,
+      y: 151,
+    })
+    expect(bottomRight.elements[0]?.geometry).toMatchObject({ x: 113, y: 86 })
+    expect(elementExtendsBeyondBleed(bottomRight.elements[0]!)).toBe(false)
+  })
+
+  it("persists an empty decorative image", () => {
+    const schema = addElement(emptyLayoutSchema(), "decorative-image")
+    expect(layoutSchemaValidator.parse(schema).elements[0]).toMatchObject({
+      type: "decorative-image",
+      geometry: { x: 20, y: 20, width: 70, height: 35 },
+    })
+    expect(schema.elements[0]).not.toHaveProperty("assetId")
+  })
 })
