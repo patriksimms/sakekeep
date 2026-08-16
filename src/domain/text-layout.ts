@@ -76,6 +76,7 @@ function wrapRuns(
   size: number,
   widthMm: number
 ): TextLayoutLine[] {
+  if (!runs.some((run) => run.text.trim())) return []
   const lines: TextLayoutLine[] = []
   for (const run of runs) {
     const weight = run.fontWeight ?? settings.fontWeight
@@ -201,19 +202,39 @@ export function layoutText(
 export function minimumTextBoxHeight(
   element: {
     type: "bound-text" | "static-text"
+    geometry: Pick<LayoutElement["geometry"], "width">
     showLabel?: boolean
+    label?: string
     text: TextSettings
   },
+  labelText?: string,
   policy: OverflowPolicy = element.text.overflow
 ) {
   const size = policy === "shrink" ? element.text.minFontSize : element.text.fontSize
-  const lineCount = element.type === "bound-text" && element.showLabel ? 2 : 1
-  return size * POINT_TO_MM * element.text.lineHeight * lineCount
+  const runs: TextLayoutRun[] =
+    element.type === "bound-text" && element.showLabel
+      ? [
+          {
+            text: labelText?.trim() || element.label?.trim() || "Question",
+            fontWeight: "bold",
+          },
+          { text: "M" },
+        ]
+      : [{ text: "M" }]
+  return layoutText(runs, element.geometry.width, Number.POSITIVE_INFINITY, {
+    ...element.text,
+    fontSize: size,
+    minFontSize: size,
+    overflow: "flag",
+  }).requiredHeightMm
 }
 
-export function enforceMinimumTextBoxHeight<T extends LayoutElement>(element: T): T {
+export function enforceMinimumTextBoxHeight<T extends LayoutElement>(
+  element: T,
+  labelText?: string
+): T {
   if (element.type !== "bound-text" && element.type !== "static-text") return element
-  const minimumHeight = minimumTextBoxHeight(element)
+  const minimumHeight = minimumTextBoxHeight(element, labelText)
   if (element.geometry.height >= minimumHeight) return element
   return {
     ...element,

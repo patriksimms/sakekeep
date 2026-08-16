@@ -80,6 +80,7 @@ import {
   moveElementLayer,
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
+import { boundTextLabel } from "#/domain/layout-label.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
 import {
   boundQuestionLabel,
@@ -774,7 +775,12 @@ function Editor({
   }
 
   const changeSelected = (nextElement: LayoutElement) => {
-    const constrainedElement = enforceMinimumTextBoxHeight(nextElement)
+    const question =
+      nextElement.type === "bound-text"
+        ? project.formSchema.questions.find((item) => item.id === nextElement.questionId)
+        : undefined
+    const label = nextElement.type === "bound-text" ? boundTextLabel(nextElement, question) : ""
+    const constrainedElement = enforceMinimumTextBoxHeight(nextElement, label)
     markChanged({
       ...schema,
       elements: schema.elements.map((element) =>

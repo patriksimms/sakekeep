@@ -36,6 +36,8 @@ describe("canonical text rendering", () => {
 
     expect(markup).toContain('data-text-overflow="true"')
     expect(markup).toContain("outline:1px solid var(--destructive)")
+    expect(markup).toContain("font-kerning:none")
+    expect(markup).toContain("font-variant-ligatures:none")
     expect(markup).toContain('<span class="block"')
   })
 

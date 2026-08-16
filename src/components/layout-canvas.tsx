@@ -90,11 +90,14 @@ export function applyInlineBoundLabelEdit(
     ...schema,
     elements: schema.elements.map((candidate) =>
       candidate.id === elementId && candidate.type === "bound-text"
-        ? enforceMinimumTextBoxHeight({
-            ...candidate,
-            showLabel: content.trim().length > 0,
-            label: content,
-          })
+        ? enforceMinimumTextBoxHeight(
+            {
+              ...candidate,
+              showLabel: content.trim().length > 0,
+              label: content,
+            },
+            content
+          )
         : candidate
     ),
   }
@@ -314,7 +317,12 @@ export function LayoutCanvas({
           if (candidate.id !== object.sakekeepElementId) return candidate
           let geometry = geometryFromObject(object, width)
           if (enforceMinimumHeight) {
-            const constrained = enforceMinimumTextBoxHeight({ ...candidate, geometry })
+            const question =
+              candidate.type === "bound-text"
+                ? questions.find((item) => item.id === candidate.questionId)
+                : undefined
+            const label = candidate.type === "bound-text" ? boundTextLabel(candidate, question) : ""
+            const constrained = enforceMinimumTextBoxHeight({ ...candidate, geometry }, label)
             if (constrained.geometry.height > geometry.height) {
               object.set({
                 scaleY: (object.scaleY ?? 1) * (constrained.geometry.height / geometry.height),

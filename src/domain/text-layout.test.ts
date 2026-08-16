@@ -85,6 +85,16 @@ describe("canonical text layout", () => {
     expect(flagged.requiredHeightMm).toBeGreaterThan(8)
   })
 
+  it("treats wholly empty content as zero lines in every consumer", () => {
+    const result = layoutText([{ text: "  \n " }], 30, 1, DEFAULT_TEXT_SETTINGS)
+
+    expect(result).toMatchObject({
+      renderedLines: [],
+      fits: true,
+      requiredHeightMm: 0,
+    })
+  })
+
   it("enforces one useful static line and separate label and answer lines", () => {
     expect(minimumTextBoxHeight(staticText)).toBeCloseTo(7.0556, 3)
     expect(minimumTextBoxHeight(boundText)).toBeCloseTo(14.1111, 3)
@@ -94,5 +104,22 @@ describe("canonical text layout", () => {
         geometry: { ...boundText.geometry, height: 1 },
       }).geometry.height
     ).toBeCloseTo(14.1111, 3)
+  })
+
+  it("includes every wrapped label line in the labelled-answer height floor", () => {
+    const narrow = {
+      ...boundText,
+      label: "Tell us about your favourite memory from school",
+      geometry: { ...boundText.geometry, width: 20, height: 1 },
+    }
+    const minimum = minimumTextBoxHeight(narrow)
+    const promptMinimum = minimumTextBoxHeight(
+      { ...narrow, label: undefined },
+      "Tell us about your favourite memory from school"
+    )
+
+    expect(minimum).toBeGreaterThan(2 * 16 * (25.4 / 72) * 1.25)
+    expect(promptMinimum).toBe(minimum)
+    expect(enforceMinimumTextBoxHeight(narrow).geometry.height).toBe(minimum)
   })
 })
