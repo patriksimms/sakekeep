@@ -1,4 +1,3 @@
-import { type Canvas } from "fabric"
 import {
   AlignCenterHorizontalIcon,
   AlignCenterVerticalIcon,
@@ -40,7 +39,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { LayoutCanvas } from "#/components/layout-canvas.tsx"
+import { LayoutCanvas, type InlineEditableCanvas } from "#/components/layout-canvas.tsx"
 import { NumericField } from "#/components/numeric-field.tsx"
 import {
   AlertDialog,
@@ -424,25 +423,6 @@ function ElementInspector({
 
       {element.type === "bound-text" && (
         <>
-          <Field orientation="horizontal">
-            <Switch
-              id={`label-${element.id}`}
-              checked={element.showLabel}
-              onCheckedChange={(checked) => onChange({ ...element, showLabel: checked === true })}
-            />
-            <FieldLabel htmlFor={`label-${element.id}`}>Show label</FieldLabel>
-          </Field>
-          {element.showLabel && (
-            <Field>
-              <FieldLabel>Custom label</FieldLabel>
-              <Input
-                aria-label="Custom label"
-                value={element.label ?? ""}
-                placeholder="Uses the question when blank"
-                onChange={(event) => onChange({ ...element, label: event.target.value })}
-              />
-            </Field>
-          )}
           <Separator />
           <TextSettingsEditor
             settings={element.text}
@@ -590,7 +570,7 @@ function Editor({
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; edge: DropEdge } | null>(null)
   const container = useRef<HTMLDivElement>(null)
-  const canvas = useRef<Canvas | null>(null)
+  const canvas = useRef<InlineEditableCanvas | null>(null)
   const history = useRef<LayoutSchema[]>([layout.schema])
   const historyIndex = useRef(0)
   const revision = useRef(layout.revision)
@@ -801,6 +781,16 @@ function Editor({
         const activeObject = canvas.current?.getActiveObject() as
           | { isEditing?: boolean }
           | undefined
+        const target = event.target as HTMLElement
+        const startsInlineEdit =
+          event.key === "Enter" &&
+          selected?.type === "bound-text" &&
+          activeObject?.isEditing !== true &&
+          (target instanceof HTMLCanvasElement || target.closest("[data-layer-select]"))
+        if (startsInlineEdit && canvas.current?.startInlineEditing?.()) {
+          event.preventDefault()
+          return
+        }
         if (
           !selected ||
           !isEditorDeleteKey(event, event.target, activeObject?.isEditing === true)
@@ -851,6 +841,7 @@ function Editor({
                       <GripVerticalIcon aria-hidden="true" />
                     </button>
                     <Button
+                      data-layer-select
                       type="button"
                       variant={selectedId === element.id ? "secondary" : "ghost"}
                       className="h-auto min-w-0 flex-1 justify-start text-left"

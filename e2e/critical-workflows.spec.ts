@@ -395,6 +395,136 @@ test.describe.serial("critical local prototype workflows", () => {
     await expectAccessible(page)
   })
 
+  test("answer labels edit directly on the layout canvas", async ({ page, request }) => {
+    test.setTimeout(60_000)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`/projects/${closedProjectId}?tab=layouts`)
+    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find((layout) => layout.name === "Warm quote")
+    expect(originalLayout).toBeDefined()
+
+    const renderedCanvas = page.locator("canvas.upper-canvas")
+    const editLabel = async (elementId: string) => {
+      const element = page.locator(`[data-layout-element-id="${elementId}"]`)
+      const [elementBounds, canvasBounds] = await Promise.all([
+        element.boundingBox(),
+        renderedCanvas.boundingBox(),
+      ])
+      expect(elementBounds).not.toBeNull()
+      expect(canvasBounds).not.toBeNull()
+      await renderedCanvas.dblclick({
+        position: {
+          x: elementBounds!.x + elementBounds!.width / 2 - canvasBounds!.x,
+          y: elementBounds!.y + elementBounds!.height / 2 - canvasBounds!.y,
+        },
+      })
+    }
+
+    try {
+      await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")
+
+      await editLabel("warm-name")
+      await page.keyboard.type("Name in this book")
+      await page.getByRole("heading", { name: "Page layouts" }).click()
+      await expect(page.locator('[data-layout-element-id="warm-name"] strong')).toHaveText(
+        "Name in this book"
+      )
+      await expect(page.getByRole("status")).toHaveText("Saved")
+
+      await page
+        .getByRole("button", { name: "What should we call you in the book?", exact: true })
+        .click()
+      await expect(page.getByText("Show label", { exact: true })).toHaveCount(0)
+      await expect(page.getByLabel("Custom label")).toHaveCount(0)
+
+      const renamedProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const renamedLayout = renamedProject.layouts.find(
+        (layout) => layout.id === originalLayout!.id
+      )!
+      const renamedElement = renamedLayout.schema.elements.find(
+        (element) => element.id === "warm-name"
+      )
+      expect(renamedElement).toMatchObject({
+        type: "bound-text",
+        showLabel: true,
+        label: "Name in this book",
+      })
+      expect(
+        renamedProject.formSchema.questions.find((question) => question.id === "name")?.prompt
+      ).toBe("What should we call you in the book?")
+
+      const nameLayer = page.getByRole("button", {
+        name: "What should we call you in the book?",
+        exact: true,
+      })
+      await nameLayer.click()
+      await nameLayer.press("Enter")
+      await page.keyboard.type("Cancelled label")
+      await page.keyboard.press("Escape")
+      await expect(page.locator('[data-layout-element-id="warm-name"] strong')).toHaveText(
+        "Name in this book"
+      )
+
+      await nameLayer.click()
+      await nameLayer.press("Enter")
+      await page.keyboard.press("Backspace")
+      await page.getByRole("heading", { name: "Page layouts" }).click()
+      await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")
+      await expect(page.locator('[data-layout-element-id="warm-name"]')).toContainText(
+        "{{ What should we call you in the book? }}"
+      )
+      await expect(page.getByRole("status")).toHaveText("Saved")
+
+      const canvasBounds = await renderedCanvas.boundingBox()
+      expect(canvasBounds).not.toBeNull()
+      await renderedCanvas.click({
+        position: { x: canvasBounds!.width - 2, y: canvasBounds!.height - 2 },
+      })
+      await expect(
+        page.getByText("Select an element on the canvas or in the layers list.")
+      ).toBeVisible()
+      await page.setViewportSize({ width: 1440, height: 1600 })
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await page.screenshot({
+        path: resolve("visual-artifacts/issues/42/after-inline-answer-label.png"),
+      })
+
+      await page.getByRole("tab", { name: "4. Book review" }).click()
+      await expect(page.locator("[data-editor-empty-label]")).toHaveCount(0)
+      await expect(page.getByText("Add label…", { exact: true })).toHaveCount(0)
+    } finally {
+      const changedProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const changedLayout = changedProject.layouts.find(
+        (layout) => layout.id === originalLayout!.id
+      ) as LayoutRecord
+      expect(
+        (
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${changedLayout.id}`, {
+            data: {
+              expectedRevision: changedLayout.revision,
+              schema: originalLayout!.schema,
+            },
+          })
+        ).ok()
+      ).toBe(true)
+      expect(
+        (
+          await request.post(`/api/projects/${closedProjectId}/book`, {
+            data: originalProject.book!.settings,
+          })
+        ).ok()
+      ).toBe(true)
+    }
+  })
+
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
     await page.goto(`/projects/${closedProjectId}?tab=layouts&source=bookmark`)
     await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
