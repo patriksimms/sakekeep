@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { z } from "zod"
 
+import { BACKGROUND_PRESET_IDS } from "#/domain/layout-backgrounds.ts"
 import { jsonError, readJson } from "#/server/http.ts"
 import { createLayout, duplicateLayout, reorderLayouts } from "#/server/repository.ts"
 
@@ -8,6 +9,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create"),
     name: z.string().max(200).optional(),
+    backgroundPresetId: z.enum(BACKGROUND_PRESET_IDS).optional(),
   }),
   z.object({
     action: z.literal("duplicate"),
@@ -26,7 +28,10 @@ export const Route = createFileRoute("/api/projects/$projectId/layouts")({
         try {
           const input = actionSchema.parse(await readJson(request))
           if (input.action === "create") {
-            return Response.json(await createLayout(params.projectId, input.name), { status: 201 })
+            return Response.json(
+              await createLayout(params.projectId, input.name, input.backgroundPresetId),
+              { status: 201 }
+            )
           }
           if (input.action === "duplicate") {
             return Response.json(await duplicateLayout(params.projectId, input.layoutId), {

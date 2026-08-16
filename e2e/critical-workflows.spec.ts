@@ -525,6 +525,52 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
+  test("organizer creates a layout from a predefined visual background", async ({
+    page,
+    request,
+  }) => {
+    let createdLayoutId: string | undefined
+
+    try {
+      await page.goto(`/projects/${closedProjectId}?tab=layouts`)
+      await page.getByRole("button", { name: "New layout" }).click()
+
+      await expect(page.getByRole("heading", { name: "Choose a background" })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Create Blank background" })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Create Warm quote background" })).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Create Playful note background" })
+      ).toBeVisible()
+
+      await page.getByRole("button", { name: "Create Warm quote background" }).click()
+      await expect(page.getByRole("heading", { name: "Choose a background" })).not.toBeVisible()
+
+      const project = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const created = project.layouts.find((layout) => layout.name === "Warm quote background")
+      expect(created).toBeDefined()
+      createdLayoutId = created!.id
+      expect(created!.schema).toMatchObject({
+        background: "#fff9ef",
+        elements: [
+          {
+            type: "rectangle",
+            locked: true,
+            fill: "#dfe8d8",
+            geometry: { x: -3, y: -3, width: 78, height: 154 },
+          },
+        ],
+      })
+    } finally {
+      if (createdLayoutId) {
+        expect(
+          (await request.delete(`/api/projects/${closedProjectId}/layouts/${createdLayoutId}`)).ok()
+        ).toBe(true)
+      }
+    }
+  })
+
   test("organizer places palette elements on the canvas and manages an empty decorative image", async ({
     page,
     request,

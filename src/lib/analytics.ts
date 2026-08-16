@@ -17,6 +17,9 @@ let desiredUserId: string | undefined
 let userKnown = false
 
 interface AnalyticsEvents {
+  "layout_editor:background_created": {
+    background_id: "blank" | "warm-quote" | "playful-note"
+  }
   "layout_editor:answer_label_edit": {
     cleared: boolean
     input_method: "double_click" | "keyboard"

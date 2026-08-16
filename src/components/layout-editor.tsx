@@ -38,6 +38,7 @@ import {
   type InlineEditableCanvas,
   type LayoutElementDragData,
 } from "#/components/layout-canvas.tsx"
+import { LayoutPageElements } from "#/components/layout-page.tsx"
 import { NumericField } from "#/components/numeric-field.tsx"
 import {
   AlertDialog,
@@ -60,6 +61,14 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card.tsx"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "#/components/ui/dialog.tsx"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import { ScrollArea } from "#/components/ui/scroll-area.tsx"
@@ -80,6 +89,7 @@ import {
   moveElementLayer,
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
+import { BACKGROUND_PRESETS, type BackgroundPreset } from "#/domain/layout-backgrounds.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
 import {
   boundQuestionLabel,
@@ -96,8 +106,69 @@ import {
   type TextSettings,
 } from "#/domain/types.ts"
 import { api, projectApi } from "#/lib/api.ts"
+import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
+
+function BackgroundPicker({ onCreate }: { onCreate: (preset: BackgroundPreset) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [creatingId, setCreatingId] = useState<BackgroundPreset["id"] | null>(null)
+
+  const create = async (preset: BackgroundPreset) => {
+    setCreatingId(preset.id)
+    try {
+      await onCreate(preset)
+      captureAnalyticsEvent("layout_editor:background_created", {
+        background_id: preset.id,
+      })
+      setOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Create failed")
+    } finally {
+      setCreatingId(null)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button />}>
+        <PlusIcon data-icon="inline-start" />
+        New layout
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Choose a background</DialogTitle>
+          <DialogDescription>
+            Decorative elements start locked and can be unlocked in the editor.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {BACKGROUND_PRESETS.map((preset) => (
+            <Button
+              key={preset.id}
+              variant="outline"
+              className="h-auto min-w-0 flex-col items-stretch gap-2 p-2"
+              disabled={creatingId !== null}
+              aria-label={`Create ${preset.name} background`}
+              onClick={() => void create(preset)}
+            >
+              <span
+                className="relative block aspect-[216/154] w-full overflow-hidden rounded-sm"
+                style={{ background: preset.schema.background, containerType: "inline-size" }}
+              >
+                <LayoutPageElements schema={preset.schema} ariaHidden />
+              </span>
+              <span className="flex items-center justify-center gap-1">
+                {creatingId === preset.id && <LoaderCircleIcon className="animate-spin" />}
+                {preset.name}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function IconAction({
   label,
@@ -1349,23 +1420,20 @@ export function LayoutsPanel({
               </SelectGroup>
             </SelectContent>
           </Select>
-          <Button
-            onClick={async () => {
-              try {
-                const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                  action: "create",
-                  name: `Layout ${project.layouts.length + 1}`,
-                })
-                updateLayouts([...project.layouts, layout])
-                setSelectedId(layout.id)
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Create failed")
-              }
+          <BackgroundPicker
+            onCreate={async (preset) => {
+              const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
+                action: "create",
+                name:
+                  preset.id === "blank"
+                    ? `Layout ${project.layouts.length + 1}`
+                    : `${preset.name} background`,
+                backgroundPresetId: preset.id,
+              })
+              updateLayouts([...project.layouts, layout])
+              setSelectedId(layout.id)
             }}
-          >
-            <PlusIcon data-icon="inline-start" />
-            New layout
-          </Button>
+          />
           {selected && (
             <>
               <IconAction label="Move layout up" disabled={selected.position === 0}>
