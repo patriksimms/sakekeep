@@ -1,3 +1,4 @@
+import { Rect } from "fabric"
 import { describe, expect, it } from "vitest"
 
 import { addElement, emptyLayoutSchema, PAGE_SPEC } from "#/domain/layout.ts"
@@ -54,6 +55,27 @@ describe("layout interaction geometry", () => {
     const canvasWidth = PAGE_SPEC.mediaWidthMm * 3
     const schema = addElement(emptyLayoutSchema(), "rectangle")
     const object = objectForElement(schema.elements[0]!, canvasWidth)
+
+    object.set({ left: 96, top: 72 })
+    expectFabricToMatchHtml(object, canvasWidth)
+
+    object.set({ scaleX: 1.7, scaleY: 0.65 })
+    expectFabricToMatchHtml(object, canvasWidth)
+
+    object.set({ angle: 23 })
+    expectFabricToMatchHtml(object, canvasWidth)
+  })
+
+  it("uses the configured static text bounding box through every transform", () => {
+    const canvasWidth = PAGE_SPEC.mediaWidthMm * 3
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    const object = objectForElement(element, canvasWidth)
+    const initialGeometry = canonicalToMediaGeometry(element.geometry, canvasWidth)
+
+    expect(object).toBeInstanceOf(Rect)
+    expect(object.getScaledHeight()).toBeCloseTo(initialGeometry.height, 5)
+    expectFabricToMatchHtml(object, canvasWidth)
 
     object.set({ left: 96, top: 72 })
     expectFabricToMatchHtml(object, canvasWidth)

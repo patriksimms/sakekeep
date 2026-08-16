@@ -151,3 +151,32 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
     0.025
   )
 })
+
+test("static text remains editable on the HTML layer", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 })
+  await page.goto("/layout-parity")
+
+  const editor = page.getByTestId("editor-layout-elements")
+  await expect(page.locator("canvas.upper-canvas")).toBeVisible()
+  const boundText = editor.locator('[data-layout-element-id="bound-memory"]')
+  const boundBox = await boundText.boundingBox()
+  expect(boundBox).not.toBeNull()
+  await page.mouse.dblclick(boundBox!.x + boundBox!.width / 2, boundBox!.y + boundBox!.height / 2)
+  await expect(page.locator('[data-layout-inline-editor="true"]')).toHaveCount(0)
+
+  const staticText = editor.locator('[data-layout-element-id="static-heading"]')
+  const box = await staticText.boundingBox()
+  expect(box).not.toBeNull()
+
+  await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2)
+  const inlineEditor = page.locator(
+    '[data-layout-inline-editor="true"][data-layout-element-id="static-heading"]'
+  )
+  await expect(inlineEditor).toBeVisible()
+  await expect(inlineEditor).toBeFocused()
+  await inlineEditor.fill("Edited directly on the page")
+  await page.keyboard.press("Tab")
+
+  await expect(inlineEditor).toHaveCount(0)
+  await expect(staticText).toHaveText("Edited directly on the page")
+})

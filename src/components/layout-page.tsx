@@ -58,6 +58,23 @@ function elementStyle(element: LayoutElement): React.CSSProperties {
   }
 }
 
+export function textElementStyle(
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
+): React.CSSProperties {
+  return {
+    ...elementStyle(element),
+    color: element.text.color,
+    fontFamily: element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
+    fontSize: pointsToContainerWidth(element.text.fontSize),
+    fontStyle: element.text.fontStyle,
+    fontWeight: element.text.fontWeight,
+    lineHeight: element.text.lineHeight,
+    overflow: "hidden",
+    textAlign: element.text.alignment,
+    whiteSpace: "pre-wrap",
+  }
+}
+
 function imagePosition(
   element: Extract<LayoutElement, { type: "image-frame" | "gallery-frame" }>,
   image: ImageAnswer
@@ -90,19 +107,7 @@ function ElementContent({
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
-        style={{
-          ...style,
-          color: element.text.color,
-          fontFamily:
-            element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
-          fontSize: pointsToContainerWidth(element.text.fontSize),
-          fontStyle: element.text.fontStyle,
-          fontWeight: element.text.fontWeight,
-          lineHeight: element.text.lineHeight,
-          overflow: "hidden",
-          textAlign: element.text.alignment,
-          whiteSpace: "pre-wrap",
-        }}
+        style={textElementStyle(element)}
       >
         {element.type === "bound-text" && element.showLabel && (
           <strong className="block">{element.label || question?.prompt || "Question"}</strong>
