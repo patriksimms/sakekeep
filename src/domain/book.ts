@@ -7,6 +7,7 @@ const problemSchema = z.object({
     z.literal("image-low-resolution"),
     z.literal("image-blocking-resolution"),
     z.literal("unsupported-asset"),
+    z.literal("photo-slot-mismatch"),
     z.literal("gallery-overflow"),
     z.literal("outside-print-area"),
     z.literal("missing-required-answer"),

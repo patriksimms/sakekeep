@@ -48,6 +48,7 @@ describe("PDF renderer", () => {
       pdfxMetadata: true,
       assetResolutionMetadata: true,
       assetResolutionCount: 0,
+      assetPlacements: [],
     })
   })
 })

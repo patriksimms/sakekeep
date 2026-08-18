@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  blockingProblems,
   deterministicLayoutAssignments,
   effectivePpi,
   generateBook,
@@ -8,6 +9,7 @@ import {
 } from "./generation.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
 import { addElement } from "./layout.ts"
+import { type ImageAnswer, type LayoutRecord } from "./types.ts"
 
 const submissionIds = [
   "10000000-0000-4000-8000-000000000001",
@@ -282,5 +284,134 @@ describe("book generation", () => {
         blocking: false,
       })
     )
+  })
+})
+
+describe("photo distribution problems", () => {
+  function photo(assetId: string, width = 3000, height = 2000): ImageAnswer {
+    return {
+      assetId,
+      name: `${assetId}.jpg`,
+      mimeType: "image/jpeg",
+      width,
+      height,
+      sizeBytes: 1_000,
+    }
+  }
+
+  function photoLayout(frames: Array<{ id: string; y: number }>): LayoutRecord {
+    const layout = layoutFixture()
+    layout.schema.elements = frames.map((frame) => ({
+      id: frame.id,
+      type: "image-frame" as const,
+      questionId: "photos",
+      cornerRadius: 0,
+      opacity: 1,
+      geometry: { x: 10, y: frame.y, width: 40, height: 27, rotation: 0 },
+    }))
+    return layout
+  }
+
+  it("warns once per question when frames stay empty", () => {
+    const layout = photoLayout(
+      [10, 40, 70, 100, 130].map((y, index) => ({ id: `frame-${index}`, y }))
+    )
+    const submission = submissionFixture(submissionIds[0]!, 3)
+    submission.answers.photos = ["a", "b", "c", "d"].map((assetId) => photo(assetId))
+
+    const problems = inspectSubmissionPage("page", layout, submission, completeForm, []).filter(
+      (problem) => problem.code === "photo-slot-mismatch"
+    )
+
+    expect(problems).toEqual([
+      expect.objectContaining({
+        blocking: false,
+        message:
+          '1 photo slot for "Photos" stays empty on Response 3. The layout has 5 photo slots for 4 uploaded photos.',
+      }),
+    ])
+  })
+
+  it("warns about photos it cannot show without blocking the export", () => {
+    const layout = photoLayout([10, 40, 70, 100].map((y, index) => ({ id: `frame-${index}`, y })))
+    const submission = submissionFixture(submissionIds[0]!, 2)
+    submission.answers.photos = ["a", "b", "c", "d", "e", "f"].map((assetId) => photo(assetId))
+
+    const book = generateBook({
+      projectId: layout.projectId,
+      form: completeForm,
+      submissions: [submission],
+      layouts: [layout],
+      settings: cycleSettings,
+      now: "2026-07-18T00:00:00.000Z",
+    })
+
+    expect(
+      book.pages[0]!.problems.filter((problem) => problem.code === "photo-slot-mismatch")
+    ).toEqual([
+      expect.objectContaining({
+        blocking: false,
+        message:
+          '2 photos for "Photos" are not shown on Response 2. The layout has 4 photo slots for 6 uploaded photos.',
+      }),
+    ])
+    expect(blockingProblems(book)).toEqual([])
+  })
+
+  it("reports one problem per question with mismatched frames", () => {
+    const layout = photoLayout([{ id: "photo-frame", y: 10 }])
+    layout.schema.elements.push({
+      id: "portrait-frame",
+      type: "image-frame",
+      questionId: "portraits",
+      cornerRadius: 0,
+      opacity: 1,
+      geometry: { x: 60, y: 10, width: 40, height: 27, rotation: 0 },
+    })
+    const form = {
+      ...completeForm,
+      questions: [
+        ...completeForm.questions,
+        {
+          id: "portraits",
+          type: "images" as const,
+          prompt: "Portraits",
+          required: false,
+          maxImages: 1,
+        },
+      ],
+    }
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.photos = [photo("a"), photo("b")]
+    submission.answers.portraits = []
+
+    const problems = inspectSubmissionPage("page", layout, submission, form, []).filter(
+      (problem) => problem.code === "photo-slot-mismatch"
+    )
+
+    expect(problems.map((problem) => problem.message)).toEqual([
+      expect.stringContaining('1 photo for "Photos" is not shown'),
+      expect.stringContaining('1 photo slot for "Portraits" stays empty'),
+    ])
+    expect(new Set(problems.map((problem) => problem.id))).toHaveLength(2)
+  })
+
+  it("checks effective resolution against the frame each photo is assigned to", () => {
+    const layout = photoLayout([
+      { id: "small-frame", y: 10 },
+      { id: "large-frame", y: 60 },
+    ])
+    layout.schema.elements[0]!.geometry = { x: 10, y: 10, width: 20, height: 14, rotation: 0 }
+    layout.schema.elements[1]!.geometry = { x: 10, y: 60, width: 180, height: 80, rotation: 0 }
+    const submission = submissionFixture(submissionIds[0]!, 1)
+    submission.answers.photos = [photo("sharp", 3000, 2000), photo("soft", 400, 300)]
+
+    const problems = inspectSubmissionPage("page", layout, submission, completeForm, []).filter(
+      (problem) => problem.code === "image-blocking-resolution"
+    )
+
+    expect(problems).toEqual([
+      expect.objectContaining({ assetId: "soft", elementId: "large-frame", blocking: true }),
+    ])
   })
 })
