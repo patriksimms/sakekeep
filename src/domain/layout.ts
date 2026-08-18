@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { FONT_FAMILY_IDS } from "./fonts.ts"
 import {
   LAYOUT_SCHEMA_VERSION,
   type GalleryArrangement,
@@ -40,7 +41,7 @@ const focalPointSchema = z.object({
 })
 
 const textSettingsSchema = z.object({
-  fontFamily: z.union([z.literal("Inter"), z.literal("Source Serif 4")]),
+  fontFamily: z.enum(FONT_FAMILY_IDS),
   fontSize: finite.min(4).max(200),
   minFontSize: finite.min(4).max(200),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),

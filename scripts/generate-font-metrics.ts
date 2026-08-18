@@ -2,27 +2,20 @@ import { readFile, writeFile } from "node:fs/promises"
 
 import fontkit from "@pdf-lib/fontkit"
 
-const fonts = [
-  ["Inter-normal-normal", "assets/fonts/Inter-Regular.ttf"],
-  ["Inter-normal-bold", "assets/fonts/Inter-Bold.ttf"],
-  ["Inter-italic-normal", "assets/fonts/Inter-Italic.ttf"],
-  ["Inter-italic-bold", "assets/fonts/Inter-BoldItalic.ttf"],
-  ["Source Serif 4-normal-normal", "assets/fonts/SourceSerif4-Regular-Print.ttf"],
-  ["Source Serif 4-normal-bold", "assets/fonts/SourceSerif4-Bold-Print.ttf"],
-  ["Source Serif 4-italic-normal", "assets/fonts/SourceSerif4-Italic-Print.ttf"],
-  ["Source Serif 4-italic-bold", "assets/fonts/SourceSerif4-BoldItalic-Print.ttf"],
-] as const
+import { FONT_CUT_FILES } from "../src/domain/fonts.ts"
 
+// Advance widths for every bundled static cut. `src/domain/text-layout.ts` uses
+// them to break lines identically in the browser preview and the PDF renderer.
 const generated = Object.fromEntries(
   await Promise.all(
-    fonts.map(async ([key, path]) => {
+    Object.entries(FONT_CUT_FILES).map(async ([cut, path]) => {
       const font = fontkit.create(await readFile(path))
       const advances: Record<number, number> = {}
-      for (const range of font.characterSet) {
-        advances[range] = font.glyphForCodePoint(range).advanceWidth
+      for (const codePoint of font.characterSet) {
+        advances[codePoint] = font.glyphForCodePoint(codePoint).advanceWidth
       }
       return [
-        key,
+        cut,
         {
           unitsPerEm: font.unitsPerEm,
           fallbackAdvance: font.glyphForCodePoint(0).advanceWidth,

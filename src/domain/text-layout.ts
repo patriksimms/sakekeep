@@ -1,4 +1,5 @@
 import { FONT_METRICS } from "./font-metrics.generated.ts"
+import { fontCut } from "./fonts.ts"
 import { POINT_TO_MM } from "./layout-rendering.ts"
 import {
   type FontWeight,
@@ -8,8 +9,6 @@ import {
   type SubmissionAnswer,
   type TextSettings,
 } from "./types.ts"
-
-type FontKey = keyof typeof FONT_METRICS
 
 export interface TextLayoutRun {
   text: string
@@ -58,12 +57,8 @@ export function textRunsForElement(
   return [...(label ? [{ text: label, fontWeight: "bold" as const }] : []), { text: value }]
 }
 
-function fontKey(settings: TextSettings, weight: FontWeight): FontKey {
-  return `${settings.fontFamily}-${settings.fontStyle}-${weight}`
-}
-
 function textWidthMm(text: string, settings: TextSettings, weight: FontWeight, size: number) {
-  const metrics = FONT_METRICS[fontKey(settings, weight)]
+  const metrics = FONT_METRICS[fontCut(settings.fontFamily, settings.fontStyle, weight)]
   let advance = 0
   for (const character of text) {
     const codePoint = character.codePointAt(0)!

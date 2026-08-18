@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
-import { completeForm, cycleSettings } from "../test/fixtures.ts"
+import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
 
 describe("PDF renderer", () => {
   it("emits individual A5 landscape pages with bleed, fonts, and output intent", async () => {
@@ -50,5 +50,45 @@ describe("PDF renderer", () => {
       assetResolutionCount: 0,
       assetPlacements: [],
     })
+  })
+
+  it("embeds only the font cuts the book uses", async () => {
+    const layout = layoutFixture()
+    layout.schema.elements = layout.schema.elements.map((element) =>
+      element.type === "bound-text"
+        ? { ...element, text: { ...element.text, fontFamily: "Caveat" as const } }
+        : element
+    )
+    const submission = submissionFixture("10000000-0000-4000-8000-000000000002", 1)
+    const bytes = await renderBookPdf({
+      book: {
+        projectId: layout.projectId,
+        settings: cycleSettings,
+        pages: [
+          {
+            id: `submission:${submission.id}`,
+            kind: "submission" as const,
+            submissionId: submission.id,
+            layoutId: layout.id,
+            problems: [],
+          },
+        ],
+        sourceFingerprint: "font-test",
+        generatedAt: "2026-07-18T00:00:00.000Z",
+        updatedAt: "2026-07-18T00:00:00.000Z",
+      },
+      layouts: [layout],
+      submissions: [submission],
+      form: completeForm,
+      marks: false,
+    })
+
+    const raw = Buffer.from(bytes).toString("latin1")
+    const embedded = new Set(
+      [...raw.matchAll(/\/BaseFont\s*\/([A-Za-z0-9+-]+)/g)].map((match) => match[1])
+    )
+    // The regular and bold cut of the family in use, and nothing else.
+    expect(embedded.size).toBe(2)
+    expect([...embedded].every((name) => name.includes("Caveat"))).toBe(true)
   })
 })
