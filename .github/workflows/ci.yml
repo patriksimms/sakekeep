@@ -28,6 +28,9 @@ jobs:
         with:
           bun-version: 1.3.9
       - run: bun install --frozen-lockfile
+      # docker compose creates missing bind-mount targets as root, which would leave the ignored
+      # .local/ tree unwritable for later steps such as setup:icc.
+      - run: mkdir -p .local/media .local/rustfs-logs
       - run: docker compose up -d --wait
       - run: bun run setup:icc
       - run: bun run db:migrate
