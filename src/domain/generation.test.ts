@@ -185,6 +185,63 @@ describe("book generation", () => {
     )
   })
 
+  it.each([
+    "static-text",
+    "image-frame",
+    "gallery-frame",
+    "rectangle",
+    "circle",
+    "line",
+    "decorative-image",
+  ] as const)("warns when a %s extends beyond the bleed boundary", (type) => {
+    const layout = layoutFixture()
+    layout.schema = addElement(
+      layout.schema,
+      type,
+      type === "image-frame" || type === "gallery-frame" ? "photos" : undefined
+    )
+    const element = layout.schema.elements.at(-1)!
+    element.geometry = { ...element.geometry, x: -4 }
+
+    expect(
+      inspectSubmissionPage(
+        "page",
+        layout,
+        submissionFixture(submissionIds[0]!, 1),
+        completeForm,
+        []
+      )
+    ).toContainEqual(
+      expect.objectContaining({
+        code: "outside-print-area",
+        elementId: element.id,
+        blocking: false,
+      })
+    )
+  })
+
+  it("keeps question-bound text beyond the bleed boundary blocking", () => {
+    const layout = layoutFixture()
+    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+    element.geometry = { ...element.geometry, x: -4 }
+
+    expect(
+      inspectSubmissionPage(
+        "page",
+        layout,
+        submissionFixture(submissionIds[0]!, 1),
+        completeForm,
+        []
+      )
+    ).toContainEqual(
+      expect.objectContaining({
+        code: "outside-print-area",
+        elementId: element.id,
+        blocking: true,
+      })
+    )
+  })
+
   it("distinguishes repeated text bounding boxes bound to the same question", () => {
     const layout = layoutFixture()
     const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
