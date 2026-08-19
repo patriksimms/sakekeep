@@ -20,7 +20,7 @@ jobs:
       VITE_CLERK_PUBLISHABLE_KEY: pk_test_c2FrZWtlZXAuY2xlcmsuYWNjb3VudHMk
       CLERK_SECRET_KEY: sk_test_sakekeep_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 26
