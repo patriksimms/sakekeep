@@ -23,15 +23,18 @@ import {
 
 import { effectivePpi } from "../domain/generation"
 import { gallerySlots, PAGE_SPEC } from "../domain/layout"
+import {
+  assignPhotosToFrames,
+  framePhotos,
+  type PhotoAssignment,
+} from "../domain/photo-assignment.ts"
 import { layoutText, textRunsForElement, type TextLayoutRun } from "../domain/text-layout.ts"
 import {
   type BookPage,
   type FormSchema,
   type GeneratedBook,
-  type ImageAnswer,
   type LayoutElement,
   type LayoutRecord,
-  type SubmissionAnswer,
   type SubmissionSummary,
   type TextSettings,
 } from "../domain/types"
@@ -88,13 +91,6 @@ async function embedImage(pdf: PDFDocument, assetId: string): Promise<PDFImage> 
   const asset = await getAsset(assetId)
   const source = await getObject(asset.objectKey)
   return asset.mimeType === "image/png" ? pdf.embedPng(source.body) : pdf.embedJpg(source.body)
-}
-
-function answerImages(answer: SubmissionAnswer | undefined): ImageAnswer[] {
-  if (!Array.isArray(answer)) return []
-  return answer.filter(
-    (item): item is ImageAnswer => typeof item === "object" && item !== null && "assetId" in item
-  )
 }
 
 function drawCroppedImage(
@@ -183,6 +179,7 @@ async function drawElement(input: {
   pageId: string
   element: LayoutElement
   submission: SubmissionSummary
+  photoAssignment: PhotoAssignment
   form: FormSchema
   fonts: EmbeddedFonts
   assetResolutions: AssetResolutionMetadata[]
@@ -269,10 +266,10 @@ async function drawElement(input: {
     return
   }
 
-  const images = answerImages(input.submission.answers[element.questionId])
-  if (images.length === 0) return
+  const images = framePhotos(input.photoAssignment, element.id)
   if (element.type === "image-frame") {
-    const image = images[0]!
+    const image = images[0]
+    if (!image) return
     const embeddedImage = await embedImage(input.pdf, image.assetId)
     input.assetResolutions.push({
       assetId: image.assetId,
@@ -294,8 +291,9 @@ async function drawElement(input: {
   }
   const slots = gallerySlots(element.arrangement, geometry.width, geometry.height, element.gap)
   await Promise.all(
-    images.slice(0, slots.length).map(async (image, index) => {
-      const slot = slots[index]!
+    slots.map(async (slot, index) => {
+      const image = images[index]
+      if (!image) return
       const embeddedImage = await embedImage(input.pdf, image.assetId)
       input.assetResolutions.push({
         assetId: image.assetId,
@@ -546,6 +544,7 @@ export async function renderBookPdf(input: {
         height: pt(PAGE_SPEC.mediaHeightMm),
         color: color(layout.schema.background),
       })
+      const photoAssignment = assignPhotosToFrames(layout.schema.elements, submission.answers)
       for (const element of layout.schema.elements) {
         await drawElement({
           pdf,
@@ -553,6 +552,7 @@ export async function renderBookPdf(input: {
           pageId: bookPage.id,
           element,
           submission,
+          photoAssignment,
           form: input.form,
           fonts,
           assetResolutions,
@@ -573,6 +573,7 @@ export async function inspectPdf(bytes: Uint8Array): Promise<{
   pdfxMetadata: boolean
   assetResolutionMetadata: boolean
   assetResolutionCount: number
+  assetPlacements: Array<{ assetId: string; elementId: string }>
 }> {
   const document = await PDFDocument.load(bytes)
   const tolerance = 0.2
@@ -591,11 +592,15 @@ export async function inspectPdf(bytes: Uint8Array): Promise<{
   })
   const raw = Buffer.from(bytes).toString("latin1")
   const assetResolutions = document.catalog.lookup(PDFName.of("SakekeepAssetResolutions"))
+  const assetResolutionEntries =
+    assetResolutions instanceof PDFArray
+      ? Array.from({ length: assetResolutions.size() }, (_, index) =>
+          assetResolutions.lookup(index)
+        )
+      : []
   const assetResolutionMetadata =
     assetResolutions instanceof PDFArray &&
-    Array.from({ length: assetResolutions.size() }, (_, index) =>
-      assetResolutions.lookup(index)
-    ).every(
+    assetResolutionEntries.every(
       (entry) =>
         entry instanceof PDFDict &&
         entry.has(PDFName.of("AssetID")) &&
@@ -615,6 +620,15 @@ export async function inspectPdf(bytes: Uint8Array): Promise<{
       /\/OutputIntents\b/.test(raw) && /\/GTS_PDFX\b/.test(raw) && /FOGRA51/.test(raw),
     pdfxMetadata: /GTS_PDFXVersion/.test(raw) && /PDF\/X-4/.test(raw),
     assetResolutionMetadata,
-    assetResolutionCount: assetResolutions instanceof PDFArray ? assetResolutions.size() : 0,
+    assetResolutionCount: assetResolutionEntries.length,
+    // Which photo the export actually placed in which frame, so distribution is verifiable
+    // from the produced PDF rather than only from the renderer's inputs.
+    assetPlacements: assetResolutionEntries.flatMap((entry) => {
+      if (!(entry instanceof PDFDict)) return []
+      const assetId = entry.lookup(PDFName.of("AssetID"))
+      const elementId = entry.lookup(PDFName.of("ElementID"))
+      if (!(assetId instanceof PDFString) || !(elementId instanceof PDFString)) return []
+      return [{ assetId: assetId.asString(), elementId: elementId.asString() }]
+    }),
   }
 }
