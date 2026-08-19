@@ -28,6 +28,8 @@ jobs:
         with:
           bun-version: 1.3.9
       - run: bun install --frozen-lockfile
+      # Before compose: its bind mounts create .local/ as root, which would then
+      # keep the runner from writing the ICC profile into it.
       - run: bun run setup:icc
       - run: docker compose up -d --wait
       - run: bun run db:migrate
