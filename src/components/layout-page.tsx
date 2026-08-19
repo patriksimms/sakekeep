@@ -1,6 +1,13 @@
+import { useMemo } from "react"
+
 import { gallerySlots } from "#/domain/layout.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
+import {
+  assignPhotosToFrames,
+  framePhotos,
+  type PhotoAssignment,
+} from "#/domain/photo-assignment.ts"
 import {
   canonicalToPercentageGeometry,
   millimetresToContainerWidth,
@@ -12,7 +19,6 @@ import {
   type ImageAnswer,
   type LayoutElement,
   type LayoutSchema,
-  type SubmissionAnswer,
   type SubmissionSummary,
 } from "#/domain/types.ts"
 
@@ -21,13 +27,6 @@ export interface LayoutPageContent {
   submission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
   decorativePlaceholderUrl?: string
-}
-
-function answerImages(answer: SubmissionAnswer | undefined): ImageAnswer[] {
-  if (!Array.isArray(answer)) return []
-  return answer.filter(
-    (item): item is ImageAnswer => typeof item === "object" && item !== null && "assetId" in item
-  )
 }
 
 function elementStyle(element: LayoutElement): React.CSSProperties {
@@ -76,12 +75,14 @@ function imagePosition(
 function ElementContent({
   element,
   content,
+  photoAssignment,
   showEditorPlaceholders,
   editingElementId,
   selectedElementId,
 }: {
   element: LayoutElement
   content: LayoutPageContent
+  photoAssignment: PhotoAssignment
   showEditorPlaceholders: boolean
   editingElementId?: string
   selectedElementId?: string
@@ -234,7 +235,7 @@ function ElementContent({
   }
 
   if (element.type !== "image-frame" && element.type !== "gallery-frame") return null
-  const images = answerImages(content.submission?.answers[element.questionId])
+  const images = framePhotos(photoAssignment, element.id)
   if (element.type === "image-frame") {
     const image = images[0]
     return (
@@ -323,6 +324,10 @@ export function LayoutPageElements({
   editingElementId?: string
   selectedElementId?: string
 }) {
+  const photoAssignment = useMemo(
+    () => assignPhotosToFrames(schema.elements, content.submission?.answers ?? {}),
+    [schema.elements, content.submission]
+  )
   return (
     <div
       className="pointer-events-none absolute inset-0"
@@ -334,6 +339,7 @@ export function LayoutPageElements({
           key={element.id}
           element={element}
           content={content}
+          photoAssignment={photoAssignment}
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
           selectedElementId={selectedElementId}
