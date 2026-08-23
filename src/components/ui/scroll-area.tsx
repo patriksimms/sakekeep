@@ -11,9 +11,13 @@ function ScrollArea({ className, children, ...props }: ScrollAreaPrimitive.Root.
       className={cn("relative", className)}
       {...props}
     >
+      {/*
+        `max-h-[inherit]` picks up a `max-h-*` set on the root. Without it the viewport grows to its
+        content height, so the overflow is clipped by the surrounding card instead of scrolling.
+      */}
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className="size-full max-h-[inherit] rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
