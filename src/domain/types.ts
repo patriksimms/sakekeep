@@ -1,3 +1,5 @@
+import { type FontFamily } from "./fonts.ts"
+
 export const FORM_SCHEMA_VERSION = 1 as const
 export const LAYOUT_SCHEMA_VERSION = 1 as const
 
@@ -93,7 +95,7 @@ export interface LayoutElementBase {
 }
 
 export interface TextSettings {
-  fontFamily: "Inter" | "Source Serif 4"
+  fontFamily: FontFamily
   fontSize: number
   minFontSize: number
   color: string

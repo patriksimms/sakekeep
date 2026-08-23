@@ -2,6 +2,7 @@ import { Canvas, FabricObject, IText, Rect, Textbox } from "fabric"
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
 import { LayoutPageElements, textElementStyle } from "#/components/layout-page.tsx"
+import { cssFontStack } from "#/domain/fonts.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
@@ -207,7 +208,7 @@ export function objectForElement(
           {
             ...common,
             editable: true,
-            fontFamily: element.text.fontFamily,
+            fontFamily: cssFontStack(element.text.fontFamily),
             fontSize: element.text.fontSize * 0.3528 * (canvasWidth / PAGE_SPEC.mediaWidthMm),
             fontStyle: element.text.fontStyle,
             fontWeight: element.text.fontWeight,

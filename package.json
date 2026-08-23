@@ -24,6 +24,8 @@
     "storage:cleanup": "bun run scripts/cleanup-orphans.ts",
     "smoke:production": "bun run scripts/smoke-production.ts",
     "setup:icc": "bun run scripts/fetch-icc.ts",
+    "fonts:build": "uvx --from \"fonttools[woff]\" python scripts/build-print-fonts.py",
+    "fonts:metrics": "bun run scripts/generate-font-metrics.ts",
     "setup": "bun install && bun run setup:icc && bun run services:up && bun run db:migrate && bun run db:seed",
     "services:up": "docker compose up -d --wait",
     "services:down": "docker compose down",

@@ -22,6 +22,7 @@ import {
 } from "pdf-lib"
 
 import { effectivePpi } from "../domain/generation"
+import { FONT_CUT_FILES, fontCut, type FontCut } from "../domain/fonts.ts"
 import { gallerySlots, PAGE_SPEC } from "../domain/layout"
 import {
   assignPhotosToFrames,
@@ -43,17 +44,14 @@ import { getObject } from "./object-store"
 import { getAsset } from "./repository"
 
 const POINTS_PER_MM = 72 / 25.4
-type EmbeddedFonts = Record<
-  | "Inter-normal-normal"
-  | "Inter-normal-bold"
-  | "Inter-italic-normal"
-  | "Inter-italic-bold"
-  | "Source Serif 4-normal-normal"
-  | "Source Serif 4-normal-bold"
-  | "Source Serif 4-italic-normal"
-  | "Source Serif 4-italic-bold",
-  PDFFont
->
+// Only the cuts a book actually uses are embedded, so adding families to the
+// picker does not grow every exported PDF.
+type EmbeddedFonts = Partial<Record<FontCut, PDFFont>>
+
+// Standalone cover and divider pages are rendered by the exporter itself rather
+// than by a layout, so their typography is fixed.
+const STANDALONE_TITLE_CUT = "SourceSerif4-Bold" satisfies FontCut
+const STANDALONE_BODY_CUT = "Inter-Regular" satisfies FontCut
 
 interface AssetResolutionMetadata {
   assetId: string
@@ -66,8 +64,10 @@ interface AssetResolutionMetadata {
   effectivePpi: number
 }
 
-function fontKey(settings: TextSettings, weight = settings.fontWeight): keyof EmbeddedFonts {
-  return `${settings.fontFamily}-${settings.fontStyle}-${weight}`
+function embeddedFont(fonts: EmbeddedFonts, cut: FontCut): PDFFont {
+  const font = fonts[cut]
+  if (!font) throw new HttpError(500, `The font cut ${cut} was not embedded for this book.`)
+  return font
 }
 
 function pt(mm: number): number {
@@ -165,7 +165,10 @@ function drawTextElement(input: {
       x: pt(PAGE_SPEC.bleedMm + input.geometry.x) + offset,
       y: top - lineHeight * (index + 1),
       size,
-      font: input.fonts[fontKey(input.settings, line.fontWeight)],
+      font: embeddedFont(
+        input.fonts,
+        fontCut(input.settings.fontFamily, input.settings.fontStyle, line.fontWeight)
+      ),
       color: color(input.settings.color),
       opacity: input.opacity,
       rotate: degrees(-input.geometry.rotation),
@@ -448,6 +451,37 @@ function standaloneText(page: BookPage): { title: string; body: string } {
   return { title: page.title, body: page.body }
 }
 
+/** Every static cut the book needs, including the bold cut used for labels. */
+function requiredCuts(book: GeneratedBook, layouts: Map<string, LayoutRecord>): Set<FontCut> {
+  const cuts = new Set<FontCut>()
+  for (const bookPage of book.pages) {
+    if (bookPage.kind === "standalone") {
+      if (bookPage.pageType === "blank") continue
+      cuts.add(STANDALONE_TITLE_CUT)
+      cuts.add(STANDALONE_BODY_CUT)
+      continue
+    }
+    for (const element of layouts.get(bookPage.layoutId)?.schema.elements ?? []) {
+      if (element.type !== "bound-text" && element.type !== "static-text") continue
+      cuts.add(fontCut(element.text.fontFamily, element.text.fontStyle, "normal"))
+      cuts.add(fontCut(element.text.fontFamily, element.text.fontStyle, "bold"))
+    }
+  }
+  return cuts
+}
+
+// Keep complete fonts embedded: fontkit's subset encoder can drop glyphs from
+// mixed layout pages.
+async function embedFonts(pdf: PDFDocument, cuts: Set<FontCut>): Promise<EmbeddedFonts> {
+  const embedded = await Promise.all(
+    [...cuts].map(async (cut) => {
+      const bytes = await readFile(resolve(FONT_CUT_FILES[cut]))
+      return [cut, await pdf.embedFont(bytes, { subset: false })] as const
+    })
+  )
+  return Object.fromEntries(embedded)
+}
+
 export async function renderBookPdf(input: {
   book: GeneratedBook
   layouts: LayoutRecord[]
@@ -464,40 +498,14 @@ export async function renderBookPdf(input: {
       "The verified PSO Coated v3 profile is missing. Run `bun run setup:icc` and try again."
     )
   }
-  const fontBytes = await Promise.all([
-    readFile(resolve("assets/fonts/Inter-Regular.ttf")),
-    readFile(resolve("assets/fonts/Inter-Bold.ttf")),
-    readFile(resolve("assets/fonts/Inter-Italic.ttf")),
-    readFile(resolve("assets/fonts/Inter-BoldItalic.ttf")),
-    readFile(resolve("assets/fonts/SourceSerif4-Regular-Print.ttf")),
-    readFile(resolve("assets/fonts/SourceSerif4-Bold-Print.ttf")),
-    readFile(resolve("assets/fonts/SourceSerif4-Italic-Print.ttf")),
-    readFile(resolve("assets/fonts/SourceSerif4-BoldItalic-Print.ttf")),
-  ])
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   pdf.setTitle("Sakekeep friend book")
   pdf.setCreator("Sakekeep local prototype")
   pdf.setProducer("Sakekeep / pdf-lib")
-  // Static instances are generated from the OFL variable sources. Source Serif
-  // print instances omit optional positioning tables that fontkit encodes with
-  // malformed spacing. Keep complete fonts embedded: fontkit's subset encoder
-  // can drop glyphs from mixed layout pages.
-  const embedded = await Promise.all(
-    fontBytes.map((bytes) => pdf.embedFont(bytes, { subset: false }))
-  )
-  const fonts: EmbeddedFonts = {
-    "Inter-normal-normal": embedded[0]!,
-    "Inter-normal-bold": embedded[1]!,
-    "Inter-italic-normal": embedded[2]!,
-    "Inter-italic-bold": embedded[3]!,
-    "Source Serif 4-normal-normal": embedded[4]!,
-    "Source Serif 4-normal-bold": embedded[5]!,
-    "Source Serif 4-italic-normal": embedded[6]!,
-    "Source Serif 4-italic-bold": embedded[7]!,
-  }
   const layouts = new Map(input.layouts.map((layout) => [layout.id, layout]))
   const submissions = new Map(input.submissions.map((submission) => [submission.id, submission]))
+  const fonts = await embedFonts(pdf, requiredCuts(input.book, layouts))
   const assetResolutions: AssetResolutionMetadata[] = []
 
   for (const bookPage of input.book.pages) {
@@ -517,16 +525,17 @@ export async function renderBookPdf(input: {
           x: pt(18),
           y: pt(100),
           size: 30,
-          font: fonts["Source Serif 4-normal-bold"],
+          font: embeddedFont(fonts, STANDALONE_TITLE_CUT),
           color: color("#292524"),
         })
-        const lines = wrapText(content.body, fonts["Inter-normal-normal"], 12, pt(170))
+        const bodyFont = embeddedFont(fonts, STANDALONE_BODY_CUT)
+        const lines = wrapText(content.body, bodyFont, 12, pt(170))
         lines.slice(0, 12).forEach((line, index) => {
           page.drawText(line, {
             x: pt(18),
             y: pt(86) - index * 16,
             size: 12,
-            font: fonts["Inter-normal-normal"],
+            font: bodyFont,
             color: color("#57534e"),
           })
         })

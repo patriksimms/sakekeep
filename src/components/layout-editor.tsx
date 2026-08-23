@@ -78,6 +78,7 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select.tsx"
@@ -90,6 +91,7 @@ import {
   moveElementLayer,
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
+import { cssFontStack, FONT_FAMILIES, FONT_FAMILY_GROUPS, type FontFamily } from "#/domain/fonts.ts"
 import { BACKGROUND_PRESETS, type BackgroundPreset } from "#/domain/layout-backgrounds.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
@@ -289,6 +291,15 @@ function PaletteAction({
   )
 }
 
+/**
+ * Handwriting faces such as Caveat ship no italic cut, so switching to one
+ * drops italic instead of silently rendering upright text.
+ */
+function withFontFamily(settings: TextSettings, fontFamily: FontFamily): TextSettings {
+  const hasItalic = FONT_FAMILIES[fontFamily].hasItalic
+  return { ...settings, fontFamily, fontStyle: hasItalic ? settings.fontStyle : "normal" }
+}
+
 function TextSettingsEditor({
   settings,
   onChange,
@@ -302,21 +313,26 @@ function TextSettingsEditor({
         <FieldLabel>Font family</FieldLabel>
         <Select
           value={settings.fontFamily}
-          onValueChange={(value) =>
-            onChange({
-              ...settings,
-              fontFamily: value as TextSettings["fontFamily"],
-            })
-          }
+          onValueChange={(value) => onChange(withFontFamily(settings, value as FontFamily))}
         >
           <SelectTrigger className="w-full" aria-label="Font family">
-            <SelectValue />
+            <SelectValue style={{ fontFamily: cssFontStack(settings.fontFamily) }} />
           </SelectTrigger>
           <SelectContent>
-            <SelectGroup>
-              <SelectItem value="Inter">Inter</SelectItem>
-              <SelectItem value="Source Serif 4">Source Serif 4</SelectItem>
-            </SelectGroup>
+            {FONT_FAMILY_GROUPS.map((group) => (
+              <SelectGroup key={group.category}>
+                <SelectLabel>{group.category}</SelectLabel>
+                {group.families.map((family) => (
+                  <SelectItem
+                    key={family}
+                    value={family}
+                    style={{ fontFamily: cssFontStack(family) }}
+                  >
+                    {family}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
           </SelectContent>
         </Select>
       </Field>
@@ -359,7 +375,9 @@ function TextSettingsEditor({
             <SelectContent>
               <SelectGroup>
                 <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="italic">Italic</SelectItem>
+                <SelectItem value="italic" disabled={!FONT_FAMILIES[settings.fontFamily].hasItalic}>
+                  Italic
+                </SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>

@@ -27,3 +27,19 @@ d84494ac7477384795500d8b75f4d71a7e7d7e34886b4d0d76651f5221cf2903  SourceSerif4-R
 140f0571a6e30d67ceb87d47e41f279f661c5fef4667b36c39cc2951f1c3e207  SourceSerif4-Italic-Print.ttf
 9ead09fbc69be4b745588b1a5d78904e8d25070cdd457e3d1999c5eeb37b05f9  SourceSerif4-BoldItalic-Print.ttf
 ```
+
+## Derived families
+
+`Playfair Display`, `Lora`, `EB Garamond`, `Montserrat`, `Nunito`, and `Caveat`
+are built by `bun run fonts:build` (see `scripts/build-print-fonts.py`, which
+needs `uvx`). The script pulls the pinned OFL variable programs from
+[github.com/google/fonts](https://github.com/google/fonts), instances the 400
+and 700 cuts, drops `GSUB`/`GPOS`/`kern`, and writes both the print TTF here and
+the matching `public/fonts/*.woff2` served to the browser. Nothing is fetched
+from Google at runtime. `assets/fonts/checksums.json` pins the resulting print
+instances; `bun run fonts:metrics` regenerates the advance-width tables.
+
+Caveat ships no italic program upstream, so its italic setting resolves to the
+upright cuts and the layout editor hides the italic option for it. The full
+family list, including which cut serves which style and weight, lives in
+`src/domain/fonts.ts`.

@@ -13,6 +13,7 @@ import {
   millimetresToContainerWidth,
   pointsToContainerWidth,
 } from "#/domain/layout-rendering.ts"
+import { cssFontStack } from "#/domain/fonts.ts"
 import { layoutText, textRunsForElement } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
@@ -51,7 +52,7 @@ export function textElementStyle(
   return {
     ...elementStyle(element),
     color: element.text.color,
-    fontFamily: element.text.fontFamily === "Inter" ? "Inter Variable" : "Source Serif 4 Variable",
+    fontFamily: cssFontStack(element.text.fontFamily),
     fontKerning: "none",
     fontSize: pointsToContainerWidth(effectiveFontSize),
     fontStyle: element.text.fontStyle,
