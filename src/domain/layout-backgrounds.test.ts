@@ -28,21 +28,20 @@ describe("layout background presets", () => {
     const second = backgroundSchema("geometric-collage")
 
     expect(first.background).toBe("#fbf3e7")
-    expect(first.elements).toHaveLength(20)
+    expect(first.elements).toHaveLength(13)
     expect(first.elements.every(({ locked }) => locked)).toBe(true)
-    expect(first.elements.map(({ type }) => type)).toContain("line")
     expect(first.elements[0]).toMatchObject({
       type: "rectangle",
       fill: "#cddfd7",
-      geometry: { x: -3, y: -3, width: 57, height: 154 },
+      geometry: { x: -3, y: -3, width: 72, height: 154 },
     })
     expect(first.elements.map(({ id }) => id)).not.toEqual(second.elements.map(({ id }) => id))
   })
 
-  // Rotation is intentionally avoided in the newer presets: the browser rotates around an
+  // Rotation is intentionally avoided in every decorated preset: the browser rotates around an
   // element's top-left corner and the PDF export around its bottom-left, so a rotated preset
   // would not print the way it previews.
-  it.each(["sunset-arches", "postcard-frame"] as const)(
+  it.each(["geometric-collage", "sunset-arches", "postcard-frame"] as const)(
     "keeps %s axis-aligned and inside the printable media area",
     (presetId) => {
       const { elements } = backgroundSchema(presetId)
