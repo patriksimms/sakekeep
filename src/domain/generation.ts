@@ -3,15 +3,21 @@ import {
   type FormSchema,
   type GeneratedBook,
   type GenerationSettings,
-  type ImageAnswer,
   type LayoutElement,
   type LayoutRecord,
   type PageProblem,
-  type SubmissionAnswers,
   type SubmissionBookPage,
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
+import { questionPrompt } from "./layout-question-palette.ts"
+import {
+  assignPhotosToFrames,
+  framePhotos,
+  isPhotoFrame,
+  type PhotoFrameElement,
+  type QuestionPhotoAssignment,
+} from "./photo-assignment.ts"
 import { layoutText, textRunsForElement, type TextLayoutResult } from "./text-layout.ts"
 
 function hashString(value: string): number {
@@ -125,15 +131,16 @@ function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<stri
   )
 }
 
-function imagesForElement(
-  element: Extract<LayoutElement, { type: "image-frame" | "gallery-frame" }>,
-  answers: SubmissionAnswers
-): ImageAnswer[] {
-  const answer = answers[element.questionId]
-  if (!Array.isArray(answer)) return []
-  return answer.filter(
-    (item): item is ImageAnswer =>
-      typeof item === "object" && item !== null && "assetId" in item && "width" in item
+/** Slot rectangles a frame prints into, in canonical millimetres relative to the frame. */
+function frameSlots(element: PhotoFrameElement): Array<{ width: number; height: number }> {
+  if (element.type === "image-frame") {
+    return [{ width: element.geometry.width, height: element.geometry.height }]
+  }
+  return gallerySlots(
+    element.arrangement,
+    element.geometry.width,
+    element.geometry.height,
+    element.gap
   )
 }
 
@@ -142,18 +149,33 @@ function problem(
   code: PageProblem["code"],
   message: string,
   blocking: boolean,
-  elementId?: string,
-  assetId?: string
+  scope: { elementId?: string; assetId?: string; key?: string } = {}
 ): PageProblem {
   return {
-    id: `${pageId}:${elementId ?? "page"}:${assetId ?? code}:${code}`,
+    id: `${pageId}:${scope.elementId ?? "page"}:${scope.key ?? scope.assetId ?? code}:${code}`,
     code,
     pageId,
-    elementId,
-    assetId,
+    elementId: scope.elementId,
+    assetId: scope.assetId,
     message,
     blocking,
   }
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`
+}
+
+function photoSlotMessage(
+  prompt: string,
+  response: number,
+  question: QuestionPhotoAssignment
+): string {
+  const capacity = `The layout has ${plural(question.slotCount, "photo slot")} for ${plural(question.photoCount, "uploaded photo")}.`
+  if (question.unplacedPhotoCount > 0) {
+    return `${plural(question.unplacedPhotoCount, "photo")} for "${prompt}" ${question.unplacedPhotoCount === 1 ? "is" : "are"} not shown on Response ${response}. ${capacity}`
+  }
+  return `${plural(question.emptySlotCount, "photo slot")} for "${prompt}" ${question.emptySlotCount === 1 ? "stays" : "stay"} empty on Response ${response}. ${capacity}`
 }
 
 export function inspectSubmissionPage(
@@ -165,6 +187,7 @@ export function inspectSubmissionPage(
 ): PageProblem[] {
   const problems: PageProblem[] = []
   const overrides = new Set(resolutionOverrides)
+  const assignment = assignPhotosToFrames(layout.schema.elements, submission.answers)
   const problemNames = textProblemNames(layout.schema.elements, form)
   const requiredQuestions = new Map(
     form.questions
@@ -180,7 +203,7 @@ export function inspectSubmissionPage(
           "outside-print-area",
           "An element extends beyond the 3 mm bleed boundary.",
           element.type === "bound-text",
-          element.id
+          { elementId: element.id }
         )
       )
     } else if (isCriticalElementOutsideSafeArea(element)) {
@@ -190,7 +213,7 @@ export function inspectSubmissionPage(
           "outside-print-area",
           "Text or critical content is outside the 6 mm safe area.",
           true,
-          element.id
+          { elementId: element.id }
         )
       )
     }
@@ -202,7 +225,7 @@ export function inspectSubmissionPage(
           "empty-decorative-image",
           "A decorative image has no image selected and will be omitted from preview and export.",
           false,
-          element.id
+          { elementId: element.id }
         )
       )
     }
@@ -229,7 +252,7 @@ export function inspectSubmissionPage(
             "missing-required-answer",
             "A required answer used by this layout is missing.",
             true,
-            element.id
+            { elementId: element.id }
           )
         )
       }
@@ -248,42 +271,17 @@ export function inspectSubmissionPage(
               element.geometry.height
             ),
             !fit.fits,
-            element.id
+            { elementId: element.id }
           )
         )
       }
       continue
     }
 
-    if (element.type === "image-frame" || element.type === "gallery-frame") {
-      const images = imagesForElement(element, submission.answers)
-      if (images.length === 0) continue
-      const slots =
-        element.type === "image-frame"
-          ? [
-              {
-                width: element.geometry.width,
-                height: element.geometry.height,
-              },
-            ]
-          : gallerySlots(
-              element.arrangement,
-              element.geometry.width,
-              element.geometry.height,
-              element.gap
-            )
-      if (images.length > slots.length) {
-        problems.push(
-          problem(
-            pageId,
-            "gallery-overflow",
-            `${images.length - slots.length} image(s) do not fit in the configured gallery.`,
-            true,
-            element.id
-          )
-        )
-      }
-      images.slice(0, slots.length).forEach((image, index) => {
+    if (isPhotoFrame(element)) {
+      const slots = frameSlots(element)
+      framePhotos(assignment, element.id).forEach((image, index) => {
+        if (!image) return
         if (image.mimeType !== "image/jpeg" && image.mimeType !== "image/png") {
           problems.push(
             problem(
@@ -291,8 +289,7 @@ export function inspectSubmissionPage(
               "unsupported-asset",
               `${image.name} is not a supported print-master format.`,
               true,
-              element.id,
-              image.assetId
+              { elementId: element.id, assetId: image.assetId }
             )
           )
           return
@@ -306,8 +303,7 @@ export function inspectSubmissionPage(
               "image-blocking-resolution",
               `${image.name} has ${ppi} effective PPI; at least 150 PPI or an explicit override is required.`,
               true,
-              element.id,
-              image.assetId
+              { elementId: element.id, assetId: image.assetId }
             )
           )
         } else if (ppi < 300) {
@@ -317,13 +313,28 @@ export function inspectSubmissionPage(
               "image-low-resolution",
               `${image.name} has ${ppi} effective PPI; 300 PPI is recommended.`,
               false,
-              element.id,
-              image.assetId
+              { elementId: element.id, assetId: image.assetId }
             )
           )
         }
       })
     }
+  }
+
+  for (const question of assignment.questions) {
+    if (question.unplacedPhotoCount === 0 && question.emptySlotCount === 0) continue
+    const prompt = questionPrompt(
+      form.questions.find((candidate) => candidate.id === question.questionId)
+    )
+    problems.push(
+      problem(
+        pageId,
+        "photo-slot-mismatch",
+        photoSlotMessage(prompt, submission.sequence, question),
+        false,
+        { key: question.questionId }
+      )
+    )
   }
   return problems
 }
