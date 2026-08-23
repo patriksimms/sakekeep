@@ -146,7 +146,7 @@ test.describe.serial("critical local prototype workflows", () => {
 
     await expect(projectCard).toBeVisible()
     await projectCard.click({ position: { x: 20, y: 20 } })
-    await expect(page).toHaveURL(`/projects/${closedProjectId}`)
+    await expect(page).toHaveURL(`/projects/${closedProjectId}?tab=layouts`)
   })
 
   test("organizer creates, autosaves, reorders, and publishes every question type", async ({
@@ -204,9 +204,19 @@ test.describe.serial("critical local prototype workflows", () => {
         page.getByRole("heading", { name: "Publish this form permanently?" })
       ).toBeVisible()
       await page.getByRole("button", { name: "Publish forever" }).click()
-      await expect(page.getByRole("heading", { name: "Published form" })).toBeVisible()
-      await expect(page.getByText("collecting", { exact: true })).toBeVisible()
-      await expect(page.getByText("This revision is permanently frozen.")).toBeVisible()
+      await expect(page).toHaveURL(`/projects/${projectId}?tab=responses`)
+      await expect(page.getByRole("heading", { name: "Responses" })).toBeVisible()
+
+      await page.getByRole("button", { name: "Lock collection" }).click()
+      await expect(
+        page.getByRole("heading", { name: "Lock collection permanently?" })
+      ).toBeVisible()
+      await page.getByRole("button", { name: "Lock collection", exact: true }).last().click()
+      await expect(page).toHaveURL(`/projects/${projectId}?tab=layouts`)
+      await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
+        "aria-selected",
+        "true"
+      )
     } finally {
       await request.delete(`/api/projects/${projectId}`)
     }
@@ -832,7 +842,8 @@ test.describe.serial("critical local prototype workflows", () => {
     )
 
     await page.goto(`/projects/${closedProjectId}?tab=unknown`)
-    await expect(page.getByRole("tab", { name: "5. Export" })).toHaveAttribute(
+    await expect(page).toHaveURL(`/projects/${closedProjectId}?tab=layouts`)
+    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
       "aria-selected",
       "true"
     )
