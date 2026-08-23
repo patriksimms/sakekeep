@@ -15,6 +15,13 @@
       "when": 1785423332713,
       "tag": "20260730145532_watery_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787498017116,
+      "tag": "20260823151337_productive_doorman",
+      "breakpoints": true
     }
   ]
 }

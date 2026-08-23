@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 
 import { PagePreview } from "#/components/book-review.tsx"
 import { LayoutCanvas } from "#/components/layout-canvas.tsx"
+import { backgroundPresets } from "#/domain/layout-backgrounds.ts"
 import { DEFAULT_TEXT_SETTINGS } from "#/domain/layout.ts"
 import {
   FORM_SCHEMA_VERSION,
@@ -22,6 +23,9 @@ declare global {
 }
 
 export const Route = createFileRoute("/layout-parity")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    orientation: search.orientation === "portrait" ? ("portrait" as const) : undefined,
+  }),
   component: LayoutParityFixture,
 })
 
@@ -189,6 +193,8 @@ const project: Project = {
   shareUrl: null,
   submissionCount: 1,
   bookStatus: "current",
+  pageFormat: "a5",
+  pageOrientation: "landscape",
   layouts: [
     {
       id: "parity-layout",
@@ -207,10 +213,39 @@ const project: Project = {
   updatedAt: "2026-07-23T00:00:00.000Z",
 }
 
+const portraitSchema = backgroundPresets("a5", "portrait").find(
+  (preset) => preset.id === "geometric-collage"
+)!.schema
+
+const portraitProject: Project = {
+  ...project,
+  pageOrientation: "portrait",
+  layouts: [
+    {
+      ...project.layouts[0],
+      id: "portrait-layout",
+      name: "Geometric collage background",
+      schema: portraitSchema,
+    },
+  ],
+}
+
+const portraitPage: SubmissionBookPage = {
+  ...page,
+  id: "portrait-page",
+  layoutId: "portrait-layout",
+}
+
 function LayoutParityFixture() {
+  const { orientation } = Route.useSearch()
+  const isPortrait = orientation === "portrait"
+  const activeSchema = isPortrait ? portraitSchema : schema
+  const activeProject = isPortrait ? portraitProject : project
+  const activePage = isPortrait ? portraitPage : page
+  const pageWidth = isPortrait ? 432 : 648
   const decorativeAssetUrl = () => "/layout-parity-decor.svg"
   const canvasRef = useRef<Canvas | null>(null)
-  const [editorSchema, setEditorSchema] = useState(schema)
+  const [editorSchema, setEditorSchema] = useState(activeSchema)
   const [canvasKey, setCanvasKey] = useState(0)
 
   useEffect(() => {
@@ -230,7 +265,9 @@ function LayoutParityFixture() {
       <div>
         <h1 className="font-heading text-2xl">Editor / preview parity fixture</h1>
         <p className="text-sm text-muted-foreground">
-          Fixed schema, content, assets, fonts, viewport, and reduced motion.
+          {isPortrait
+            ? "A5 portrait decorative background, rendered by the editor and book preview."
+            : "Fixed schema, content, assets, fonts, viewport, and reduced motion."}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-6" data-testid="layout-parity-fixture">
@@ -239,12 +276,12 @@ function LayoutParityFixture() {
           <LayoutCanvas
             key={canvasKey}
             schema={editorSchema}
-            width={648}
+            width={pageWidth}
             selectedId={null}
             onSelect={() => undefined}
             onChange={setEditorSchema}
             canvasRef={canvasRef}
-            questions={project.formSchema.questions}
+            questions={activeProject.formSchema.questions}
             previewSubmission={submission}
             decorativeAssetUrl={decorativeAssetUrl}
             showGuides={false}
@@ -253,9 +290,9 @@ function LayoutParityFixture() {
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Book preview</h2>
           <PagePreview
-            page={page}
-            project={project}
-            className="w-[648px]"
+            page={activePage}
+            project={activeProject}
+            className={isPortrait ? "w-[432px]" : "w-[648px]"}
             decorativeAssetUrl={decorativeAssetUrl}
             showProblems={false}
           />

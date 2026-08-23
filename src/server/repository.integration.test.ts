@@ -15,6 +15,7 @@ import {
   getProject,
   listProjects,
   publishProject,
+  setProjectPageFormat,
   unarchiveProject,
   updateProject,
 } from "./repository.ts"
@@ -159,6 +160,88 @@ describe("repository state machine", () => {
       expect.objectContaining({ kind: "submission", layoutId: remainingLayout.id }),
     ])
     expect((await getProject(project.id)).bookStatus).toBe("current")
+  })
+
+  it("resizes same-orientation layouts and explicitly resets orientation changes", async () => {
+    const project = await createProject({ title: "Page formats" })
+    createdProjectIds.add(project.id)
+    await updateProject({
+      projectId: project.id,
+      formSchema: completeForm,
+      expectedRevision: 0,
+    })
+    await publishProject(project.id)
+    await createSubmissionRecord({
+      projectId: project.id,
+      idempotencyKey: crypto.randomUUID(),
+      answers: {
+        name: "Nora",
+        memory: "A memory",
+        role: ["friend"],
+        traits: ["kind"],
+      },
+      pendingAssets: [],
+    })
+    await closeProject(project.id)
+    const first = await createLayout(project.id, "Decorated", "geometric-collage")
+    const second = await createLayout(project.id, "Blank")
+    const settings = {
+      mode: "cycle" as const,
+      seed: "page-formats",
+      manualAssignments: {},
+      resolutionOverrides: [],
+    }
+    await generateProjectBook(project.id, settings)
+
+    const resized = await setProjectPageFormat({
+      projectId: project.id,
+      pageFormat: "a4",
+      pageOrientation: "landscape",
+    })
+    expect(resized).toMatchObject({
+      pageFormat: "a4",
+      pageOrientation: "landscape",
+      bookStatus: "stale",
+    })
+    expect(resized.layouts.map(({ id }) => id)).toEqual([first.id, second.id])
+    expect(resized.layouts[0]?.schema.trim).toEqual({ widthMm: 297, heightMm: 210 })
+    expect(resized.layouts[0]?.schema.elements[0]?.geometry.width).toBeGreaterThan(72)
+
+    await generateProjectBook(project.id, settings)
+    await expect(
+      setProjectPageFormat({
+        projectId: project.id,
+        pageFormat: "a4",
+        pageOrientation: "portrait",
+      })
+    ).rejects.toMatchObject({ status: 409, details: { layoutCount: 2 } })
+    expect(await getProject(project.id)).toMatchObject({
+      pageFormat: "a4",
+      pageOrientation: "landscape",
+      bookStatus: "current",
+    })
+
+    const reset = await setProjectPageFormat({
+      projectId: project.id,
+      pageFormat: "a4",
+      pageOrientation: "portrait",
+      resetLayouts: true,
+    })
+    expect(reset).toMatchObject({
+      pageFormat: "a4",
+      pageOrientation: "portrait",
+      bookStatus: "stale",
+      layouts: [
+        expect.objectContaining({
+          name: "Layout 1",
+          position: 0,
+          schema: expect.objectContaining({
+            trim: { widthMm: 210, heightMm: 297 },
+            elements: [],
+          }),
+        }),
+      ],
+    })
   })
 })
 

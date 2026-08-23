@@ -5,6 +5,8 @@ export const LAYOUT_SCHEMA_VERSION = 1 as const
 
 export type ProjectState = "draft" | "collecting" | "closed"
 export type BookStatus = "not-generated" | "current" | "stale"
+export type PageFormat = "a4" | "a5" | "a6"
+export type PageOrientation = "portrait" | "landscape"
 export type QuestionType = "single-line" | "multiline" | "radio" | "checkboxes" | "images"
 
 export interface BaseQuestion {
@@ -160,7 +162,7 @@ export type LayoutElement =
 
 export interface LayoutSchema {
   version: typeof LAYOUT_SCHEMA_VERSION
-  trim: { widthMm: 210; heightMm: 148 }
+  trim: { widthMm: number; heightMm: number }
   bleedMm: 3
   safeMarginMm: 6
   background: string
@@ -249,6 +251,8 @@ export interface Project {
   shareUrl: string | null
   submissionCount: number
   bookStatus: BookStatus
+  pageFormat: PageFormat
+  pageOrientation: PageOrientation
   layouts: LayoutRecord[]
   book: GeneratedBook | null
   submissions?: SubmissionSummary[]
@@ -264,6 +268,8 @@ export interface ProjectSummary {
   state: ProjectState
   submissionCount: number
   bookStatus: BookStatus
+  pageFormat: PageFormat
+  pageOrientation: PageOrientation
   archivedAt: string | null
   createdAt: string
   updatedAt: string
@@ -282,10 +288,10 @@ export interface ExportReport {
   sourceFingerprint: string
   generatedAt: string
   specification: {
-    standard: "DIN/ISO A5 landscape"
-    trimMm: [210, 148]
+    standard: string
+    trimMm: [number, number]
     bleedMm: 3
-    mediaBoxMm: [216, 154]
+    mediaBoxMm: [number, number]
     safeMarginMm: 6
     targetPpi: 300
     blockingPpi: 150

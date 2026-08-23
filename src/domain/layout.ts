@@ -9,15 +9,13 @@ import {
   type RelativeGeometry,
   type TextSettings,
 } from "./types"
+import {
+  pageSpecification,
+  pageSpecificationForLayout,
+  type PageSpecification,
+} from "./page-format.ts"
 
-export const PAGE_SPEC = {
-  trimWidthMm: 210,
-  trimHeightMm: 148,
-  bleedMm: 3,
-  safeMarginMm: 6,
-  mediaWidthMm: 216,
-  mediaHeightMm: 154,
-} as const
+export const PAGE_SPEC = pageSpecification()
 
 const finite = z.number().finite()
 const geometrySchema = z.object({
@@ -99,10 +97,14 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
 export const layoutSchemaValidator = z
   .object({
     version: z.literal(LAYOUT_SCHEMA_VERSION),
-    trim: z.object({
-      widthMm: z.literal(210),
-      heightMm: z.literal(148),
-    }),
+    trim: z.union([
+      z.object({ widthMm: z.literal(210), heightMm: z.literal(297) }),
+      z.object({ widthMm: z.literal(297), heightMm: z.literal(210) }),
+      z.object({ widthMm: z.literal(148), heightMm: z.literal(210) }),
+      z.object({ widthMm: z.literal(210), heightMm: z.literal(148) }),
+      z.object({ widthMm: z.literal(105), heightMm: z.literal(148) }),
+      z.object({ widthMm: z.literal(148), heightMm: z.literal(105) }),
+    ]),
     bleedMm: z.literal(3),
     safeMarginMm: z.literal(6),
     background: z.string(),
@@ -141,10 +143,17 @@ export const DEFAULT_TEXT_SETTINGS: TextSettings = {
   overflow: "flag",
 }
 
-export function emptyLayoutSchema(): LayoutSchema {
+export function emptyLayoutSchema(
+  format: import("./types.ts").PageFormat = "a5",
+  orientation: import("./types.ts").PageOrientation = "landscape"
+): LayoutSchema {
+  const specification = pageSpecification(format, orientation)
   return {
     version: LAYOUT_SCHEMA_VERSION,
-    trim: { widthMm: 210, heightMm: 148 },
+    trim: {
+      widthMm: specification.trimWidthMm,
+      heightMm: specification.trimHeightMm,
+    },
     bleedMm: 3,
     safeMarginMm: 6,
     background: "#fffdf7",
@@ -152,8 +161,12 @@ export function emptyLayoutSchema(): LayoutSchema {
   }
 }
 
-export function mmToCanvas(geometry: RelativeGeometry, editorWidth: number): RelativeGeometry {
-  const scale = editorWidth / PAGE_SPEC.trimWidthMm
+export function mmToCanvas(
+  geometry: RelativeGeometry,
+  editorWidth: number,
+  specification: PageSpecification = PAGE_SPEC
+): RelativeGeometry {
+  const scale = editorWidth / specification.trimWidthMm
   return {
     x: geometry.x * scale,
     y: geometry.y * scale,
@@ -163,8 +176,12 @@ export function mmToCanvas(geometry: RelativeGeometry, editorWidth: number): Rel
   }
 }
 
-export function canvasToMm(geometry: RelativeGeometry, editorWidth: number): RelativeGeometry {
-  const scale = PAGE_SPEC.trimWidthMm / editorWidth
+export function canvasToMm(
+  geometry: RelativeGeometry,
+  editorWidth: number,
+  specification: PageSpecification = PAGE_SPEC
+): RelativeGeometry {
+  const scale = specification.trimWidthMm / editorWidth
   return {
     x: geometry.x * scale,
     y: geometry.y * scale,
@@ -246,26 +263,32 @@ export function gallerySlots(
   }
 }
 
-export function elementExtendsBeyondBleed(element: LayoutElement): boolean {
+export function elementExtendsBeyondBleed(
+  element: LayoutElement,
+  specification: PageSpecification = PAGE_SPEC
+): boolean {
   const { x, y, width, height } = element.geometry
   return (
-    x < -PAGE_SPEC.bleedMm ||
-    y < -PAGE_SPEC.bleedMm ||
-    x + width > PAGE_SPEC.trimWidthMm + PAGE_SPEC.bleedMm ||
-    y + height > PAGE_SPEC.trimHeightMm + PAGE_SPEC.bleedMm
+    x < -specification.bleedMm ||
+    y < -specification.bleedMm ||
+    x + width > specification.trimWidthMm + specification.bleedMm ||
+    y + height > specification.trimHeightMm + specification.bleedMm
   )
 }
 
-export function isCriticalElementOutsideSafeArea(element: LayoutElement): boolean {
+export function isCriticalElementOutsideSafeArea(
+  element: LayoutElement,
+  specification: PageSpecification = PAGE_SPEC
+): boolean {
   if (element.type !== "bound-text" && element.type !== "static-text" && element.type !== "line") {
     return false
   }
   const { x, y, width, height } = element.geometry
   return (
-    x < PAGE_SPEC.safeMarginMm ||
-    y < PAGE_SPEC.safeMarginMm ||
-    x + width > PAGE_SPEC.trimWidthMm - PAGE_SPEC.safeMarginMm ||
-    y + height > PAGE_SPEC.trimHeightMm - PAGE_SPEC.safeMarginMm
+    x < specification.safeMarginMm ||
+    y < specification.safeMarginMm ||
+    x + width > specification.trimWidthMm - specification.safeMarginMm ||
+    y + height > specification.trimHeightMm - specification.safeMarginMm
   )
 }
 
@@ -275,6 +298,7 @@ export function addElement(
   questionId?: string,
   center?: { x: number; y: number }
 ): LayoutSchema {
+  const specification = pageSpecificationForLayout(schema)
   const id = crypto.randomUUID()
   const geometry = { x: 20, y: 20, width: 70, height: 35, rotation: 0 }
   let element: LayoutElement
@@ -351,14 +375,63 @@ export function addElement(
     element.geometry = {
       ...element.geometry,
       x: Math.min(
-        PAGE_SPEC.trimWidthMm + PAGE_SPEC.bleedMm - width,
-        Math.max(-PAGE_SPEC.bleedMm, center.x - width / 2)
+        specification.trimWidthMm + specification.bleedMm - width,
+        Math.max(-specification.bleedMm, center.x - width / 2)
       ),
       y: Math.min(
-        PAGE_SPEC.trimHeightMm + PAGE_SPEC.bleedMm - height,
-        Math.max(-PAGE_SPEC.bleedMm, center.y - height / 2)
+        specification.trimHeightMm + specification.bleedMm - height,
+        Math.max(-specification.bleedMm, center.y - height / 2)
       ),
     }
   }
   return { ...schema, elements: [...schema.elements, element] }
+}
+
+const round = (value: number) => Math.round(value * 10_000) / 10_000
+
+export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecification): LayoutSchema {
+  const source = pageSpecificationForLayout(schema)
+  const scale = Math.min(
+    target.mediaWidthMm / source.mediaWidthMm,
+    target.mediaHeightMm / source.mediaHeightMm
+  )
+  const offsetX = (target.mediaWidthMm - source.mediaWidthMm * scale) / 2
+  const offsetY = (target.mediaHeightMm - source.mediaHeightMm * scale) / 2
+
+  return {
+    ...schema,
+    trim: { widthMm: target.trimWidthMm, heightMm: target.trimHeightMm },
+    elements: schema.elements.map((element) => {
+      const resized = {
+        ...element,
+        geometry: {
+          ...element.geometry,
+          x: round((element.geometry.x + source.bleedMm) * scale + offsetX - target.bleedMm),
+          y: round((element.geometry.y + source.bleedMm) * scale + offsetY - target.bleedMm),
+          width: round(element.geometry.width * scale),
+          height: round(element.geometry.height * scale),
+        },
+      }
+      if (resized.type === "bound-text" || resized.type === "static-text") {
+        return {
+          ...resized,
+          text: {
+            ...resized.text,
+            fontSize: Math.min(200, Math.max(4, round(resized.text.fontSize * scale))),
+            minFontSize: Math.min(200, Math.max(4, round(resized.text.minFontSize * scale))),
+          },
+        }
+      }
+      if (resized.type === "image-frame") {
+        return { ...resized, cornerRadius: Math.min(100, round(resized.cornerRadius * scale)) }
+      }
+      if (resized.type === "gallery-frame") {
+        return { ...resized, gap: Math.min(50, round(resized.gap * scale)) }
+      }
+      if (resized.type === "rectangle" || resized.type === "circle" || resized.type === "line") {
+        return { ...resized, strokeWidth: Math.min(100, round(resized.strokeWidth * scale)) }
+      }
+      return resized
+    }),
+  }
 }

@@ -8,7 +8,9 @@ import {
   gallerySlots,
   layoutSchemaValidator,
   mmToCanvas,
+  resizeLayoutSchema,
 } from "./layout.ts"
+import { pageSpecification } from "./page-format.ts"
 
 describe("canonical layout schema", () => {
   it("round-trips millimetre geometry at desktop and tablet widths", () => {
@@ -109,5 +111,28 @@ describe("canonical layout schema", () => {
       geometry: { x: 20, y: 20, width: 70, height: 35 },
     })
     expect(schema.elements[0]).not.toHaveProperty("assetId")
+  })
+
+  it("scales geometry and physical styling proportionally between same-orientation formats", () => {
+    let schema = addElement(emptyLayoutSchema(), "static-text")
+    schema = addElement(schema, "gallery-frame", "photos")
+    const sourceText = schema.elements[0]!
+    const sourceGallery = schema.elements[1]!
+    const target = pageSpecification("a4", "landscape")
+    const resized = resizeLayoutSchema(schema, target)
+    const scale = Math.min(target.mediaWidthMm / 216, target.mediaHeightMm / 154)
+
+    expect(resized.trim).toEqual({ widthMm: 297, heightMm: 210 })
+    expect(resized.elements[0]?.geometry.width).toBeCloseTo(sourceText.geometry.width * scale, 3)
+    expect(resized.elements[0]).toMatchObject({
+      type: "static-text",
+      text: { fontSize: expect.closeTo(16 * scale, 3) },
+    })
+    expect(resized.elements[1]).toMatchObject({
+      type: "gallery-frame",
+      gap: expect.closeTo(3 * scale, 3),
+    })
+    expect(sourceGallery.geometry).toEqual({ x: 20, y: 20, width: 100, height: 65, rotation: 0 })
+    expect(layoutSchemaValidator.safeParse(resized).success).toBe(true)
   })
 })

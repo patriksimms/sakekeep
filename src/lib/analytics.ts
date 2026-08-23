@@ -1,7 +1,7 @@
 import type { PostHog } from "posthog-js"
 
 import type { BackgroundPresetId } from "#/domain/layout-backgrounds.ts"
-import type { PageProblem } from "#/domain/types.ts"
+import type { PageFormat, PageOrientation, PageProblem } from "#/domain/types.ts"
 import type { BookView } from "#/domain/workspace-tabs.ts"
 import { isDemoMode } from "#/lib/demo-mode.ts"
 
@@ -20,6 +20,11 @@ let desiredUserId: string | undefined
 let userKnown = false
 
 interface AnalyticsEvents {
+  "layout_editor:page_format_changed": {
+    page_format: PageFormat
+    page_orientation: PageOrientation
+    layouts_reset: boolean
+  }
   "layout_editor:background_created": {
     background_id: BackgroundPresetId
   }

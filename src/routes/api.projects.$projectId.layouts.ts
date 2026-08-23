@@ -2,14 +2,26 @@ import { createFileRoute } from "@tanstack/react-router"
 import { z } from "zod"
 
 import { BACKGROUND_PRESET_IDS } from "#/domain/layout-backgrounds.ts"
+import { PAGE_FORMATS, PAGE_ORIENTATIONS } from "#/domain/page-format.ts"
 import { jsonError, readJson } from "#/server/http.ts"
-import { createLayout, duplicateLayout, reorderLayouts } from "#/server/repository.ts"
+import {
+  createLayout,
+  duplicateLayout,
+  reorderLayouts,
+  setProjectPageFormat,
+} from "#/server/repository.ts"
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create"),
     name: z.string().max(200).optional(),
     backgroundPresetId: z.enum(BACKGROUND_PRESET_IDS).optional(),
+  }),
+  z.object({
+    action: z.literal("set-page-format"),
+    pageFormat: z.enum(PAGE_FORMATS),
+    pageOrientation: z.enum(PAGE_ORIENTATIONS),
+    resetLayouts: z.boolean().optional(),
   }),
   z.object({
     action: z.literal("duplicate"),
@@ -37,6 +49,11 @@ export const Route = createFileRoute("/api/projects/$projectId/layouts")({
             return Response.json(await duplicateLayout(params.projectId, input.layoutId), {
               status: 201,
             })
+          }
+          if (input.action === "set-page-format") {
+            return Response.json(
+              await setProjectPageFormat({ projectId: params.projectId, ...input })
+            )
           }
           return Response.json({
             layouts: await reorderLayouts(params.projectId, input.layoutIds),

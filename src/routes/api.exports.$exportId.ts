@@ -17,10 +17,14 @@ export const Route = createFileRoute("/api/exports/$exportId")({
             stored.body.byteOffset,
             stored.body.byteOffset + stored.body.byteLength
           ) as ArrayBuffer
+          const pdfName = record.report.specification.standard
+            .replace("DIN/ISO ", "")
+            .toLowerCase()
+            .replace(" ", "-")
           return new Response(body, {
             headers: {
               "Content-Type": stored.contentType,
-              "Content-Disposition": `attachment; filename="${isReport ? "sakekeep-preflight.txt" : "sakekeep-a5-landscape.pdf"}"`,
+              "Content-Disposition": `attachment; filename="${isReport ? "sakekeep-preflight.txt" : `sakekeep-${pdfName}.pdf`}"`,
               "Cache-Control": "private, no-store",
             },
           })

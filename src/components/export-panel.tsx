@@ -26,9 +26,11 @@ import {
 import { Field, FieldDescription, FieldLabel } from "#/components/ui/field.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
 import { type ExportArtifact, type Project } from "#/domain/types.ts"
+import { pageSpecification } from "#/domain/page-format.ts"
 import { projectApi } from "#/lib/api.ts"
 
 export function ExportPanel({ project }: { project: Project }) {
+  const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const [marks, setMarks] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [artifact, setArtifact] = useState<ExportArtifact | null>(null)
@@ -60,14 +62,15 @@ export function ExportPanel({ project }: { project: Project }) {
       <div>
         <h2 className="font-heading text-2xl">Print export</h2>
         <p className="text-sm text-muted-foreground">
-          Render source assets and canonical geometry into individual DIN A5 landscape pages.
+          Render source assets and canonical geometry into individual {specification.standard}
+          pages.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         {[
-          ["Trim size", "210 × 148 mm"],
-          ["Page with bleed", "216 × 154 mm"],
+          ["Trim size", `${specification.trimWidthMm} × ${specification.trimHeightMm} mm`],
+          ["Page with bleed", `${specification.mediaWidthMm} × ${specification.mediaHeightMm} mm`],
           ["Print condition", "PSO Coated v3 · FOGRA51"],
           ["Image target", "300 effective PPI"],
           ["Blocking threshold", "< 150 PPI"],

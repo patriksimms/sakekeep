@@ -5,7 +5,7 @@
 Build a complete local-first web application in which an organizer creates a
 questionnaire, shares an unguessable public link, collects anonymous responses,
 designs mixed-layout friend-book pages, reviews the generated book, and exports
-a print-ready DIN A5 landscape PDF.
+a print-ready DIN A4, A5, or A6 PDF in portrait or landscape.
 
 The primary use cases are personal birthday gifts and farewell gifts for work
 colleagues.
@@ -65,7 +65,7 @@ not part of this version.
    and the response count in read-only form.
 6. The organizer permanently closes collection.
 7. The organizer creates one or more reusable-within-the-project page layouts
-   on a visual DIN A5 landscape canvas.
+   on a visual canvas matching the book's DIN page format.
 8. The organizer generates one book page for every submission, reviews
    warnings, changes individual layout assignments where needed, reorders
    pages, and adds standalone pages.
@@ -226,12 +226,12 @@ Fabric canvas.
 
 ## Print and PDF specification
 
-The default book specification is:
+The book specification is:
 
-- Standard: DIN/ISO A5 landscape
-- Trim size: 210 mm × 148 mm
+- Standard: DIN/ISO A4, A5, or A6 in portrait or landscape
+- Default for existing projects: A5 landscape, 210 mm × 148 mm trim
 - Bleed: 3 mm on every edge
-- Export page box including bleed: 216 mm × 154 mm
+- Export page box: selected trim size plus 3 mm bleed on every edge
 - Safe margin: 6 mm inside every trim edge; normal text and critical content
   must remain inside it
 - Image target: 300 effective PPI at placed size

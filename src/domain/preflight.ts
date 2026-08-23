@@ -1,5 +1,5 @@
-import { PAGE_SPEC } from "./layout"
 import { blockingProblems } from "./generation"
+import { pageSpecification, type PageSpecification } from "./page-format.ts"
 import { type ExportReport, type GeneratedBook, type PreflightCheck } from "./types"
 
 export function createPreflightReport(input: {
@@ -13,8 +13,10 @@ export function createPreflightReport(input: {
   assetResolutionMetadata: boolean
   assetResolutionCount: number
   marks: boolean
+  pageSpecification?: PageSpecification
   now?: string
 }): ExportReport {
+  const specification = input.pageSpecification ?? pageSpecification()
   const problems = blockingProblems(input.book)
   const emptyDecorativeImages = input.book.pages.flatMap((page) =>
     page.problems.filter((problem) => problem.code === "empty-decorative-image")
@@ -42,7 +44,7 @@ export function createPreflightReport(input: {
       id: "page-boxes",
       label: "Page boxes and physical dimensions",
       status: input.pageBoxesValid ? "pass" : "fail",
-      detail: `${PAGE_SPEC.mediaWidthMm} × ${PAGE_SPEC.mediaHeightMm} mm including 3 mm bleed.`,
+      detail: `${specification.mediaWidthMm} × ${specification.mediaHeightMm} mm including 3 mm bleed.`,
     },
     {
       id: "page-count",
@@ -104,10 +106,10 @@ export function createPreflightReport(input: {
     sourceFingerprint: input.book.sourceFingerprint,
     generatedAt: input.now ?? new Date().toISOString(),
     specification: {
-      standard: "DIN/ISO A5 landscape",
-      trimMm: [210, 148],
+      standard: specification.standard,
+      trimMm: [specification.trimWidthMm, specification.trimHeightMm],
       bleedMm: 3,
-      mediaBoxMm: [216, 154],
+      mediaBoxMm: [specification.mediaWidthMm, specification.mediaHeightMm],
       safeMarginMm: 6,
       targetPpi: 300,
       blockingPpi: 150,

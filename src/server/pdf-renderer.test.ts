@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
+import { pageSpecification } from "../domain/page-format.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
 
 describe("PDF renderer", () => {
@@ -90,5 +91,44 @@ describe("PDF renderer", () => {
     // The regular and bold cut of the family in use, and nothing else.
     expect(embedded.size).toBe(2)
     expect([...embedded].every((name) => name.includes("Caveat"))).toBe(true)
+  })
+
+  it("emits portrait pages with format-specific media and trim boxes", async () => {
+    const pages = [
+      {
+        id: "standalone:portrait",
+        kind: "standalone" as const,
+        pageType: "introduction" as const,
+        title: "Portrait book",
+        body: "This content stays within a narrow A6 page.",
+        background: "#fffdf7",
+        problems: [],
+      },
+    ]
+    const bytes = await renderBookPdf({
+      book: {
+        projectId: "99999999-9999-4999-8999-999999999999",
+        settings: cycleSettings,
+        pages,
+        sourceFingerprint: "portrait-test",
+        generatedAt: "2026-07-18T00:00:00.000Z",
+        updatedAt: "2026-07-18T00:00:00.000Z",
+      },
+      layouts: [],
+      submissions: [],
+      form: completeForm,
+      marks: true,
+      pageFormat: "a6",
+      pageOrientation: "portrait",
+    })
+
+    expect(await inspectPdf(bytes, pageSpecification("a6", "portrait"))).toMatchObject({
+      pageCount: 1,
+      pageBoxesValid: true,
+      fontsEmbedded: true,
+    })
+    expect(await inspectPdf(bytes, pageSpecification("a5", "landscape"))).toMatchObject({
+      pageBoxesValid: false,
+    })
   })
 })

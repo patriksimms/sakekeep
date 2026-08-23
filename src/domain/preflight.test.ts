@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { createPreflightReport, hasFailedPreflight } from "./preflight.ts"
 import { generateBook } from "./generation.ts"
+import { pageSpecification } from "./page-format.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
 
 function book() {
@@ -32,6 +33,30 @@ describe("preflight", () => {
     })
     expect(hasFailedPreflight(report)).toBe(false)
     expect(report.pdfx.structurallyVerified).toBe(true)
+  })
+
+  it("reports the selected DIN format", () => {
+    const report = createPreflightReport({
+      projectId: book().projectId,
+      book: book(),
+      bookStatus: "current",
+      pageCount: 1,
+      fontsEmbedded: true,
+      outputIntentEmbedded: true,
+      pageBoxesValid: true,
+      assetResolutionMetadata: true,
+      assetResolutionCount: 0,
+      marks: false,
+      pageSpecification: pageSpecification("a4", "portrait"),
+    })
+
+    expect(report.specification).toMatchObject({
+      standard: "DIN/ISO A4 portrait",
+      trimMm: [210, 297],
+      mediaBoxMm: [216, 303],
+      bleedMm: 3,
+      safeMarginMm: 6,
+    })
   })
 
   it("blocks stale generation and invalid PDF structure", () => {
