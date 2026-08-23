@@ -9,22 +9,22 @@ import {
   type RelativeGeometry,
   type TextSettings,
 } from "./types"
+import {
+  pageSpecification,
+  pageSpecificationForLayout,
+  type PageSpecification,
+} from "./page-format.ts"
 
-export const PAGE_SPEC = {
-  trimWidthMm: 210,
-  trimHeightMm: 148,
-  bleedMm: 3,
-  safeMarginMm: 6,
-  mediaWidthMm: 216,
-  mediaHeightMm: 154,
-} as const
+export const PAGE_SPEC = pageSpecification()
 
 const finite = z.number().finite()
 const geometrySchema = z.object({
-  x: finite.min(-1000).max(1000),
-  y: finite.min(-1000).max(1000),
-  width: finite.positive().max(2000),
-  height: finite.positive().max(2000),
+  // The complete layout validator applies format-aware bounds. These storage bounds
+  // accommodate every proportional A4/A5/A6 transform.
+  x: finite.min(-5000).max(5000),
+  y: finite.min(-5000).max(5000),
+  width: finite.positive().max(5000),
+  height: finite.positive().max(5000),
   rotation: finite.min(-36000).max(36000),
 })
 
@@ -42,8 +42,9 @@ const focalPointSchema = z.object({
 
 const textSettingsSchema = z.object({
   fontFamily: z.enum(FONT_FAMILY_IDS),
-  fontSize: finite.min(4).max(200),
-  minFontSize: finite.min(4).max(200),
+  // Format-aware bounds are applied by the complete layout validator below.
+  fontSize: finite.min(1).max(500),
+  minFontSize: finite.min(1).max(500),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   fontStyle: z.union([z.literal("normal"), z.literal("italic")]),
   fontWeight: z.union([z.literal("normal"), z.literal("bold")]),
@@ -68,7 +69,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
   baseElement.extend({
     type: z.literal("image-frame"),
     questionId: z.string().min(1),
-    cornerRadius: finite.min(0).max(100),
+    cornerRadius: finite.min(0).max(500),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
@@ -80,14 +81,14 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
       z.literal("hero-two"),
       z.literal("three-column"),
     ]),
-    gap: finite.min(0).max(50),
+    gap: finite.min(0).max(500),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
     type: z.union([z.literal("rectangle"), z.literal("circle"), z.literal("line")]),
     fill: z.string(),
     stroke: z.string(),
-    strokeWidth: finite.min(0).max(100),
+    strokeWidth: finite.min(0).max(500),
   }),
   baseElement.extend({
     type: z.literal("decorative-image"),
@@ -99,10 +100,14 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
 export const layoutSchemaValidator = z
   .object({
     version: z.literal(LAYOUT_SCHEMA_VERSION),
-    trim: z.object({
-      widthMm: z.literal(210),
-      heightMm: z.literal(148),
-    }),
+    trim: z.union([
+      z.object({ widthMm: z.literal(210), heightMm: z.literal(297) }),
+      z.object({ widthMm: z.literal(297), heightMm: z.literal(210) }),
+      z.object({ widthMm: z.literal(148), heightMm: z.literal(210) }),
+      z.object({ widthMm: z.literal(210), heightMm: z.literal(148) }),
+      z.object({ widthMm: z.literal(105), heightMm: z.literal(148) }),
+      z.object({ widthMm: z.literal(148), heightMm: z.literal(105) }),
+    ]),
     bleedMm: z.literal(3),
     safeMarginMm: z.literal(6),
     background: z.string(),
@@ -110,6 +115,23 @@ export const layoutSchemaValidator = z
   })
   .superRefine((layout, context) => {
     const ids = new Set<string>()
+    const specification = pageSpecificationForLayout(layout)
+    const limits = layoutStyleLimits(specification)
+    const geometryLimits = layoutGeometryLimits(specification)
+    const checkRange = (
+      value: number,
+      minimum: number,
+      maximum: number,
+      path: (string | number)[],
+      label: string
+    ) => {
+      if (value >= minimum - 0.0001 && value <= maximum + 0.0001) return
+      context.addIssue({
+        code: "custom",
+        path,
+        message: `${label} must be between ${round(minimum)} and ${round(maximum)} for this page format.`,
+      })
+    }
     for (const [index, element] of layout.elements.entries()) {
       if (ids.has(element.id)) {
         context.addIssue({
@@ -119,12 +141,77 @@ export const layoutSchemaValidator = z
         })
       }
       ids.add(element.id)
+      checkRange(
+        element.geometry.x,
+        geometryLimits.x.min,
+        geometryLimits.x.max,
+        ["elements", index, "geometry", "x"],
+        "Horizontal position"
+      )
+      checkRange(
+        element.geometry.y,
+        geometryLimits.y.min,
+        geometryLimits.y.max,
+        ["elements", index, "geometry", "y"],
+        "Vertical position"
+      )
+      checkRange(
+        element.geometry.width,
+        Number.MIN_VALUE,
+        geometryLimits.widthMax,
+        ["elements", index, "geometry", "width"],
+        "Width"
+      )
+      checkRange(
+        element.geometry.height,
+        Number.MIN_VALUE,
+        geometryLimits.heightMax,
+        ["elements", index, "geometry", "height"],
+        "Height"
+      )
       if ("text" in element && element.text.minFontSize > element.text.fontSize) {
         context.addIssue({
           code: "custom",
           path: ["elements", index, "text", "minFontSize"],
           message: "Minimum font size cannot exceed the font size.",
         })
+      }
+      if ("text" in element) {
+        checkRange(
+          element.text.fontSize,
+          limits.fontSize.min,
+          limits.fontSize.max,
+          ["elements", index, "text", "fontSize"],
+          "Font size"
+        )
+        checkRange(
+          element.text.minFontSize,
+          limits.fontSize.min,
+          limits.fontSize.max,
+          ["elements", index, "text", "minFontSize"],
+          "Minimum font size"
+        )
+      }
+      if (element.type === "image-frame") {
+        checkRange(
+          element.cornerRadius,
+          0,
+          limits.cornerRadiusMax,
+          ["elements", index, "cornerRadius"],
+          "Corner radius"
+        )
+      }
+      if (element.type === "gallery-frame") {
+        checkRange(element.gap, 0, limits.gapMax, ["elements", index, "gap"], "Gallery gap")
+      }
+      if (element.type === "rectangle" || element.type === "circle" || element.type === "line") {
+        checkRange(
+          element.strokeWidth,
+          0,
+          limits.strokeWidthMax,
+          ["elements", index, "strokeWidth"],
+          "Stroke width"
+        )
       }
     }
   })
@@ -141,10 +228,17 @@ export const DEFAULT_TEXT_SETTINGS: TextSettings = {
   overflow: "flag",
 }
 
-export function emptyLayoutSchema(): LayoutSchema {
+export function emptyLayoutSchema(
+  format: import("./types.ts").PageFormat = "a5",
+  orientation: import("./types.ts").PageOrientation = "landscape"
+): LayoutSchema {
+  const specification = pageSpecification(format, orientation)
   return {
     version: LAYOUT_SCHEMA_VERSION,
-    trim: { widthMm: 210, heightMm: 148 },
+    trim: {
+      widthMm: specification.trimWidthMm,
+      heightMm: specification.trimHeightMm,
+    },
     bleedMm: 3,
     safeMarginMm: 6,
     background: "#fffdf7",
@@ -152,8 +246,12 @@ export function emptyLayoutSchema(): LayoutSchema {
   }
 }
 
-export function mmToCanvas(geometry: RelativeGeometry, editorWidth: number): RelativeGeometry {
-  const scale = editorWidth / PAGE_SPEC.trimWidthMm
+export function mmToCanvas(
+  geometry: RelativeGeometry,
+  editorWidth: number,
+  specification: PageSpecification = PAGE_SPEC
+): RelativeGeometry {
+  const scale = editorWidth / specification.trimWidthMm
   return {
     x: geometry.x * scale,
     y: geometry.y * scale,
@@ -163,8 +261,12 @@ export function mmToCanvas(geometry: RelativeGeometry, editorWidth: number): Rel
   }
 }
 
-export function canvasToMm(geometry: RelativeGeometry, editorWidth: number): RelativeGeometry {
-  const scale = PAGE_SPEC.trimWidthMm / editorWidth
+export function canvasToMm(
+  geometry: RelativeGeometry,
+  editorWidth: number,
+  specification: PageSpecification = PAGE_SPEC
+): RelativeGeometry {
+  const scale = specification.trimWidthMm / editorWidth
   return {
     x: geometry.x * scale,
     y: geometry.y * scale,
@@ -246,26 +348,32 @@ export function gallerySlots(
   }
 }
 
-export function elementExtendsBeyondBleed(element: LayoutElement): boolean {
+export function elementExtendsBeyondBleed(
+  element: LayoutElement,
+  specification: PageSpecification = PAGE_SPEC
+): boolean {
   const { x, y, width, height } = element.geometry
   return (
-    x < -PAGE_SPEC.bleedMm ||
-    y < -PAGE_SPEC.bleedMm ||
-    x + width > PAGE_SPEC.trimWidthMm + PAGE_SPEC.bleedMm ||
-    y + height > PAGE_SPEC.trimHeightMm + PAGE_SPEC.bleedMm
+    x < -specification.bleedMm ||
+    y < -specification.bleedMm ||
+    x + width > specification.trimWidthMm + specification.bleedMm ||
+    y + height > specification.trimHeightMm + specification.bleedMm
   )
 }
 
-export function isCriticalElementOutsideSafeArea(element: LayoutElement): boolean {
+export function isCriticalElementOutsideSafeArea(
+  element: LayoutElement,
+  specification: PageSpecification = PAGE_SPEC
+): boolean {
   if (element.type !== "bound-text" && element.type !== "static-text" && element.type !== "line") {
     return false
   }
   const { x, y, width, height } = element.geometry
   return (
-    x < PAGE_SPEC.safeMarginMm ||
-    y < PAGE_SPEC.safeMarginMm ||
-    x + width > PAGE_SPEC.trimWidthMm - PAGE_SPEC.safeMarginMm ||
-    y + height > PAGE_SPEC.trimHeightMm - PAGE_SPEC.safeMarginMm
+    x < specification.safeMarginMm ||
+    y < specification.safeMarginMm ||
+    x + width > specification.trimWidthMm - specification.safeMarginMm ||
+    y + height > specification.trimHeightMm - specification.safeMarginMm
   )
 }
 
@@ -275,6 +383,7 @@ export function addElement(
   questionId?: string,
   center?: { x: number; y: number }
 ): LayoutSchema {
+  const specification = pageSpecificationForLayout(schema)
   const id = crypto.randomUUID()
   const geometry = { x: 20, y: 20, width: 70, height: 35, rotation: 0 }
   let element: LayoutElement
@@ -351,14 +460,113 @@ export function addElement(
     element.geometry = {
       ...element.geometry,
       x: Math.min(
-        PAGE_SPEC.trimWidthMm + PAGE_SPEC.bleedMm - width,
-        Math.max(-PAGE_SPEC.bleedMm, center.x - width / 2)
+        specification.trimWidthMm + specification.bleedMm - width,
+        Math.max(-specification.bleedMm, center.x - width / 2)
       ),
       y: Math.min(
-        PAGE_SPEC.trimHeightMm + PAGE_SPEC.bleedMm - height,
-        Math.max(-PAGE_SPEC.bleedMm, center.y - height / 2)
+        specification.trimHeightMm + specification.bleedMm - height,
+        Math.max(-specification.bleedMm, center.y - height / 2)
       ),
     }
   }
   return { ...schema, elements: [...schema.elements, element] }
+}
+
+const round = (value: number) => Math.round(value * 10_000) / 10_000
+
+export function layoutStyleLimits(specification: PageSpecification) {
+  const a5Width = specification.orientation === "portrait" ? 148 : 210
+  const scale = specification.trimWidthMm / a5Width
+  return {
+    fontSize: { min: round(4 * scale), max: round(200 * scale) },
+    cornerRadiusMax: round(100 * scale),
+    gapMax: round(50 * scale),
+    strokeWidthMax: round(100 * scale),
+  }
+}
+
+export function layoutGeometryLimits(specification: PageSpecification) {
+  const canonical = pageSpecification("a5", specification.orientation)
+  const scale = specification.trimWidthMm / canonical.trimWidthMm
+  const offsetX = (specification.mediaWidthMm - canonical.mediaWidthMm * scale) / 2
+  const offsetY = (specification.mediaHeightMm - canonical.mediaHeightMm * scale) / 2
+  const transformX = (value: number) =>
+    (value + canonical.bleedMm) * scale + offsetX - specification.bleedMm
+  const transformY = (value: number) =>
+    (value + canonical.bleedMm) * scale + offsetY - specification.bleedMm
+
+  return {
+    x: { min: transformX(-1000), max: transformX(1000) },
+    y: { min: transformY(-1000), max: transformY(1000) },
+    widthMax: 2000 * scale,
+    heightMax: 2000 * scale,
+  }
+}
+
+export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecification): LayoutSchema {
+  const source = pageSpecificationForLayout(schema)
+  // DIN's integer millimetre dimensions are only approximately proportional. Using one canonical
+  // axis keeps the transform path-independent and makes repeated size changes reversible.
+  const scale = target.trimWidthMm / source.trimWidthMm
+  const offsetX = (target.mediaWidthMm - source.mediaWidthMm * scale) / 2
+  const offsetY = (target.mediaHeightMm - source.mediaHeightMm * scale) / 2
+
+  return {
+    ...schema,
+    trim: { widthMm: target.trimWidthMm, heightMm: target.trimHeightMm },
+    elements: schema.elements.map((element) => {
+      const touchesLeftBleed = Math.abs(element.geometry.x + source.bleedMm) < 0.0001
+      const touchesTopBleed = Math.abs(element.geometry.y + source.bleedMm) < 0.0001
+      const touchesRightBleed =
+        Math.abs(
+          element.geometry.x + element.geometry.width - (source.trimWidthMm + source.bleedMm)
+        ) < 0.0001
+      const touchesBottomBleed =
+        Math.abs(
+          element.geometry.y + element.geometry.height - (source.trimHeightMm + source.bleedMm)
+        ) < 0.0001
+      const x = touchesLeftBleed
+        ? -target.bleedMm
+        : round((element.geometry.x + source.bleedMm) * scale + offsetX - target.bleedMm)
+      const y = touchesTopBleed
+        ? -target.bleedMm
+        : round((element.geometry.y + source.bleedMm) * scale + offsetY - target.bleedMm)
+      const width = touchesRightBleed
+        ? round(target.trimWidthMm + target.bleedMm - x)
+        : element.geometry.width * scale
+      const height = touchesBottomBleed
+        ? round(target.trimHeightMm + target.bleedMm - y)
+        : element.geometry.height * scale
+      const resized = {
+        ...element,
+        geometry: {
+          ...element.geometry,
+          x,
+          y,
+          width,
+          height,
+        },
+      }
+      if (resized.type === "bound-text" || resized.type === "static-text") {
+        return {
+          ...resized,
+          text: {
+            ...resized.text,
+            fontSize: round(resized.text.fontSize * scale),
+            minFontSize: round(resized.text.minFontSize * scale),
+          },
+        }
+      }
+      if (resized.type === "image-frame") {
+        return { ...resized, cornerRadius: round(resized.cornerRadius * scale) }
+      }
+      if (resized.type === "gallery-frame") {
+        return { ...resized, gap: round(resized.gap * scale) }
+      }
+      if (resized.type === "rectangle" || resized.type === "circle" || resized.type === "line") {
+        return { ...resized, strokeWidth: round(resized.strokeWidth * scale) }
+      }
+      return resized
+    }),
+  }
 }

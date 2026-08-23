@@ -2,7 +2,7 @@
 
 Sakekeep is a private shared organizer workspace for collecting anonymous
 memories and photos, composing a friend book, and exporting a print-ready DIN
-A5 landscape PDF. `PLAN.md` is the product source of truth.
+A4, A5, or A6 PDF in portrait or landscape. `PLAN.md` is the product source of truth.
 
 Clerk authentication protects every organizer page and API. Contributor links
 remain anonymous and token-based.
@@ -150,7 +150,7 @@ deployment.
 - Fabric.js 7 as an interaction adapter over a typed, versioned canonical
   layout schema; raw Fabric JSON is never persisted
 - `pdf-lib`, bundled OFL static fonts, and a locally downloaded PSO Coated v3
-  output intent for individual-page 216 × 154 mm exports
+  output intent for individual-page DIN A4, A5, and A6 exports
 
 Share tokens encode 192 HMAC-derived bits. Only their SHA-256 digest is stored
 in PostgreSQL. Form and layout autosaves use revision checks and serialized
@@ -158,8 +158,8 @@ client queues, and submissions use persisted UUID idempotency keys.
 
 ## PDF verification scope
 
-The renderer emits 210 × 148 mm TrimBoxes inside 216 × 154 mm Media/BleedBoxes,
-embeds all offered fonts, embeds the FOGRA51 output intent, retains vector text
+The renderer emits format-specific TrimBoxes inside Media/BleedBoxes with 3 mm
+bleed, embeds all offered fonts, embeds the FOGRA51 output intent, retains vector text
 and geometry, and exports source image masters rather than the screen canvas.
 The included inspection verifies page count, boxes, fonts, output intent,
 metadata, resolution reporting, and unresolved blockers.

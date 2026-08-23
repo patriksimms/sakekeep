@@ -6,6 +6,7 @@ import { cssFontStack } from "#/domain/fonts.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
+import { pageSpecificationForLayout, type PageSpecification } from "#/domain/page-format.ts"
 import { enforceMinimumTextBoxHeight } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
@@ -106,16 +107,18 @@ export function applyInlineBoundLabelEdit(
 
 export function canonicalToCanvasGeometry(
   geometry: RelativeGeometry,
-  canvasWidth: number
+  canvasWidth: number,
+  specification: PageSpecification = PAGE_SPEC
 ): RelativeGeometry {
-  return canonicalToMediaGeometry(geometry, canvasWidth)
+  return canonicalToMediaGeometry(geometry, canvasWidth, specification)
 }
 
 export function canvasToCanonicalGeometry(
   geometry: RelativeGeometry,
-  canvasWidth: number
+  canvasWidth: number,
+  specification: PageSpecification = PAGE_SPEC
 ): RelativeGeometry {
-  return mediaToCanonicalGeometry(geometry, canvasWidth)
+  return mediaToCanonicalGeometry(geometry, canvasWidth, specification)
 }
 
 function elementName(element: LayoutElement) {
@@ -135,9 +138,11 @@ function elementName(element: LayoutElement) {
 function InlineStaticTextEditor({
   element,
   onCommit,
+  specification,
 }: {
   element: Extract<LayoutElement, { type: "static-text" }>
   onCommit: (content: string) => void
+  specification: PageSpecification
 }) {
   const editor = useRef<HTMLDivElement>(null)
 
@@ -162,7 +167,7 @@ function InlineStaticTextEditor({
       suppressContentEditableWarning
       onBlur={(event) => onCommit(event.currentTarget.innerText)}
       style={{
-        ...textElementStyle(element),
+        ...textElementStyle(element, element.text.fontSize, specification),
         zIndex: 2,
         cursor: "text",
         outline: "2px solid var(--primary)",
@@ -176,9 +181,10 @@ function InlineStaticTextEditor({
 export function objectForElement(
   element: LayoutElement,
   canvasWidth: number,
-  questions: FormQuestion[] = []
+  questions: FormQuestion[] = [],
+  specification: PageSpecification = PAGE_SPEC
 ): SakekeepObject {
-  const geometry = canonicalToCanvasGeometry(element.geometry, canvasWidth)
+  const geometry = canonicalToCanvasGeometry(element.geometry, canvasWidth, specification)
   const common = {
     left: geometry.x,
     top: geometry.y,
@@ -209,7 +215,7 @@ export function objectForElement(
             ...common,
             editable: true,
             fontFamily: cssFontStack(element.text.fontFamily),
-            fontSize: element.text.fontSize * 0.3528 * (canvasWidth / PAGE_SPEC.mediaWidthMm),
+            fontSize: element.text.fontSize * 0.3528 * (canvasWidth / specification.mediaWidthMm),
             fontStyle: element.text.fontStyle,
             fontWeight: element.text.fontWeight,
             textAlign: element.text.alignment,
@@ -229,7 +235,11 @@ export function objectForElement(
   return object
 }
 
-export function geometryFromObject(object: FabricObject, canvasWidth: number): RelativeGeometry {
+export function geometryFromObject(
+  object: FabricObject,
+  canvasWidth: number,
+  specification: PageSpecification = PAGE_SPEC
+): RelativeGeometry {
   return canvasToCanonicalGeometry(
     {
       x: object.left ?? 0,
@@ -238,7 +248,8 @@ export function geometryFromObject(object: FabricObject, canvasWidth: number): R
       height: object.getScaledHeight(),
       rotation: object.angle ?? 0,
     },
-    canvasWidth
+    canvasWidth,
+    specification
   )
 }
 
@@ -276,6 +287,7 @@ export function LayoutCanvas({
   showGuides?: boolean
   onDropElement?: (data: LayoutElementDragData, center: { x: number; y: number }) => void
 }) {
+  const specification = pageSpecificationForLayout(schema)
   const element = useRef<HTMLCanvasElement>(null)
   const instance = useRef<Canvas | null>(null)
   const schemaRef = useRef(schema)
@@ -294,7 +306,7 @@ export function LayoutCanvas({
     if (!element.current || width <= 0) return
     const canvas = new Canvas(element.current, {
       width,
-      height: width * (PAGE_SPEC.mediaHeightMm / PAGE_SPEC.mediaWidthMm),
+      height: width * (specification.mediaHeightMm / specification.mediaWidthMm),
       preserveObjectStacking: true,
       selection: true,
       backgroundColor: "transparent",
@@ -316,7 +328,7 @@ export function LayoutCanvas({
         ...schemaRef.current,
         elements: schemaRef.current.elements.map((candidate) => {
           if (candidate.id !== object.sakekeepElementId) return candidate
-          let geometry = geometryFromObject(object, width)
+          let geometry = geometryFromObject(object, width, specification)
           if (enforceMinimumHeight) {
             const question =
               candidate.type === "bound-text"
@@ -329,7 +341,7 @@ export function LayoutCanvas({
                 scaleY: (object.scaleY ?? 1) * (constrained.geometry.height / geometry.height),
               })
               object.setCoords()
-              geometry = geometryFromObject(object, width)
+              geometry = geometryFromObject(object, width, specification)
             }
           }
           return { ...candidate, geometry }
@@ -484,12 +496,12 @@ export function LayoutCanvas({
         y:
           ((event.clientY - bounds.top) / bounds.height) *
           width *
-          (PAGE_SPEC.mediaHeightMm / PAGE_SPEC.mediaWidthMm),
+          (specification.mediaHeightMm / specification.mediaWidthMm),
       }
       const hitElement = [...schemaRef.current.elements].reverse().find((candidate) => {
         if (candidate.type !== "bound-text" && candidate.type !== "static-text") return false
         return geometryContainsPoint(
-          canonicalToCanvasGeometry(candidate.geometry, width),
+          canonicalToCanvasGeometry(candidate.geometry, width, specification),
           pointer.x,
           pointer.y
         )
@@ -520,7 +532,7 @@ export function LayoutCanvas({
       instance.current = null
       canvas.dispose()
     }
-  }, [canvasRef, width])
+  }, [canvasRef, questions, specification.mediaHeightMm, specification.mediaWidthMm, width])
 
   useEffect(() => {
     setDisplaySchema(schema)
@@ -531,7 +543,9 @@ export function LayoutCanvas({
     if (!canvas || changing.current) return
     const activeObject = canvas.getActiveObject()
     if (activeObject instanceof IText && activeObject.isEditing) return
-    const objects = schema.elements.map((item) => objectForElement(item, width, questions))
+    const objects = schema.elements.map((item) =>
+      objectForElement(item, width, questions, specification)
+    )
     canvas.clear()
     canvas.backgroundColor = "transparent"
     canvas.add(...objects)
@@ -551,7 +565,7 @@ export function LayoutCanvas({
       }
     }
     canvas.requestRenderAll()
-  }, [schema, selectedId, width])
+  }, [questions, schema, selectedId, specification.mediaWidthMm, width])
 
   const editingElement = editingElementId
     ? schema.elements.find(
@@ -589,10 +603,11 @@ export function LayoutCanvas({
     const bounds = event.currentTarget.getBoundingClientRect()
     onDropElement(data, {
       x:
-        ((event.clientX - bounds.left) / bounds.width) * PAGE_SPEC.mediaWidthMm - PAGE_SPEC.bleedMm,
+        ((event.clientX - bounds.left) / bounds.width) * specification.mediaWidthMm -
+        specification.bleedMm,
       y:
-        ((event.clientY - bounds.top) / bounds.height) * PAGE_SPEC.mediaHeightMm -
-        PAGE_SPEC.bleedMm,
+        ((event.clientY - bounds.top) / bounds.height) * specification.mediaHeightMm -
+        specification.bleedMm,
     })
   }
 
@@ -623,7 +638,7 @@ export function LayoutCanvas({
       onDrop={dropElement}
       style={{
         width,
-        height: width * (PAGE_SPEC.mediaHeightMm / PAGE_SPEC.mediaWidthMm),
+        height: width * (specification.mediaHeightMm / specification.mediaWidthMm),
         background: displaySchema.background,
         containerType: "inline-size",
       }}
@@ -641,9 +656,16 @@ export function LayoutCanvas({
         showEditorPlaceholders
         editingElementId={editingElementId ?? undefined}
       />
-      <canvas ref={element} aria-label="Visual DIN A5 landscape layout canvas" />
+      <canvas
+        ref={element}
+        aria-label={`Visual DIN ${specification.format.toUpperCase()} ${specification.orientation} layout canvas`}
+      />
       {editingElement && (
-        <InlineStaticTextEditor element={editingElement} onCommit={commitInlineEdit} />
+        <InlineStaticTextEditor
+          element={editingElement}
+          onCommit={commitInlineEdit}
+          specification={specification}
+        />
       )}
       {showGuides && (
         <>
@@ -651,20 +673,20 @@ export function LayoutCanvas({
             aria-hidden="true"
             className="pointer-events-none absolute border border-dashed border-primary/70"
             style={{
-              left: `${(3 / 216) * 100}%`,
-              top: `${(3 / 154) * 100}%`,
-              width: `${(210 / 216) * 100}%`,
-              height: `${(148 / 154) * 100}%`,
+              left: `${(specification.bleedMm / specification.mediaWidthMm) * 100}%`,
+              top: `${(specification.bleedMm / specification.mediaHeightMm) * 100}%`,
+              width: `${(specification.trimWidthMm / specification.mediaWidthMm) * 100}%`,
+              height: `${(specification.trimHeightMm / specification.mediaHeightMm) * 100}%`,
             }}
           />
           <div
             aria-hidden="true"
             className="pointer-events-none absolute border border-dotted border-primary/45"
             style={{
-              left: `${(9 / 216) * 100}%`,
-              top: `${(9 / 154) * 100}%`,
-              width: `${(198 / 216) * 100}%`,
-              height: `${(136 / 154) * 100}%`,
+              left: `${((specification.bleedMm + specification.safeMarginMm) / specification.mediaWidthMm) * 100}%`,
+              top: `${((specification.bleedMm + specification.safeMarginMm) / specification.mediaHeightMm) * 100}%`,
+              width: `${((specification.trimWidthMm - specification.safeMarginMm * 2) / specification.mediaWidthMm) * 100}%`,
+              height: `${((specification.trimHeightMm - specification.safeMarginMm * 2) / specification.mediaHeightMm) * 100}%`,
             }}
           />
           <div className="pointer-events-none absolute top-2 left-2 rounded bg-background/85 px-2 py-1 text-[10px] text-muted-foreground">

@@ -8,8 +8,8 @@ embedded at their source resolution; the editor canvas is never rasterized.
 
 The PDF contains:
 
-- a 216 × 154 mm MediaBox and BleedBox per page;
-- a 210 × 148 mm TrimBox offset by the 3 mm bleed;
+- a format-specific MediaBox and BleedBox per page;
+- a DIN A4, A5, or A6 TrimBox offset by the 3 mm bleed;
 - fully embedded Inter and Source Serif 4 TrueType static instances under the
   SIL Open Font License. Regular, bold, italic, and bold-italic instances are
   generated from the canonical variable sources because fontkit cannot embed

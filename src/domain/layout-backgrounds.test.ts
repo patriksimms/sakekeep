@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import { layoutSchemaValidator } from "./layout.ts"
-import { BACKGROUND_PRESETS, backgroundSchema } from "./layout-backgrounds.ts"
+import { BACKGROUND_PRESETS, backgroundPresets, backgroundSchema } from "./layout-backgrounds.ts"
+import { PAGE_FORMATS, PAGE_ORIENTATIONS, pageSpecification } from "./page-format.ts"
 
 describe("layout background presets", () => {
   it("provides a blank page and visual-only decorated pages", () => {
@@ -56,4 +57,30 @@ describe("layout background presets", () => {
       }
     }
   )
+
+  it("provides portrait compositions for every supported DIN size", () => {
+    for (const format of PAGE_FORMATS) {
+      for (const orientation of PAGE_ORIENTATIONS) {
+        const specification = pageSpecification(format, orientation)
+        for (const preset of backgroundPresets(format, orientation)) {
+          expect(layoutSchemaValidator.safeParse(preset.schema).success).toBe(true)
+          expect(preset.schema.trim).toEqual({
+            widthMm: specification.trimWidthMm,
+            heightMm: specification.trimHeightMm,
+          })
+          for (const { geometry } of preset.schema.elements) {
+            expect(geometry.x).toBeGreaterThanOrEqual(-3)
+            expect(geometry.y).toBeGreaterThanOrEqual(-3)
+            expect(geometry.x + geometry.width).toBeLessThanOrEqual(specification.trimWidthMm + 3)
+            expect(geometry.y + geometry.height).toBeLessThanOrEqual(specification.trimHeightMm + 3)
+          }
+        }
+      }
+    }
+
+    expect(backgroundSchema("geometric-collage", "a5", "portrait").elements[0]).toMatchObject({
+      id: expect.any(String),
+      geometry: { x: -3, y: -3, width: 154, height: 63 },
+    })
+  })
 })

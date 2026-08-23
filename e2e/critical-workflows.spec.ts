@@ -222,6 +222,104 @@ test.describe.serial("critical local prototype workflows", () => {
     }
   })
 
+  test("changes DIN size and resets layouts before changing orientation", async ({
+    page,
+    request,
+  }) => {
+    const created = (await (
+      await request.post("/api/projects", {
+        data: { title: "Page format journey", occasion: null },
+      })
+    ).json()) as Project
+    const projectId = created.id
+
+    try {
+      await request.patch(`/api/projects/${projectId}`, {
+        data: {
+          expectedRevision: 0,
+          formSchema: {
+            version: 1,
+            questions: [
+              {
+                id: "memory",
+                type: "multiline",
+                prompt: "A memory",
+                required: true,
+              },
+            ],
+          },
+        },
+      })
+      await request.post(`/api/projects/${projectId}/publish`)
+      await request.post(`/api/projects/${projectId}/close`)
+      await request.post(`/api/projects/${projectId}/layouts`, {
+        data: {
+          action: "create",
+          name: "Decorated",
+          backgroundPresetId: "geometric-collage",
+        },
+      })
+      await request.post(`/api/projects/${projectId}/layouts`, {
+        data: { action: "create", name: "Blank", backgroundPresetId: "blank" },
+      })
+      await request.post(`/api/projects/${projectId}/book`, {
+        data: {
+          mode: "cycle",
+          seed: "page-format-journey",
+          manualAssignments: {},
+          resolutionOverrides: [],
+        },
+      })
+
+      await page.goto(`/projects/${projectId}?tab=layouts`)
+      await expect(page.getByRole("combobox", { name: "Page size" })).toContainText("A5")
+      await page.getByRole("combobox", { name: "Page size" }).click()
+      await page.getByRole("option", { name: "A6" }).click()
+      await expect(page.getByLabel("Visual DIN A6 landscape layout canvas")).toBeVisible()
+
+      const resized = (await (await request.get(`/api/projects/${projectId}`)).json()) as Project
+      expect(resized).toMatchObject({
+        pageFormat: "a6",
+        pageOrientation: "landscape",
+        bookStatus: "stale",
+      })
+      expect(resized.layouts).toHaveLength(2)
+      expect(resized.layouts.every((layout) => layout.schema.trim.widthMm === 148)).toBe(true)
+
+      await page.getByRole("combobox", { name: "Page orientation" }).click()
+      await page.getByRole("option", { name: "portrait" }).click()
+      await expect(
+        page.getByRole("heading", { name: "Reset layouts and change orientation?" })
+      ).toBeVisible()
+      await expect(page.getByText("removes 2 layouts")).toBeVisible()
+      await page.getByRole("button", { name: "Cancel" }).click()
+      await expect(page.getByLabel("Visual DIN A6 landscape layout canvas")).toBeVisible()
+
+      await page.getByRole("combobox", { name: "Page orientation" }).click()
+      await page.getByRole("option", { name: "portrait" }).click()
+      await page.getByRole("button", { name: "Reset layouts" }).click()
+      await expect(page.getByLabel("Visual DIN A6 portrait layout canvas")).toBeVisible()
+      await expect(page.getByRole("tab", { name: "Layout 1" })).toHaveAttribute(
+        "aria-selected",
+        "true"
+      )
+
+      const reset = (await (await request.get(`/api/projects/${projectId}`)).json()) as Project
+      expect(reset).toMatchObject({
+        pageFormat: "a6",
+        pageOrientation: "portrait",
+        bookStatus: "stale",
+      })
+      expect(reset.layouts).toHaveLength(1)
+      expect(reset.layouts[0]).toMatchObject({
+        name: "Layout 1",
+        schema: { trim: { widthMm: 105, heightMm: 148 }, elements: [] },
+      })
+    } finally {
+      await request.delete(`/api/projects/${projectId}`)
+    }
+  })
+
   test("layout editor stays stable across selection and sidebar overflow", async ({
     page,
     request,

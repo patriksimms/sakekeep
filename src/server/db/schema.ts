@@ -15,6 +15,8 @@ import {
   type GeneratedBook,
   type GenerationSettings,
   type LayoutSchema,
+  type PageFormat,
+  type PageOrientation,
   type SubmissionAnswers,
 } from "../../domain/types"
 
@@ -32,6 +34,11 @@ export const projects = pgTable(
       .$type<"not-generated" | "current" | "stale">()
       .notNull()
       .default("not-generated"),
+    pageFormat: text("page_format").$type<PageFormat>().notNull().default("a5"),
+    pageOrientation: text("page_orientation")
+      .$type<PageOrientation>()
+      .notNull()
+      .default("landscape"),
     archivedAt: timestamp("archived_at", {
       withTimezone: true,
       mode: "date",

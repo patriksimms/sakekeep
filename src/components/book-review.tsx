@@ -84,6 +84,7 @@ import {
 import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
+import { pageSpecification } from "#/domain/page-format.ts"
 
 // Standalone page text is sized in cqw like every submission-page element, so a preview stays a
 // faithful miniature at any width. Viewport units would ignore the preview's own size.
@@ -112,10 +113,15 @@ export function PagePreview({
       : null
   const background =
     page.kind === "standalone" ? page.background : (layout?.schema.background ?? "#fffdf7")
+  const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   return (
     <div
-      className={`paper-shadow relative aspect-[216/154] overflow-hidden rounded-md ring-1 ring-foreground/10 ${className ?? ""}`}
-      style={{ background, containerType: "inline-size" }}
+      className={`paper-shadow relative overflow-hidden rounded-md ring-1 ring-foreground/10 ${className ?? ""}`}
+      style={{
+        aspectRatio: `${specification.mediaWidthMm} / ${specification.mediaHeightMm}`,
+        background,
+        containerType: "inline-size",
+      }}
       data-testid="page-preview"
     >
       {page.kind === "standalone" ? (

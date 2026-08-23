@@ -3,7 +3,8 @@ import { and, asc, count, desc, eq, inArray, max, sql } from "drizzle-orm"
 import { emptyFormSchema, validateFormForDraft, validateFormForPublish } from "../domain/form"
 import { generateBook } from "../domain/generation"
 import { type BackgroundPresetId, backgroundSchema } from "../domain/layout-backgrounds"
-import { layoutSchemaValidator } from "../domain/layout"
+import { emptyLayoutSchema, layoutSchemaValidator, resizeLayoutSchema } from "../domain/layout"
+import { pageSpecification } from "../domain/page-format.ts"
 import {
   type BookPage,
   type FormSchema,
@@ -12,6 +13,8 @@ import {
   type ImageAnswer,
   type LayoutRecord,
   type LayoutSchema,
+  type PageFormat,
+  type PageOrientation,
   type Project,
   type ProjectSummary,
   type SubmissionAnswers,
@@ -91,6 +94,8 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     state: project.state,
     submissionCount,
     bookStatus: project.bookStatus,
+    pageFormat: project.pageFormat,
+    pageOrientation: project.pageOrientation,
     archivedAt: project.archivedAt ? iso(project.archivedAt) : null,
     createdAt: iso(project.createdAt),
     updatedAt: iso(project.updatedAt),
@@ -128,6 +133,8 @@ export async function getProject(projectId: string, includeSubmissions = false):
     shareUrl: shareUrl(project.id, project.state),
     submissionCount: countRows[0]?.value ?? 0,
     bookStatus: project.bookStatus,
+    pageFormat: project.pageFormat,
+    pageOrientation: project.pageOrientation,
     layouts: layoutRows.map(layoutRecord),
     book: bookRows[0]?.generatedBook ?? null,
     submissions: includeSubmissions ? submissionRows.map(submissionSummary) : undefined,
@@ -318,6 +325,8 @@ export async function duplicateProject(projectId: string): Promise<Project> {
       title: `${source.title} — copy`,
       occasion: source.occasion,
       formSchema: source.formSchema,
+      pageFormat: source.pageFormat,
+      pageOrientation: source.pageOrientation,
     })
     const sourceLayouts = await tx
       .select()
@@ -427,7 +436,7 @@ export async function createLayout(
         projectId,
         name: name.trim() || "Untitled layout",
         position: (positionRow?.value ?? -1) + 1,
-        schema: backgroundSchema(backgroundPresetId),
+        schema: backgroundSchema(backgroundPresetId, project.pageFormat, project.pageOrientation),
       })
       .returning()
     await tx
@@ -465,6 +474,15 @@ export async function updateLayout(input: {
       .for("update")
     if (!project) throw new HttpError(404, "Project not found.")
     assertNotArchived(project)
+    if (input.schema) {
+      const specification = pageSpecification(project.pageFormat, project.pageOrientation)
+      if (
+        input.schema.trim.widthMm !== specification.trimWidthMm ||
+        input.schema.trim.heightMm !== specification.trimHeightMm
+      ) {
+        throw new HttpError(409, "The layout uses a different project page format. Reload it.")
+      }
+    }
     const [updated] = await tx
       .update(layouts)
       .set({
@@ -618,6 +636,81 @@ export async function deleteLayout(projectId: string, layoutId: string): Promise
       })
       .where(eq(projects.id, projectId))
   })
+}
+
+export async function setProjectPageFormat(input: {
+  projectId: string
+  pageFormat: PageFormat
+  pageOrientation: PageOrientation
+  resetLayouts?: boolean
+}): Promise<Project> {
+  await db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
+    if (project.state !== "closed") {
+      throw new HttpError(409, "Close collection before choosing a page format.")
+    }
+    if (
+      project.pageFormat === input.pageFormat &&
+      project.pageOrientation === input.pageOrientation
+    ) {
+      return
+    }
+
+    const currentLayouts = await tx
+      .select()
+      .from(layouts)
+      .where(eq(layouts.projectId, input.projectId))
+      .orderBy(asc(layouts.position))
+      .for("update")
+    const orientationChanged = project.pageOrientation !== input.pageOrientation
+    const target = pageSpecification(input.pageFormat, input.pageOrientation)
+
+    if (orientationChanged) {
+      if (currentLayouts.length > 0 && !input.resetLayouts) {
+        throw new HttpError(
+          409,
+          `Changing orientation resets ${currentLayouts.length} layout${currentLayouts.length === 1 ? "" : "s"}.`,
+          { layoutCount: currentLayouts.length }
+        )
+      }
+      await tx.delete(layouts).where(eq(layouts.projectId, input.projectId))
+      await tx.insert(layouts).values({
+        id: crypto.randomUUID(),
+        projectId: input.projectId,
+        name: "Layout 1",
+        position: 0,
+        schema: emptyLayoutSchema(input.pageFormat, input.pageOrientation),
+      })
+    } else {
+      for (const layout of currentLayouts) {
+        await tx
+          .update(layouts)
+          .set({
+            schema: resizeLayoutSchema(layout.schema, target),
+            revision: sql`${layouts.revision} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(layouts.id, layout.id))
+      }
+    }
+
+    await tx
+      .update(projects)
+      .set({
+        pageFormat: input.pageFormat,
+        pageOrientation: input.pageOrientation,
+        bookStatus: markBookStaleSet(project.bookStatus),
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, input.projectId))
+  })
+  return getProject(input.projectId, true)
 }
 
 export async function generateProjectBook(

@@ -32,7 +32,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Create a shared friend book, collect anonymous stories, design pages, and export a print-ready A5 landscape PDF.",
+          "Create a shared friend book, collect anonymous stories, design pages, and export a print-ready PDF in standard DIN formats.",
       },
     ],
     links: [

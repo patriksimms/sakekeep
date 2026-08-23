@@ -31,7 +31,16 @@ import {
   XCircleIcon,
   type LucideIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactElement } from "react"
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactElement,
+} from "react"
 import { toast } from "sonner"
 
 import {
@@ -93,7 +102,7 @@ import {
   type LayerAction,
 } from "#/domain/layout-editor-actions.ts"
 import { cssFontStack, FONT_FAMILIES, FONT_FAMILY_GROUPS, type FontFamily } from "#/domain/fonts.ts"
-import { BACKGROUND_PRESETS, type BackgroundPreset } from "#/domain/layout-backgrounds.ts"
+import { backgroundPresets, type BackgroundPreset } from "#/domain/layout-backgrounds.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { reorderElementsFromTopmostList, type DropEdge } from "#/domain/layout-layer-order.ts"
 import {
@@ -101,7 +110,13 @@ import {
   layoutQuestionPalette,
   questionPrompt,
 } from "#/domain/layout-question-palette.ts"
-import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
+import { addElement, layoutStyleLimits } from "#/domain/layout.ts"
+import {
+  PAGE_FORMATS,
+  PAGE_ORIENTATIONS,
+  pageFormatLabel,
+  pageSpecificationForLayout,
+} from "#/domain/page-format.ts"
 import { photoSlotMismatches } from "#/domain/photo-assignment.ts"
 import { enforceMinimumTextBoxHeight } from "#/domain/text-layout.ts"
 import {
@@ -109,6 +124,8 @@ import {
   type LayoutElement,
   type LayoutRecord,
   type LayoutSchema,
+  type PageFormat,
+  type PageOrientation,
   type Project,
   type TextSettings,
 } from "#/domain/types.ts"
@@ -119,9 +136,13 @@ type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
 function BackgroundPicker({
   compact = false,
+  pageFormat,
+  pageOrientation,
   onCreate,
 }: {
   compact?: boolean
+  pageFormat: PageFormat
+  pageOrientation: PageOrientation
   onCreate: (preset: BackgroundPreset) => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
@@ -164,7 +185,7 @@ function BackgroundPicker({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          {BACKGROUND_PRESETS.map((preset) => (
+          {backgroundPresets(pageFormat, pageOrientation).map((preset) => (
             <Button
               key={preset.id}
               variant="outline"
@@ -174,8 +195,12 @@ function BackgroundPicker({
               onClick={() => void create(preset)}
             >
               <span
-                className="relative block aspect-[216/154] w-full overflow-hidden rounded-sm"
-                style={{ background: preset.schema.background, containerType: "inline-size" }}
+                className="relative block w-full overflow-hidden rounded-sm"
+                style={{
+                  aspectRatio: `${preset.schema.trim.widthMm + preset.schema.bleedMm * 2} / ${preset.schema.trim.heightMm + preset.schema.bleedMm * 2}`,
+                  background: preset.schema.background,
+                  containerType: "inline-size",
+                }}
               >
                 <LayoutPageElements schema={preset.schema} ariaHidden />
               </span>
@@ -318,9 +343,11 @@ function withFontFamily(settings: TextSettings, fontFamily: FontFamily): TextSet
 function TextSettingsEditor({
   settings,
   onChange,
+  limits,
 }: {
   settings: TextSettings
   onChange: (settings: TextSettings) => void
+  limits: ReturnType<typeof layoutStyleLimits>
 }) {
   return (
     <FieldGroup>
@@ -355,11 +382,15 @@ function TextSettingsEditor({
         <NumericField
           label="Font size"
           value={settings.fontSize}
+          min={limits.fontSize.min}
+          max={limits.fontSize.max}
           onChange={(fontSize) => onChange({ ...settings, fontSize })}
         />
         <NumericField
           label="Minimum"
           value={settings.minFontSize}
+          min={limits.fontSize.min}
+          max={limits.fontSize.max}
           onChange={(minFontSize) => onChange({ ...settings, minFontSize })}
         />
       </div>
@@ -479,12 +510,14 @@ function TextSettingsEditor({
 function ElementInspector({
   element,
   questions,
+  limits,
   onChange,
   onChooseDecorative,
   decorativeUploading,
 }: {
   element: LayoutElement
   questions: FormQuestion[]
+  limits: ReturnType<typeof layoutStyleLimits>
   onChange: (element: LayoutElement) => void
   onChooseDecorative: (file: File) => void
   decorativeUploading: boolean
@@ -579,6 +612,7 @@ function ElementInspector({
           <Separator />
           <TextSettingsEditor
             settings={element.text}
+            limits={limits}
             onChange={(text) => onChange({ ...element, text })}
           />
         </>
@@ -596,6 +630,7 @@ function ElementInspector({
           <Separator />
           <TextSettingsEditor
             settings={element.text}
+            limits={limits}
             onChange={(text) => onChange({ ...element, text })}
           />
         </>
@@ -629,6 +664,8 @@ function ElementInspector({
           <NumericField
             label="Slot gap (mm)"
             value={element.gap}
+            min={0}
+            max={limits.gapMax}
             onChange={(gap) => onChange({ ...element, gap: Math.max(0, gap) })}
           />
         </>
@@ -657,6 +694,8 @@ function ElementInspector({
           <NumericField
             label="Stroke width"
             value={element.strokeWidth}
+            min={0}
+            max={limits.strokeWidthMax}
             onChange={(strokeWidth) =>
               onChange({ ...element, strokeWidth: Math.max(0, strokeWidth) })
             }
@@ -743,15 +782,21 @@ function ElementInspector({
   )
 }
 
-function Editor({
-  project,
-  layout,
-  onSaved,
-}: {
-  project: Project
-  layout: LayoutRecord
-  onSaved: (layout: LayoutRecord) => void
-}) {
+interface EditorHandle {
+  discard: () => void
+  flush: () => Promise<boolean>
+  settle: () => Promise<void>
+}
+
+const Editor = forwardRef<
+  EditorHandle,
+  {
+    project: Project
+    layout: LayoutRecord
+    onSaved: (layout: LayoutRecord) => void
+    onSaveStateChange: (state: SaveState) => void
+  }
+>(function Editor({ project, layout, onSaved, onSaveStateChange }, ref) {
   const [schema, setSchema] = useState(layout.schema)
   const [name, setName] = useState(layout.name)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -769,10 +814,18 @@ function Editor({
   const nameRef = useRef(name)
   const editVersion = useRef(0)
   const savedVersion = useRef(0)
-  const saveInFlight = useRef(false)
+  const saveInFlight = useRef<Promise<boolean> | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onSavedRef = useRef(onSaved)
+  const onSaveStateChangeRef = useRef(onSaveStateChange)
   schemaRef.current = schema
   nameRef.current = name
+  onSavedRef.current = onSaved
+  onSaveStateChangeRef.current = onSaveStateChange
+  const pageSpecification = pageSpecificationForLayout(schema)
+  const styleLimits = layoutStyleLimits(pageSpecification)
+
+  useEffect(() => onSaveStateChangeRef.current(saveState), [saveState])
 
   useEffect(() => {
     const node = container.current
@@ -785,44 +838,78 @@ function Editor({
     return () => observer.disconnect()
   }, [])
 
-  const save = useCallback(async () => {
-    if (savedVersion.current === editVersion.current) return
-    if (saveInFlight.current) return
-    saveInFlight.current = true
+  const save = useCallback(
+    async (reschedule = true): Promise<boolean> => {
+      if (saveInFlight.current) return saveInFlight.current
+      if (savedVersion.current === editVersion.current) return true
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+      }
+      const version = editVersion.current
+      setSaveState("saving")
+      const request = (async () => {
+        try {
+          const updated = await projectApi.updateLayout<LayoutRecord>(project.id, layout.id, {
+            expectedRevision: revision.current,
+            name: nameRef.current,
+            schema: schemaRef.current,
+          })
+          revision.current = updated.revision
+          savedVersion.current = version
+          onSavedRef.current(updated)
+          setSaveState(savedVersion.current === editVersion.current ? "saved" : "unsaved")
+          if (reschedule && savedVersion.current !== editVersion.current) {
+            if (timer.current) clearTimeout(timer.current)
+            timer.current = setTimeout(() => void save(), 400)
+          }
+          return true
+        } catch (error) {
+          setSaveState("failed")
+          toast.error(error instanceof Error ? error.message : "Layout save failed")
+          return false
+        } finally {
+          saveInFlight.current = null
+        }
+      })()
+      saveInFlight.current = request
+      return request
+    },
+    [layout.id, project.id]
+  )
+
+  const flush = useCallback(async () => {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
     }
-    const version = editVersion.current
-    setSaveState("saving")
-    try {
-      const updated = await projectApi.updateLayout<LayoutRecord>(project.id, layout.id, {
-        expectedRevision: revision.current,
-        name: nameRef.current,
-        schema: schemaRef.current,
-      })
-      revision.current = updated.revision
-      savedVersion.current = version
-      onSaved(updated)
-      setSaveState(savedVersion.current === editVersion.current ? "saved" : "unsaved")
-      if (savedVersion.current !== editVersion.current) {
-        if (timer.current) clearTimeout(timer.current)
-        timer.current = setTimeout(() => void save(), 400)
-      }
-    } catch (error) {
-      setSaveState("failed")
-      toast.error(error instanceof Error ? error.message : "Layout save failed")
-    } finally {
-      saveInFlight.current = false
+    while (savedVersion.current !== editVersion.current) {
+      if (!(await save(false))) return false
     }
-  }, [layout.id, onSaved, project.id])
+    return true
+  }, [save])
+
+  const settle = useCallback(async () => {
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+    await saveInFlight.current
+  }, [])
+
+  const discard = useCallback(() => {
+    savedVersion.current = editVersion.current
+    setSaveState("saved")
+  }, [])
+
+  useImperativeHandle(ref, () => ({ discard, flush, settle }), [discard, flush, settle])
 
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current)
-      void save()
+      void flush()
     },
-    [save]
+    [flush]
   )
 
   useEffect(() => {
@@ -1211,7 +1298,7 @@ function Editor({
                         ...selected,
                         geometry: {
                           ...selected.geometry,
-                          x: (PAGE_SPEC.trimWidthMm - selected.geometry.width) / 2,
+                          x: (pageSpecification.trimWidthMm - selected.geometry.width) / 2,
                         },
                       })
                     }
@@ -1229,7 +1316,7 @@ function Editor({
                         ...selected,
                         geometry: {
                           ...selected.geometry,
-                          y: (PAGE_SPEC.trimHeightMm - selected.geometry.height) / 2,
+                          y: (pageSpecification.trimHeightMm - selected.geometry.height) / 2,
                         },
                       })
                     }
@@ -1384,6 +1471,7 @@ function Editor({
               <ElementInspector
                 element={selected}
                 questions={project.formSchema.questions}
+                limits={styleLimits}
                 onChange={changeSelected}
                 onChooseDecorative={(file) => void uploadDecorative(selected.id, file)}
                 decorativeUploading={decorativeUploadingId === selected.id}
@@ -1398,7 +1486,7 @@ function Editor({
       </Card>
     </div>
   )
-}
+})
 
 export function LayoutsPanel({
   project,
@@ -1409,6 +1497,14 @@ export function LayoutsPanel({
 }) {
   const [selectedId, setSelectedId] = useState(project.layouts[0]?.id ?? null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [editorSaveState, setEditorSaveState] = useState<SaveState>("saved")
+  const [formatChanging, setFormatChanging] = useState(false)
+  const [layoutChanging, setLayoutChanging] = useState(false)
+  const [pendingOrientation, setPendingOrientation] = useState<PageOrientation | null>(null)
+  const [editorEpoch, setEditorEpoch] = useState(0)
+  const editorRef = useRef<EditorHandle>(null)
+  const projectRef = useRef(project)
+  projectRef.current = project
   const selected = project.layouts.find((layout) => layout.id === selectedId) ?? project.layouts[0]
 
   useEffect(() => {
@@ -1444,34 +1540,174 @@ export function LayoutsPanel({
 
   const updateLayouts = (layouts: LayoutRecord[]) =>
     onProjectChange({
-      ...project,
+      ...projectRef.current,
       layouts,
-      bookStatus: project.bookStatus === "not-generated" ? "not-generated" : "stale",
+      bookStatus: projectRef.current.bookStatus === "not-generated" ? "not-generated" : "stale",
     })
 
-  const deleteSelectedLayout = async () => {
-    if (!selected) return
+  const onEditorSaved = (updated: LayoutRecord) =>
+    updateLayouts(
+      projectRef.current.layouts.map((layout) => (layout.id === updated.id ? updated : layout))
+    )
 
+  const selectLayout = async (layoutId: string) => {
+    if (layoutId === selected?.id || formatChanging || layoutChanging) return
+    setLayoutChanging(true)
     try {
+      if ((await editorRef.current?.flush()) === false) return
+      setEditorSaveState("saved")
+      setSelectedId(layoutId)
+    } finally {
+      setLayoutChanging(false)
+    }
+  }
+
+  async function runAfterEditorSave(action: () => Promise<void>) {
+    if (formatChanging || layoutChanging) return
+    setLayoutChanging(true)
+    try {
+      if ((await editorRef.current?.flush()) === false) return
+      await action()
+    } finally {
+      setLayoutChanging(false)
+    }
+  }
+
+  const deleteSelectedLayout = async () => {
+    if (!selected || formatChanging || layoutChanging) return
+
+    setLayoutChanging(true)
+    try {
+      await editorRef.current?.settle()
       await projectApi.deleteLayout(project.id, selected.id)
+      editorRef.current?.discard()
       const index = project.layouts.findIndex((layout) => layout.id === selected.id)
       const remaining = project.layouts
         .filter((layout) => layout.id !== selected.id)
         .map((layout, position) => ({ ...layout, position }))
       setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
+      setEditorSaveState("saved")
       updateLayouts(remaining)
     } catch (error) {
+      void editorRef.current?.flush()
       toast.error(error instanceof Error ? error.message : "Delete failed")
+    } finally {
+      setLayoutChanging(false)
     }
   }
+
+  const changePageFormat = async (
+    pageFormat: PageFormat,
+    pageOrientation: PageOrientation,
+    resetLayouts = false
+  ) => {
+    if (formatChanging || layoutChanging) return
+    setFormatChanging(true)
+    try {
+      if ((await editorRef.current?.flush()) === false) return
+      const updated = await projectApi.layoutAction<Project>(project.id, {
+        action: "set-page-format",
+        pageFormat,
+        pageOrientation,
+        resetLayouts,
+      })
+      onProjectChange(updated)
+      setSelectedId(
+        updated.layouts.some((layout) => layout.id === selectedId)
+          ? selectedId
+          : (updated.layouts[0]?.id ?? null)
+      )
+      setEditorEpoch((value) => value + 1)
+      captureAnalyticsEvent("layout_editor:page_format_changed", {
+        page_format: pageFormat,
+        page_orientation: pageOrientation,
+        layouts_reset: resetLayouts,
+      })
+      toast.success(`Page format changed to ${pageFormatLabel(pageFormat)} ${pageOrientation}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Page format change failed")
+    } finally {
+      setFormatChanging(false)
+      setPendingOrientation(null)
+    }
+  }
+
+  const workspaceDisabled = formatChanging || layoutChanging
+  const formatControlsDisabled = workspaceDisabled || editorSaveState !== "saved"
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-4">
-        <h2 className="font-heading text-2xl">Page layouts</h2>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+          <h2 className="font-heading text-2xl">Page layouts</h2>
+          <div className="flex items-end gap-2">
+            <Field className="w-24 gap-1">
+              <FieldLabel>Page size</FieldLabel>
+              <Select
+                items={PAGE_FORMATS.map((format) => ({
+                  value: format,
+                  label: pageFormatLabel(format),
+                }))}
+                value={project.pageFormat}
+                disabled={formatControlsDisabled}
+                onValueChange={(value) => {
+                  if (!value || value === project.pageFormat) return
+                  void changePageFormat(value as PageFormat, project.pageOrientation)
+                }}
+              >
+                <SelectTrigger aria-label="Page size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {PAGE_FORMATS.map((format) => (
+                      <SelectItem key={format} value={format}>
+                        {pageFormatLabel(format)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field className="w-32 gap-1">
+              <FieldLabel>Orientation</FieldLabel>
+              <Select
+                value={project.pageOrientation}
+                disabled={formatControlsDisabled}
+                onValueChange={(value) => {
+                  if (!value || value === project.pageOrientation) return
+                  const orientation = value as PageOrientation
+                  if (project.layouts.length > 0) setPendingOrientation(orientation)
+                  else void changePageFormat(project.pageFormat, orientation, true)
+                }}
+              >
+                <SelectTrigger aria-label="Page orientation" className="capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {PAGE_ORIENTATIONS.map((orientation) => (
+                      <SelectItem key={orientation} value={orientation} className="capitalize">
+                        {orientation}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+        </div>
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-2"
+          inert={workspaceDisabled || undefined}
+          aria-busy={workspaceDisabled}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-1">
-            <Tabs className="min-w-0" value={selected?.id ?? ""} onValueChange={setSelectedId}>
+            <Tabs
+              className="min-w-0"
+              value={selected?.id ?? ""}
+              onValueChange={(value) => void selectLayout(value)}
+            >
               <TabsList className="max-w-full justify-start overflow-x-auto">
                 {project.layouts.map((layout) => {
                   const active = layout.id === selected?.id
@@ -1505,17 +1741,21 @@ export function LayoutsPanel({
             </Tabs>
             <BackgroundPicker
               compact
+              pageFormat={project.pageFormat}
+              pageOrientation={project.pageOrientation}
               onCreate={async (preset) => {
-                const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                  action: "create",
-                  name:
-                    preset.id === "blank"
-                      ? `Layout ${project.layouts.length + 1}`
-                      : `${preset.name} background`,
-                  backgroundPresetId: preset.id,
+                await runAfterEditorSave(async () => {
+                  const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
+                    action: "create",
+                    name:
+                      preset.id === "blank"
+                        ? `Layout ${project.layouts.length + 1}`
+                        : `${preset.name} background`,
+                    backgroundPresetId: preset.id,
+                  })
+                  updateLayouts([...projectRef.current.layouts, layout])
+                  setSelectedId(layout.id)
                 })
-                updateLayouts([...project.layouts, layout])
-                setSelectedId(layout.id)
               }}
             />
           </div>
@@ -1548,13 +1788,19 @@ export function LayoutsPanel({
                   disabled={selected.position === 0}
                   onClick={async () => {
                     if (selected.position === 0) return
-                    const ids = project.layouts.map((layout) => layout.id)
-                    const index = ids.indexOf(selected.id)
-                    ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
-                    const result = await projectApi.layoutAction<{
-                      layouts: LayoutRecord[]
-                    }>(project.id, { action: "reorder", layoutIds: ids })
-                    updateLayouts(result.layouts)
+                    await runAfterEditorSave(async () => {
+                      const ids = project.layouts.map((layout) => layout.id)
+                      const index = ids.indexOf(selected.id)
+                      ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
+                      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(
+                        project.id,
+                        {
+                          action: "reorder",
+                          layoutIds: ids,
+                        }
+                      )
+                      updateLayouts(result.layouts)
+                    })
                   }}
                 >
                   <ArrowUpIcon />
@@ -1571,13 +1817,19 @@ export function LayoutsPanel({
                   disabled={selected.position === project.layouts.length - 1}
                   onClick={async () => {
                     if (selected.position === project.layouts.length - 1) return
-                    const ids = project.layouts.map((layout) => layout.id)
-                    const index = ids.indexOf(selected.id)
-                    ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
-                    const result = await projectApi.layoutAction<{
-                      layouts: LayoutRecord[]
-                    }>(project.id, { action: "reorder", layoutIds: ids })
-                    updateLayouts(result.layouts)
+                    await runAfterEditorSave(async () => {
+                      const ids = project.layouts.map((layout) => layout.id)
+                      const index = ids.indexOf(selected.id)
+                      ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
+                      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(
+                        project.id,
+                        {
+                          action: "reorder",
+                          layoutIds: ids,
+                        }
+                      )
+                      updateLayouts(result.layouts)
+                    })
                   }}
                 >
                   <ArrowDownIcon />
@@ -1586,12 +1838,14 @@ export function LayoutsPanel({
               <Button
                 variant="outline"
                 onClick={async () => {
-                  const duplicate = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                    action: "duplicate",
-                    layoutId: selected.id,
+                  await runAfterEditorSave(async () => {
+                    const duplicate = await projectApi.layoutAction<LayoutRecord>(project.id, {
+                      action: "duplicate",
+                      layoutId: selected.id,
+                    })
+                    updateLayouts([...projectRef.current.layouts, duplicate])
+                    setSelectedId(duplicate.id)
                   })
-                  updateLayouts([...project.layouts, duplicate])
-                  setSelectedId(duplicate.id)
                 }}
               >
                 <CopyIcon data-icon="inline-start" />
@@ -1603,16 +1857,16 @@ export function LayoutsPanel({
       </div>
 
       {selected ? (
-        <Editor
-          key={selected.id}
-          project={project}
-          layout={selected}
-          onSaved={(updated) =>
-            updateLayouts(
-              project.layouts.map((layout) => (layout.id === updated.id ? updated : layout))
-            )
-          }
-        />
+        <div inert={workspaceDisabled || undefined} aria-busy={workspaceDisabled}>
+          <Editor
+            ref={editorRef}
+            key={`${selected.id}:${editorEpoch}`}
+            project={project}
+            layout={selected}
+            onSaveStateChange={setEditorSaveState}
+            onSaved={onEditorSaved}
+          />
+        </div>
       ) : (
         <Card className="min-h-80 bg-card/80">
           <CardHeader className="m-auto place-items-center text-center">
@@ -1626,6 +1880,40 @@ export function LayoutsPanel({
           </CardHeader>
         </Card>
       )}
+
+      <AlertDialog
+        open={pendingOrientation !== null}
+        onOpenChange={(open) => {
+          if (!open && !formatChanging) setPendingOrientation(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset layouts and change orientation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Changing to {pendingOrientation} removes {project.layouts.length} layout
+              {project.layouts.length === 1 ? "" : "s"} and creates one blank Layout 1. This cannot
+              be undone. You must regenerate the book before export.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={formatChanging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={formatChanging || !pendingOrientation}
+              onClick={() => {
+                if (!pendingOrientation) return
+                void changePageFormat(project.pageFormat, pendingOrientation, true)
+              }}
+            >
+              {formatChanging && (
+                <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
+              )}
+              Reset layouts
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -24,6 +24,7 @@ import {
 import { effectivePpi } from "../domain/generation"
 import { FONT_CUT_FILES, fontCut, type FontCut } from "../domain/fonts.ts"
 import { gallerySlots, PAGE_SPEC } from "../domain/layout"
+import { pageSpecification, type PageSpecification } from "../domain/page-format.ts"
 import {
   assignPhotosToFrames,
   framePhotos,
@@ -74,6 +75,15 @@ function pt(mm: number): number {
   return mm * POINTS_PER_MM
 }
 
+export function fitSingleLineTextSize(
+  preferredSize: number,
+  measuredWidth: number,
+  availableWidth: number
+): number {
+  if (measuredWidth <= availableWidth || measuredWidth === 0) return preferredSize
+  return preferredSize * (availableWidth / measuredWidth)
+}
+
 function color(value: string) {
   const hex = /^#([0-9a-f]{6})$/i.exec(value)?.[1] ?? "000000"
   return rgb(
@@ -83,8 +93,8 @@ function color(value: string) {
   )
 }
 
-function pdfY(yMm: number, heightMm: number): number {
-  return pt(PAGE_SPEC.mediaHeightMm - PAGE_SPEC.bleedMm - yMm - heightMm)
+function pdfY(yMm: number, heightMm: number, specification: PageSpecification): number {
+  return pt(specification.mediaHeightMm - specification.bleedMm - yMm - heightMm)
 }
 
 async function embedImage(pdf: PDFDocument, assetId: string): Promise<PDFImage> {
@@ -97,10 +107,11 @@ function drawCroppedImage(
   page: PDFPage,
   image: PDFImage,
   geometry: { x: number; y: number; width: number; height: number },
+  specification: PageSpecification,
   focalPoint = { x: 0.5, y: 0.5 }
 ) {
-  const x = pt(PAGE_SPEC.bleedMm + geometry.x)
-  const y = pdfY(geometry.y, geometry.height)
+  const x = pt(specification.bleedMm + geometry.x)
+  const y = pdfY(geometry.y, geometry.height, specification)
   const width = pt(geometry.width)
   const height = pt(geometry.height)
   const scale = Math.max(width / image.width, height / image.height)
@@ -146,13 +157,14 @@ function drawTextElement(input: {
   settings: TextSettings
   geometry: LayoutElement["geometry"]
   opacity: number
+  specification: PageSpecification
 }) {
   if (!input.runs.some((run) => run.text.trim())) return
   const layout = layoutText(input.runs, input.geometry.width, input.geometry.height, input.settings)
   const size = layout.effectiveFontSize
   const width = pt(input.geometry.width)
   const lineHeight = pt(layout.lineHeightMm)
-  const top = pdfY(input.geometry.y, 0)
+  const top = pdfY(input.geometry.y, 0, input.specification)
   layout.renderedLines.forEach((line, index) => {
     const textWidth = pt(line.widthMm)
     const offset =
@@ -162,7 +174,7 @@ function drawTextElement(input: {
           ? width - textWidth
           : 0
     input.page.drawText(line.text, {
-      x: pt(PAGE_SPEC.bleedMm + input.geometry.x) + offset,
+      x: pt(input.specification.bleedMm + input.geometry.x) + offset,
       y: top - lineHeight * (index + 1),
       size,
       font: embeddedFont(
@@ -186,11 +198,12 @@ async function drawElement(input: {
   form: FormSchema
   fonts: EmbeddedFonts
   assetResolutions: AssetResolutionMetadata[]
+  specification: PageSpecification
 }) {
   const { element, page } = input
   const geometry = element.geometry
-  const x = pt(PAGE_SPEC.bleedMm + geometry.x)
-  const y = pdfY(geometry.y, geometry.height)
+  const x = pt(input.specification.bleedMm + geometry.x)
+  const y = pdfY(geometry.y, geometry.height, input.specification)
   const width = pt(geometry.width)
   const height = pt(geometry.height)
 
@@ -210,6 +223,7 @@ async function drawElement(input: {
       settings: element.text,
       geometry,
       opacity: element.opacity,
+      specification: input.specification,
     })
     return
   }
@@ -262,7 +276,7 @@ async function drawElement(input: {
       placedHeightMm: geometry.height,
       effectivePpi: effectivePpi(image.width, image.height, geometry.width, geometry.height),
     })
-    drawCroppedImage(page, image, geometry, element.focalPoint)
+    drawCroppedImage(page, image, geometry, input.specification, element.focalPoint)
     return
   }
   if (element.type !== "image-frame" && element.type !== "gallery-frame") {
@@ -289,7 +303,13 @@ async function drawElement(input: {
         geometry.height
       ),
     })
-    drawCroppedImage(page, embeddedImage, geometry, element.focalPoint ?? image.focalPoint)
+    drawCroppedImage(
+      page,
+      embeddedImage,
+      geometry,
+      input.specification,
+      element.focalPoint ?? image.focalPoint
+    )
     return
   }
   const slots = gallerySlots(element.arrangement, geometry.width, geometry.height, element.gap)
@@ -322,35 +342,36 @@ async function drawElement(input: {
           width: slot.width,
           height: slot.height,
         },
+        input.specification,
         element.focalPoint ?? image.focalPoint
       )
     })
   )
 }
 
-function applyPageBoxes(page: PDFPage) {
+function applyPageBoxes(page: PDFPage, specification: PageSpecification) {
   const context = page.doc.context
   const trim = context.obj([
-    PDFNumber.of(pt(3)),
-    PDFNumber.of(pt(3)),
-    PDFNumber.of(pt(213)),
-    PDFNumber.of(pt(151)),
+    PDFNumber.of(pt(specification.bleedMm)),
+    PDFNumber.of(pt(specification.bleedMm)),
+    PDFNumber.of(pt(specification.bleedMm + specification.trimWidthMm)),
+    PDFNumber.of(pt(specification.bleedMm + specification.trimHeightMm)),
   ])
   const bleed = context.obj([
     PDFNumber.of(0),
     PDFNumber.of(0),
-    PDFNumber.of(pt(216)),
-    PDFNumber.of(pt(154)),
+    PDFNumber.of(pt(specification.mediaWidthMm)),
+    PDFNumber.of(pt(specification.mediaHeightMm)),
   ])
   page.node.set(PDFName.of("TrimBox"), trim)
   page.node.set(PDFName.of("BleedBox"), bleed)
 }
 
-function drawMarks(page: PDFPage) {
-  const trimLeft = pt(3)
-  const trimRight = pt(213)
-  const trimBottom = pt(3)
-  const trimTop = pt(151)
+function drawMarks(page: PDFPage, specification: PageSpecification) {
+  const trimLeft = pt(specification.bleedMm)
+  const trimRight = pt(specification.bleedMm + specification.trimWidthMm)
+  const trimBottom = pt(specification.bleedMm)
+  const trimTop = pt(specification.bleedMm + specification.trimHeightMm)
   const length = pt(2)
   const gap = pt(0.5)
   const options = { color: rgb(0, 0, 0), thickness: 0.25, opacity: 1 }
@@ -488,6 +509,8 @@ export async function renderBookPdf(input: {
   submissions: SubmissionSummary[]
   form: FormSchema
   marks: boolean
+  pageFormat?: import("../domain/types.ts").PageFormat
+  pageOrientation?: import("../domain/types.ts").PageOrientation
 }): Promise<Uint8Array> {
   let icc: Uint8Array
   try {
@@ -507,33 +530,51 @@ export async function renderBookPdf(input: {
   const submissions = new Map(input.submissions.map((submission) => [submission.id, submission]))
   const fonts = await embedFonts(pdf, requiredCuts(input.book, layouts))
   const assetResolutions: AssetResolutionMetadata[] = []
+  const specification = pageSpecification(
+    input.pageFormat ?? "a5",
+    input.pageOrientation ?? "landscape"
+  )
 
   for (const bookPage of input.book.pages) {
-    const page = pdf.addPage([pt(PAGE_SPEC.mediaWidthMm), pt(PAGE_SPEC.mediaHeightMm)])
-    applyPageBoxes(page)
+    const page = pdf.addPage([pt(specification.mediaWidthMm), pt(specification.mediaHeightMm)])
+    applyPageBoxes(page, specification)
     if (bookPage.kind === "standalone") {
       page.drawRectangle({
         x: 0,
         y: 0,
-        width: pt(PAGE_SPEC.mediaWidthMm),
-        height: pt(PAGE_SPEC.mediaHeightMm),
+        width: pt(specification.mediaWidthMm),
+        height: pt(specification.mediaHeightMm),
         color: color(bookPage.background),
       })
       const content = standaloneText(bookPage)
       if (bookPage.pageType !== "blank") {
+        const titleFont = embeddedFont(fonts, STANDALONE_TITLE_CUT)
+        const titleWidth = pt(Math.max(20, specification.trimWidthMm - 30))
+        const titleSize = fitSingleLineTextSize(
+          30,
+          titleFont.widthOfTextAtSize(content.title, 30),
+          titleWidth
+        )
         page.drawText(content.title, {
-          x: pt(18),
-          y: pt(100),
-          size: 30,
-          font: embeddedFont(fonts, STANDALONE_TITLE_CUT),
+          x: pt(specification.bleedMm + 15),
+          y: pt(specification.bleedMm + specification.trimHeightMm * 0.68),
+          size: titleSize,
+          font: titleFont,
           color: color("#292524"),
         })
         const bodyFont = embeddedFont(fonts, STANDALONE_BODY_CUT)
-        const lines = wrapText(content.body, bodyFont, 12, pt(170))
-        lines.slice(0, 12).forEach((line, index) => {
+        const bodyY = specification.bleedMm + specification.trimHeightMm * 0.68 - 14
+        const lines = wrapText(
+          content.body,
+          bodyFont,
+          12,
+          pt(Math.max(20, specification.trimWidthMm - 30))
+        )
+        const lineLimit = Math.max(1, Math.floor(((bodyY - 15) * POINTS_PER_MM) / 16))
+        lines.slice(0, lineLimit).forEach((line, index) => {
           page.drawText(line, {
-            x: pt(18),
-            y: pt(86) - index * 16,
+            x: pt(specification.bleedMm + 15),
+            y: pt(bodyY) - index * 16,
             size: 12,
             font: bodyFont,
             color: color("#57534e"),
@@ -549,8 +590,8 @@ export async function renderBookPdf(input: {
       page.drawRectangle({
         x: 0,
         y: 0,
-        width: pt(PAGE_SPEC.mediaWidthMm),
-        height: pt(PAGE_SPEC.mediaHeightMm),
+        width: pt(specification.mediaWidthMm),
+        height: pt(specification.mediaHeightMm),
         color: color(layout.schema.background),
       })
       const photoAssignment = assignPhotosToFrames(layout.schema.elements, submission.answers)
@@ -565,16 +606,20 @@ export async function renderBookPdf(input: {
           form: input.form,
           fonts,
           assetResolutions,
+          specification,
         })
       }
     }
-    if (input.marks) drawMarks(page)
+    if (input.marks) drawMarks(page, specification)
   }
   setPdfXMetadata(pdf, icc, assetResolutions)
   return pdf.save({ useObjectStreams: false, addDefaultPage: false })
 }
 
-export async function inspectPdf(bytes: Uint8Array): Promise<{
+export async function inspectPdf(
+  bytes: Uint8Array,
+  specification: PageSpecification = PAGE_SPEC
+): Promise<{
   pageCount: number
   pageBoxesValid: boolean
   fontsEmbedded: boolean
@@ -586,8 +631,15 @@ export async function inspectPdf(bytes: Uint8Array): Promise<{
 }> {
   const document = await PDFDocument.load(bytes)
   const tolerance = 0.2
-  const expectedWidth = pt(PAGE_SPEC.mediaWidthMm)
-  const expectedHeight = pt(PAGE_SPEC.mediaHeightMm)
+  const expectedWidth = pt(specification.mediaWidthMm)
+  const expectedHeight = pt(specification.mediaHeightMm)
+  const boxMatches = (box: unknown, expected: number[]) =>
+    box instanceof PDFArray &&
+    box.size() === expected.length &&
+    expected.every((value, index) => {
+      const item = box.lookup(index)
+      return item instanceof PDFNumber && Math.abs(item.asNumber() - value) < tolerance
+    })
   const pageBoxesValid = document.getPages().every((page) => {
     const size = page.getSize()
     const trimBox = page.node.lookup(PDFName.of("TrimBox"))
@@ -595,8 +647,13 @@ export async function inspectPdf(bytes: Uint8Array): Promise<{
     return (
       Math.abs(size.width - expectedWidth) < tolerance &&
       Math.abs(size.height - expectedHeight) < tolerance &&
-      trimBox instanceof PDFArray &&
-      bleedBox instanceof PDFArray
+      boxMatches(trimBox, [
+        pt(specification.bleedMm),
+        pt(specification.bleedMm),
+        pt(specification.bleedMm + specification.trimWidthMm),
+        pt(specification.bleedMm + specification.trimHeightMm),
+      ]) &&
+      boxMatches(bleedBox, [0, 0, expectedWidth, expectedHeight])
     )
   })
   const raw = Buffer.from(bytes).toString("latin1")

@@ -12,8 +12,8 @@
   project UUID and a local secret. Only a SHA-256 digest is stored in PostgreSQL.
   This retains stable organizer links without storing usable tokens in routine
   database rows and provides 192 bits of encoded token entropy.
-- Canonical layout geometry uses millimetres relative to the 210 × 148 mm trim
-  box. Negative coordinates and values beyond trim are allowed for bleed.
+- Canonical layout geometry uses millimetres relative to the project page format's
+  trim box. Negative coordinates and values beyond trim are allowed for bleed.
 - Fabric.js is an interaction adapter only. The canonical versioned schema is
   reconstructed after every transform and persisted with optimistic revisions.
 - Uploads are normalized with Sharp. Metadata is stripped by re-encoding,

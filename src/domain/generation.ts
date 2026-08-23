@@ -10,6 +10,7 @@ import {
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
+import { pageSpecificationForLayout } from "./page-format.ts"
 import { questionPrompt } from "./layout-question-palette.ts"
 import {
   assignPhotosToFrames,
@@ -194,9 +195,10 @@ export function inspectSubmissionPage(
       .filter((question) => question.required)
       .map((question) => [question.id, question])
   )
+  const pageSpecification = pageSpecificationForLayout(layout.schema)
 
   for (const element of layout.schema.elements) {
-    if (elementExtendsBeyondBleed(element)) {
+    if (elementExtendsBeyondBleed(element, pageSpecification)) {
       problems.push(
         problem(
           pageId,
@@ -206,7 +208,7 @@ export function inspectSubmissionPage(
           { elementId: element.id }
         )
       )
-    } else if (isCriticalElementOutsideSafeArea(element)) {
+    } else if (isCriticalElementOutsideSafeArea(element, pageSpecification)) {
       problems.push(
         problem(
           pageId,

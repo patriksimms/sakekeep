@@ -1,6 +1,11 @@
 import { useMemo } from "react"
 
 import { gallerySlots } from "#/domain/layout.ts"
+import {
+  pageSpecification,
+  pageSpecificationForLayout,
+  type PageSpecification,
+} from "#/domain/page-format.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { boundQuestionPlaceholder } from "#/domain/layout-question-palette.ts"
 import {
@@ -30,8 +35,11 @@ export interface LayoutPageContent {
   decorativePlaceholderUrl?: string
 }
 
-function elementStyle(element: LayoutElement): React.CSSProperties {
-  const geometry = canonicalToPercentageGeometry(element.geometry)
+function elementStyle(
+  element: LayoutElement,
+  specification: PageSpecification
+): React.CSSProperties {
+  const geometry = canonicalToPercentageGeometry(element.geometry, specification)
   return {
     position: "absolute",
     boxSizing: "border-box",
@@ -47,14 +55,15 @@ function elementStyle(element: LayoutElement): React.CSSProperties {
 
 export function textElementStyle(
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
-  effectiveFontSize = element.text.fontSize
+  effectiveFontSize = element.text.fontSize,
+  specification = pageSpecification()
 ): React.CSSProperties {
   return {
-    ...elementStyle(element),
+    ...elementStyle(element, specification),
     color: element.text.color,
     fontFamily: cssFontStack(element.text.fontFamily),
     fontKerning: "none",
-    fontSize: pointsToContainerWidth(effectiveFontSize),
+    fontSize: pointsToContainerWidth(effectiveFontSize, specification),
     fontStyle: element.text.fontStyle,
     fontWeight: element.text.fontWeight,
     fontVariantLigatures: "none",
@@ -80,6 +89,7 @@ function ElementContent({
   showEditorPlaceholders,
   editingElementId,
   selectedElementId,
+  specification,
 }: {
   element: LayoutElement
   content: LayoutPageContent
@@ -87,6 +97,7 @@ function ElementContent({
   showEditorPlaceholders: boolean
   editingElementId?: string
   selectedElementId?: string
+  specification: PageSpecification
 }) {
   const selectedStyle: React.CSSProperties =
     selectedElementId === element.id
@@ -96,7 +107,10 @@ function ElementContent({
           zIndex: 1,
         }
       : {}
-  const style: React.CSSProperties = { ...elementStyle(element), ...selectedStyle }
+  const style: React.CSSProperties = {
+    ...elementStyle(element, specification),
+    ...selectedStyle,
+  }
   const question =
     "questionId" in element
       ? content.questions?.find((candidate) => candidate.id === element.questionId)
@@ -132,7 +146,7 @@ function ElementContent({
         data-layout-element-type={element.type}
         data-text-overflow={!layout.fits || undefined}
         style={{
-          ...textElementStyle(element, layout.effectiveFontSize),
+          ...textElementStyle(element, layout.effectiveFontSize, specification),
           outline: !layout.fits ? "1px solid var(--destructive)" : undefined,
           background: !layout.fits
             ? "color-mix(in srgb, var(--destructive) 8%, transparent)"
@@ -176,7 +190,9 @@ function ElementContent({
           borderRadius: element.type === "circle" ? "50%" : undefined,
           borderStyle: element.strokeWidth > 0 ? "solid" : "none",
           borderWidth:
-            element.strokeWidth > 0 ? millimetresToContainerWidth(element.strokeWidth) : undefined,
+            element.strokeWidth > 0
+              ? millimetresToContainerWidth(element.strokeWidth, specification)
+              : undefined,
         }}
       />
     )
@@ -246,7 +262,7 @@ function ElementContent({
         data-layout-element-type={element.type}
         style={{
           ...style,
-          borderRadius: millimetresToContainerWidth(element.cornerRadius),
+          borderRadius: millimetresToContainerWidth(element.cornerRadius, specification),
           overflow: "hidden",
         }}
       >
@@ -328,6 +344,7 @@ export function LayoutPageElements({
   editingElementId?: string
   selectedElementId?: string
 }) {
+  const specification = pageSpecificationForLayout(schema)
   const photoAssignment = useMemo(
     () => assignPhotosToFrames(schema.elements, content.submission?.answers ?? {}),
     [schema.elements, content.submission]
@@ -347,6 +364,7 @@ export function LayoutPageElements({
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
           selectedElementId={selectedElementId}
+          specification={specification}
         />
       ))}
     </div>

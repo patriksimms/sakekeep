@@ -1,5 +1,6 @@
 import { createPreflightReport, hasFailedPreflight, reportAsText } from "../domain/preflight"
 import { blockingProblems } from "../domain/generation"
+import { pageSpecification } from "../domain/page-format.ts"
 import { type ExportArtifact } from "../domain/types"
 import { HttpError } from "./http"
 import { putObject } from "./object-store"
@@ -29,14 +30,17 @@ export async function exportProject(projectId: string, marks: boolean): Promise<
     )
   }
 
+  const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const pdf = await renderBookPdf({
     book: project.book,
     layouts: project.layouts,
     submissions: project.submissions ?? [],
     form: project.formSchema,
     marks,
+    pageFormat: project.pageFormat,
+    pageOrientation: project.pageOrientation,
   })
-  const inspection = await inspectPdf(pdf)
+  const inspection = await inspectPdf(pdf, specification)
   const report = createPreflightReport({
     projectId,
     book: project.book,
@@ -48,6 +52,7 @@ export async function exportProject(projectId: string, marks: boolean): Promise<
     assetResolutionMetadata: inspection.assetResolutionMetadata,
     assetResolutionCount: inspection.assetResolutionCount,
     marks,
+    pageSpecification: specification,
   })
   if (hasFailedPreflight(report)) {
     throw new HttpError(409, "Automated preflight failed. No final export was stored.", { report })
@@ -55,7 +60,7 @@ export async function exportProject(projectId: string, marks: boolean): Promise<
 
   const id = crypto.randomUUID()
   const baseKey = `projects/${projectId}/exports/${id}`
-  const pdfObjectKey = `${baseKey}/sakekeep-a5-landscape.pdf`
+  const pdfObjectKey = `${baseKey}/sakekeep-${project.pageFormat}-${project.pageOrientation}.pdf`
   const reportObjectKey = `${baseKey}/preflight-report.txt`
   await putObject({
     key: pdfObjectKey,
