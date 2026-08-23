@@ -133,9 +133,19 @@ describe("layout editor saves", () => {
       ...layoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 1),
       name: "Geometric collage background",
     }
+    updateLayout.mockImplementation(
+      (
+        _projectId: string,
+        _layoutId: string,
+        input: { name: string; schema: LayoutRecord["schema"] }
+      ) => Promise.resolve({ ...existing, ...input, revision: 1 })
+    )
     layoutAction.mockResolvedValue(created)
     render(<Harness initial={project([existing])} />)
 
+    fireEvent.change(screen.getByLabelText("Layout name"), {
+      target: { value: "Edited original" },
+    })
     fireEvent.click(screen.getByRole("button", { name: "New layout" }))
     fireEvent.click(screen.getByRole("button", { name: "Create Geometric collage background" }))
     await act(async () => {})
@@ -145,6 +155,7 @@ describe("layout editor saves", () => {
         .getByRole("tab", { name: /Geometric collage background/ })
         .getAttribute("aria-selected")
     ).toBe("true")
+    expect(screen.getByRole("tab", { name: /Edited original/ })).toBeTruthy()
   })
 
   it("can become archived while the panel remains mounted", () => {

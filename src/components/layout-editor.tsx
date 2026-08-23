@@ -1753,7 +1753,7 @@ export function LayoutsPanel({
                         : `${preset.name} background`,
                     backgroundPresetId: preset.id,
                   })
-                  updateLayouts([...project.layouts, layout])
+                  updateLayouts([...projectRef.current.layouts, layout])
                   setSelectedId(layout.id)
                 })
               }}
@@ -1843,7 +1843,7 @@ export function LayoutsPanel({
                       action: "duplicate",
                       layoutId: selected.id,
                     })
-                    updateLayouts([...project.layouts, duplicate])
+                    updateLayouts([...projectRef.current.layouts, duplicate])
                     setSelectedId(duplicate.id)
                   })
                 }}
