@@ -27,6 +27,7 @@ import {
   TypeIcon,
   Undo2Icon,
   UnlockIcon,
+  XIcon,
   XCircleIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -50,7 +51,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "#/components/ui/alert-dialog.tsx"
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert.tsx"
 import { Button } from "#/components/ui/button.tsx"
@@ -84,6 +84,7 @@ import {
 } from "#/components/ui/select.tsx"
 import { Separator } from "#/components/ui/separator.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
+import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.tsx"
 import {
@@ -116,7 +117,13 @@ import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
-function BackgroundPicker({ onCreate }: { onCreate: (preset: BackgroundPreset) => Promise<void> }) {
+function BackgroundPicker({
+  compact = false,
+  onCreate,
+}: {
+  compact?: boolean
+  onCreate: (preset: BackgroundPreset) => Promise<void>
+}) {
   const [open, setOpen] = useState(false)
   const [creatingId, setCreatingId] = useState<BackgroundPreset["id"] | null>(null)
 
@@ -137,9 +144,17 @@ function BackgroundPicker({ onCreate }: { onCreate: (preset: BackgroundPreset) =
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
-        <PlusIcon data-icon="inline-start" />
-        New layout
+      <DialogTrigger
+        render={
+          <Button
+            variant={compact ? "ghost" : "default"}
+            size={compact ? "icon-sm" : "default"}
+            aria-label={compact ? "New layout" : undefined}
+          />
+        }
+      >
+        <PlusIcon data-icon={compact ? undefined : "inline-start"} />
+        {!compact && "New layout"}
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
@@ -1393,6 +1408,7 @@ export function LayoutsPanel({
   onProjectChange: (project: Project) => void
 }) {
   const [selectedId, setSelectedId] = useState(project.layouts[0]?.id ?? null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const selected = project.layouts.find((layout) => layout.id === selectedId) ?? project.layouts[0]
 
   useEffect(() => {
@@ -1433,53 +1449,95 @@ export function LayoutsPanel({
       bookStatus: project.bookStatus === "not-generated" ? "not-generated" : "stale",
     })
 
+  const deleteSelectedLayout = async () => {
+    if (!selected) return
+
+    try {
+      await projectApi.deleteLayout(project.id, selected.id)
+      const index = project.layouts.findIndex((layout) => layout.id === selected.id)
+      const remaining = project.layouts
+        .filter((layout) => layout.id !== selected.id)
+        .map((layout, position) => ({ ...layout, position }))
+      setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
+      updateLayouts(remaining)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed")
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <h2 className="font-heading text-2xl">Page layouts</h2>
-          <p className="text-sm text-muted-foreground">
-            Canonical millimetre geometry powers Fabric interaction and final rendering.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            items={project.layouts.map((layout) => ({
-              label: layout.name,
-              value: layout.id,
-            }))}
-            value={selected?.id}
-            onValueChange={(value) => {
-              if (value) setSelectedId(value)
-            }}
-          >
-            <SelectTrigger className="w-56" aria-label="Choose a layout">
-              <SelectValue placeholder="Choose a layout" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {project.layouts.map((layout) => (
-                  <SelectItem key={layout.id} value={layout.id}>
-                    {layout.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <BackgroundPicker
-            onCreate={async (preset) => {
-              const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                action: "create",
-                name:
-                  preset.id === "blank"
-                    ? `Layout ${project.layouts.length + 1}`
-                    : `${preset.name} background`,
-                backgroundPresetId: preset.id,
-              })
-              updateLayouts([...project.layouts, layout])
-              setSelectedId(layout.id)
-            }}
-          />
+      <div className="flex flex-col gap-4">
+        <h2 className="font-heading text-2xl">Page layouts</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            <Tabs className="min-w-0" value={selected?.id ?? ""} onValueChange={setSelectedId}>
+              <TabsList className="max-w-full justify-start overflow-x-auto">
+                {project.layouts.map((layout) => {
+                  const active = layout.id === selected?.id
+
+                  return (
+                    <TabsTrigger
+                      key={layout.id}
+                      value={layout.id}
+                      className="max-w-56 shrink-0 text-foreground"
+                      onKeyDown={(event) => {
+                        if (active && event.key === "Delete") setDeleteDialogOpen(true)
+                      }}
+                    >
+                      <span className="truncate">{layout.name}</span>
+                      {active && (
+                        <span
+                          aria-label={`Delete ${layout.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setDeleteDialogOpen(true)
+                          }}
+                          onPointerDown={(event) => event.stopPropagation()}
+                        >
+                          <XIcon />
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )
+                })}
+              </TabsList>
+            </Tabs>
+            <BackgroundPicker
+              compact
+              onCreate={async (preset) => {
+                const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
+                  action: "create",
+                  name:
+                    preset.id === "blank"
+                      ? `Layout ${project.layouts.length + 1}`
+                      : `${preset.name} background`,
+                  backgroundPresetId: preset.id,
+                })
+                updateLayouts([...project.layouts, layout])
+                setSelectedId(layout.id)
+              }}
+            />
+          </div>
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this layout?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  If this layout is used in the generated book, you must regenerate before export.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={() => void deleteSelectedLayout()}
+                >
+                  Delete layout
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {selected && (
             <>
               <IconAction label="Move layout up" disabled={selected.position === 0}>
@@ -1539,44 +1597,6 @@ export function LayoutsPanel({
                 <CopyIcon data-icon="inline-start" />
                 Duplicate layout
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="outline" />}>
-                  <Trash2Icon data-icon="inline-start" />
-                  Delete
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete this layout?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      If this layout is used in the generated book, you must regenerate before
-                      export.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      variant="destructive"
-                      onClick={async () => {
-                        try {
-                          await projectApi.deleteLayout(project.id, selected.id)
-                          updateLayouts(
-                            project.layouts
-                              .filter((layout) => layout.id !== selected.id)
-                              .map((layout, position) => ({
-                                ...layout,
-                                position,
-                              }))
-                          )
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Delete failed")
-                        }
-                      }}
-                    >
-                      Delete layout
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </>
           )}
         </div>
