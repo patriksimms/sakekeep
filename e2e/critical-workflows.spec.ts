@@ -630,13 +630,13 @@ test.describe.serial("critical local prototype workflows", () => {
       expect(created).toBeDefined()
       createdLayoutId = created!.id
       expect(created!.schema.background).toBe("#fbf3e7")
-      expect(created!.schema.elements).toHaveLength(20)
+      expect(created!.schema.elements).toHaveLength(13)
       expect(created!.schema.elements.every(({ locked }) => locked)).toBe(true)
       expect(created!.schema.elements[0]).toMatchObject({
         type: "rectangle",
         locked: true,
         fill: "#cddfd7",
-        geometry: { x: -3, y: -3, width: 57, height: 154 },
+        geometry: { x: -3, y: -3, width: 72, height: 154 },
       })
     } finally {
       if (createdLayoutId) {
