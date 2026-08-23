@@ -299,8 +299,9 @@ test.describe.serial("critical local prototype workflows", () => {
       await page.getByRole("option", { name: "portrait" }).click()
       await page.getByRole("button", { name: "Reset layouts" }).click()
       await expect(page.getByLabel("Visual DIN A6 portrait layout canvas")).toBeVisible()
-      await expect(page.getByRole("combobox", { name: "Choose a layout" })).toContainText(
-        "Layout 1"
+      await expect(page.getByRole("tab", { name: "Layout 1" })).toHaveAttribute(
+        "aria-selected",
+        "true"
       )
 
       const reset = (await (await request.get(`/api/projects/${projectId}`)).json()) as Project
