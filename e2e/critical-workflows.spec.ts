@@ -648,6 +648,14 @@ test.describe.serial("critical local prototype workflows", () => {
         fill: "#cddfd7",
         geometry: { x: -3, y: -3, width: 57, height: 154 },
       })
+
+      const previousLayout = project.layouts.at(-2)!
+      await closeLayout.click()
+      await page.getByRole("button", { name: "Delete layout" }).click()
+      await expect(
+        page.getByRole("tab", { name: previousLayout.name, selected: true })
+      ).toBeVisible()
+      createdLayoutId = undefined
     } finally {
       if (createdLayoutId) {
         expect(
