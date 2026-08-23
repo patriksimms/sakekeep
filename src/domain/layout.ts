@@ -40,8 +40,7 @@ const focalPointSchema = z.object({
 
 const textSettingsSchema = z.object({
   fontFamily: z.enum(FONT_FAMILY_IDS),
-  // Project-wide resizing can move the editable 4–200 pt range beyond those bounds. The storage
-  // range covers the largest A6 → A4 and smallest A4 → A6 proportional results.
+  // Format-aware bounds are applied by the complete layout validator below.
   fontSize: finite.min(1).max(500),
   minFontSize: finite.min(1).max(500),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -68,7 +67,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
   baseElement.extend({
     type: z.literal("image-frame"),
     questionId: z.string().min(1),
-    cornerRadius: finite.min(0).max(100),
+    cornerRadius: finite.min(0).max(500),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
@@ -80,14 +79,14 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
       z.literal("hero-two"),
       z.literal("three-column"),
     ]),
-    gap: finite.min(0).max(50),
+    gap: finite.min(0).max(500),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
     type: z.union([z.literal("rectangle"), z.literal("circle"), z.literal("line")]),
     fill: z.string(),
     stroke: z.string(),
-    strokeWidth: finite.min(0).max(100),
+    strokeWidth: finite.min(0).max(500),
   }),
   baseElement.extend({
     type: z.literal("decorative-image"),
@@ -114,6 +113,22 @@ export const layoutSchemaValidator = z
   })
   .superRefine((layout, context) => {
     const ids = new Set<string>()
+    const specification = pageSpecificationForLayout(layout)
+    const limits = layoutStyleLimits(specification)
+    const checkRange = (
+      value: number,
+      minimum: number,
+      maximum: number,
+      path: (string | number)[],
+      label: string
+    ) => {
+      if (value >= minimum - 0.0001 && value <= maximum + 0.0001) return
+      context.addIssue({
+        code: "custom",
+        path,
+        message: `${label} must be between ${round(minimum)} and ${round(maximum)} for this page format.`,
+      })
+    }
     for (const [index, element] of layout.elements.entries()) {
       if (ids.has(element.id)) {
         context.addIssue({
@@ -129,6 +144,43 @@ export const layoutSchemaValidator = z
           path: ["elements", index, "text", "minFontSize"],
           message: "Minimum font size cannot exceed the font size.",
         })
+      }
+      if ("text" in element) {
+        checkRange(
+          element.text.fontSize,
+          limits.fontSize.min,
+          limits.fontSize.max,
+          ["elements", index, "text", "fontSize"],
+          "Font size"
+        )
+        checkRange(
+          element.text.minFontSize,
+          limits.fontSize.min,
+          limits.fontSize.max,
+          ["elements", index, "text", "minFontSize"],
+          "Minimum font size"
+        )
+      }
+      if (element.type === "image-frame") {
+        checkRange(
+          element.cornerRadius,
+          0,
+          limits.cornerRadiusMax,
+          ["elements", index, "cornerRadius"],
+          "Corner radius"
+        )
+      }
+      if (element.type === "gallery-frame") {
+        checkRange(element.gap, 0, limits.gapMax, ["elements", index, "gap"], "Gallery gap")
+      }
+      if (element.type === "rectangle" || element.type === "circle" || element.type === "line") {
+        checkRange(
+          element.strokeWidth,
+          0,
+          limits.strokeWidthMax,
+          ["elements", index, "strokeWidth"],
+          "Stroke width"
+        )
       }
     }
   })
@@ -391,6 +443,17 @@ export function addElement(
 
 const round = (value: number) => Math.round(value * 10_000) / 10_000
 
+export function layoutStyleLimits(specification: PageSpecification) {
+  const a5Width = specification.orientation === "portrait" ? 148 : 210
+  const scale = specification.trimWidthMm / a5Width
+  return {
+    fontSize: { min: round(4 * scale), max: round(200 * scale) },
+    cornerRadiusMax: round(100 * scale),
+    gapMax: round(50 * scale),
+    strokeWidthMax: round(100 * scale),
+  }
+}
+
 export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecification): LayoutSchema {
   const source = pageSpecificationForLayout(schema)
   // DIN's integer millimetre dimensions are only approximately proportional. Using one canonical
@@ -446,13 +509,13 @@ export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecificati
         }
       }
       if (resized.type === "image-frame") {
-        return { ...resized, cornerRadius: Math.min(100, round(resized.cornerRadius * scale)) }
+        return { ...resized, cornerRadius: round(resized.cornerRadius * scale) }
       }
       if (resized.type === "gallery-frame") {
-        return { ...resized, gap: Math.min(50, round(resized.gap * scale)) }
+        return { ...resized, gap: round(resized.gap * scale) }
       }
       if (resized.type === "rectangle" || resized.type === "circle" || resized.type === "line") {
-        return { ...resized, strokeWidth: Math.min(100, round(resized.strokeWidth * scale)) }
+        return { ...resized, strokeWidth: round(resized.strokeWidth * scale) }
       }
       return resized
     }),

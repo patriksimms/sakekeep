@@ -7,11 +7,12 @@ import {
   emptyLayoutSchema,
   gallerySlots,
   layoutSchemaValidator,
+  layoutStyleLimits,
   mmToCanvas,
   resizeLayoutSchema,
 } from "./layout.ts"
-import { pageSpecification } from "./page-format.ts"
-import { type LayoutElement } from "./types.ts"
+import { PAGE_FORMATS, PAGE_ORIENTATIONS, pageSpecification } from "./page-format.ts"
+import { type LayoutElement, type ShapeElement } from "./types.ts"
 
 describe("canonical layout schema", () => {
   it("round-trips millimetre geometry at desktop and tablet widths", () => {
@@ -155,20 +156,77 @@ describe("canonical layout schema", () => {
   })
 
   it("keeps supported boundary fonts proportional across DIN sizes", () => {
-    const smallest = addElement(emptyLayoutSchema("a4", "landscape"), "static-text")
+    const smallest = addElement(emptyLayoutSchema("a5", "landscape"), "static-text")
     const smallestText = smallest.elements[0] as Extract<LayoutElement, { type: "static-text" }>
     smallestText.text = { ...smallestText.text, fontSize: 4, minFontSize: 4 }
     const reduced = resizeLayoutSchema(smallest, pageSpecification("a6", "landscape"))
     const reducedText = reduced.elements[0] as Extract<LayoutElement, { type: "static-text" }>
-    expect(reducedText.text.fontSize).toBeCloseTo(4 * (148 / 297), 3)
+    expect(reducedText.text.fontSize).toBeCloseTo(4 * (148 / 210), 3)
     expect(layoutSchemaValidator.safeParse(reduced).success).toBe(true)
 
-    const largest = addElement(emptyLayoutSchema("a6", "landscape"), "static-text")
+    const largest = addElement(emptyLayoutSchema("a5", "landscape"), "static-text")
     const largestText = largest.elements[0] as Extract<LayoutElement, { type: "static-text" }>
     largestText.text = { ...largestText.text, fontSize: 200, minFontSize: 200 }
     const enlarged = resizeLayoutSchema(largest, pageSpecification("a4", "landscape"))
     const enlargedText = enlarged.elements[0] as Extract<LayoutElement, { type: "static-text" }>
-    expect(enlargedText.text.fontSize).toBeCloseTo(200 * (297 / 148), 3)
+    expect(enlargedText.text.fontSize).toBeCloseTo(200 * (297 / 210), 3)
     expect(layoutSchemaValidator.safeParse(enlarged).success).toBe(true)
+  })
+
+  it("round-trips every physical style without clamping", () => {
+    let original = addElement(emptyLayoutSchema(), "image-frame", "photos")
+    original = addElement(original, "gallery-frame", "photos")
+    original = addElement(original, "rectangle")
+    const image = original.elements[0] as Extract<LayoutElement, { type: "image-frame" }>
+    const gallery = original.elements[1] as Extract<LayoutElement, { type: "gallery-frame" }>
+    const rectangle = original.elements[2] as ShapeElement
+    image.cornerRadius = 100
+    gallery.gap = 50
+    rectangle.strokeWidth = 100
+
+    let resized = resizeLayoutSchema(original, pageSpecification("a6", "landscape"))
+    resized = resizeLayoutSchema(resized, pageSpecification("a4", "landscape"))
+    resized = resizeLayoutSchema(resized, pageSpecification("a5", "landscape"))
+
+    expect(resized.elements[0]).toMatchObject({ cornerRadius: 100 })
+    expect(resized.elements[1]).toMatchObject({ gap: 50 })
+    expect(resized.elements[2]).toMatchObject({ strokeWidth: 100 })
+    expect(layoutSchemaValidator.safeParse(resized).success).toBe(true)
+  })
+
+  it("keeps every accepted style boundary valid across same-orientation sizes", () => {
+    for (const sourceFormat of PAGE_FORMATS) {
+      for (const orientation of PAGE_ORIENTATIONS) {
+        let source = addElement(emptyLayoutSchema(sourceFormat, orientation), "static-text")
+        source = addElement(source, "static-text")
+        source = addElement(source, "image-frame", "photos")
+        source = addElement(source, "gallery-frame", "photos")
+        source = addElement(source, "rectangle")
+        const limits = layoutStyleLimits(pageSpecification(sourceFormat, orientation))
+        const minimumText = source.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+        const maximumText = source.elements[1] as Extract<LayoutElement, { type: "static-text" }>
+        minimumText.text = {
+          ...minimumText.text,
+          fontSize: limits.fontSize.min,
+          minFontSize: limits.fontSize.min,
+        }
+        maximumText.text = {
+          ...maximumText.text,
+          fontSize: limits.fontSize.max,
+          minFontSize: limits.fontSize.max,
+        }
+        ;(source.elements[2] as Extract<LayoutElement, { type: "image-frame" }>).cornerRadius =
+          limits.cornerRadiusMax
+        ;(source.elements[3] as Extract<LayoutElement, { type: "gallery-frame" }>).gap =
+          limits.gapMax
+        ;(source.elements[4] as ShapeElement).strokeWidth = limits.strokeWidthMax
+        expect(layoutSchemaValidator.safeParse(source).success).toBe(true)
+
+        for (const targetFormat of PAGE_FORMATS) {
+          const resized = resizeLayoutSchema(source, pageSpecification(targetFormat, orientation))
+          expect(layoutSchemaValidator.safeParse(resized).success).toBe(true)
+        }
+      }
+    }
   })
 })

@@ -101,7 +101,7 @@ import {
   layoutQuestionPalette,
   questionPrompt,
 } from "#/domain/layout-question-palette.ts"
-import { addElement } from "#/domain/layout.ts"
+import { addElement, layoutStyleLimits } from "#/domain/layout.ts"
 import {
   PAGE_FORMATS,
   PAGE_ORIENTATIONS,
@@ -334,9 +334,11 @@ function withFontFamily(settings: TextSettings, fontFamily: FontFamily): TextSet
 function TextSettingsEditor({
   settings,
   onChange,
+  limits,
 }: {
   settings: TextSettings
   onChange: (settings: TextSettings) => void
+  limits: ReturnType<typeof layoutStyleLimits>
 }) {
   return (
     <FieldGroup>
@@ -371,11 +373,15 @@ function TextSettingsEditor({
         <NumericField
           label="Font size"
           value={settings.fontSize}
+          min={limits.fontSize.min}
+          max={limits.fontSize.max}
           onChange={(fontSize) => onChange({ ...settings, fontSize })}
         />
         <NumericField
           label="Minimum"
           value={settings.minFontSize}
+          min={limits.fontSize.min}
+          max={limits.fontSize.max}
           onChange={(minFontSize) => onChange({ ...settings, minFontSize })}
         />
       </div>
@@ -495,12 +501,14 @@ function TextSettingsEditor({
 function ElementInspector({
   element,
   questions,
+  limits,
   onChange,
   onChooseDecorative,
   decorativeUploading,
 }: {
   element: LayoutElement
   questions: FormQuestion[]
+  limits: ReturnType<typeof layoutStyleLimits>
   onChange: (element: LayoutElement) => void
   onChooseDecorative: (file: File) => void
   decorativeUploading: boolean
@@ -595,6 +603,7 @@ function ElementInspector({
           <Separator />
           <TextSettingsEditor
             settings={element.text}
+            limits={limits}
             onChange={(text) => onChange({ ...element, text })}
           />
         </>
@@ -612,6 +621,7 @@ function ElementInspector({
           <Separator />
           <TextSettingsEditor
             settings={element.text}
+            limits={limits}
             onChange={(text) => onChange({ ...element, text })}
           />
         </>
@@ -645,6 +655,8 @@ function ElementInspector({
           <NumericField
             label="Slot gap (mm)"
             value={element.gap}
+            min={0}
+            max={limits.gapMax}
             onChange={(gap) => onChange({ ...element, gap: Math.max(0, gap) })}
           />
         </>
@@ -673,6 +685,8 @@ function ElementInspector({
           <NumericField
             label="Stroke width"
             value={element.strokeWidth}
+            min={0}
+            max={limits.strokeWidthMax}
             onChange={(strokeWidth) =>
               onChange({ ...element, strokeWidth: Math.max(0, strokeWidth) })
             }
@@ -792,6 +806,7 @@ function Editor({
   schemaRef.current = schema
   nameRef.current = name
   const pageSpecification = pageSpecificationForLayout(schema)
+  const styleLimits = layoutStyleLimits(pageSpecification)
 
   useEffect(() => onSaveStateChange(saveState), [onSaveStateChange, saveState])
 
@@ -1405,6 +1420,7 @@ function Editor({
               <ElementInspector
                 element={selected}
                 questions={project.formSchema.questions}
+                limits={styleLimits}
                 onChange={changeSelected}
                 onChooseDecorative={(file) => void uploadDecorative(selected.id, file)}
                 decorativeUploading={decorativeUploadingId === selected.id}
