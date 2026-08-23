@@ -11,6 +11,7 @@ import {
   resizeLayoutSchema,
 } from "./layout.ts"
 import { pageSpecification } from "./page-format.ts"
+import { type LayoutElement } from "./types.ts"
 
 describe("canonical layout schema", () => {
   it("round-trips millimetre geometry at desktop and tablet widths", () => {
@@ -120,7 +121,7 @@ describe("canonical layout schema", () => {
     const sourceGallery = schema.elements[1]!
     const target = pageSpecification("a4", "landscape")
     const resized = resizeLayoutSchema(schema, target)
-    const scale = Math.min(target.mediaWidthMm / 216, target.mediaHeightMm / 154)
+    const scale = target.trimWidthMm / 210
 
     expect(resized.trim).toEqual({ widthMm: 297, heightMm: 210 })
     expect(resized.elements[0]?.geometry.width).toBeCloseTo(sourceText.geometry.width * scale, 3)
@@ -134,5 +135,40 @@ describe("canonical layout schema", () => {
     })
     expect(sourceGallery.geometry).toEqual({ x: 20, y: 20, width: 100, height: 65, rotation: 0 })
     expect(layoutSchemaValidator.safeParse(resized).success).toBe(true)
+  })
+
+  it("round-trips size changes without cumulative layout drift", () => {
+    const original = addElement(emptyLayoutSchema(), "static-text")
+    let resized = original
+    for (let index = 0; index < 10; index += 1) {
+      resized = resizeLayoutSchema(resized, pageSpecification("a6", "landscape"))
+      resized = resizeLayoutSchema(resized, pageSpecification("a5", "landscape"))
+    }
+
+    const originalText = original.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+    const resizedText = resized.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+    expect(resizedText.geometry.x).toBeCloseTo(originalText.geometry.x, 3)
+    expect(resizedText.geometry.y).toBeCloseTo(originalText.geometry.y, 3)
+    expect(resizedText.geometry.width).toBeCloseTo(originalText.geometry.width, 3)
+    expect(resizedText.geometry.height).toBeCloseTo(originalText.geometry.height, 3)
+    expect(resizedText.text.fontSize).toBe(originalText.text.fontSize)
+  })
+
+  it("keeps supported boundary fonts proportional across DIN sizes", () => {
+    const smallest = addElement(emptyLayoutSchema("a4", "landscape"), "static-text")
+    const smallestText = smallest.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+    smallestText.text = { ...smallestText.text, fontSize: 4, minFontSize: 4 }
+    const reduced = resizeLayoutSchema(smallest, pageSpecification("a6", "landscape"))
+    const reducedText = reduced.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+    expect(reducedText.text.fontSize).toBeCloseTo(4 * (148 / 297), 3)
+    expect(layoutSchemaValidator.safeParse(reduced).success).toBe(true)
+
+    const largest = addElement(emptyLayoutSchema("a6", "landscape"), "static-text")
+    const largestText = largest.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+    largestText.text = { ...largestText.text, fontSize: 200, minFontSize: 200 }
+    const enlarged = resizeLayoutSchema(largest, pageSpecification("a4", "landscape"))
+    const enlargedText = enlarged.elements[0] as Extract<LayoutElement, { type: "static-text" }>
+    expect(enlargedText.text.fontSize).toBeCloseTo(200 * (297 / 148), 3)
+    expect(layoutSchemaValidator.safeParse(enlarged).success).toBe(true)
   })
 })

@@ -40,8 +40,10 @@ const focalPointSchema = z.object({
 
 const textSettingsSchema = z.object({
   fontFamily: z.enum(FONT_FAMILY_IDS),
-  fontSize: finite.min(4).max(200),
-  minFontSize: finite.min(4).max(200),
+  // Project-wide resizing can move the editable 4–200 pt range beyond those bounds. The storage
+  // range covers the largest A6 → A4 and smallest A4 → A6 proportional results.
+  fontSize: finite.min(1).max(500),
+  minFontSize: finite.min(1).max(500),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   fontStyle: z.union([z.literal("normal"), z.literal("italic")]),
   fontWeight: z.union([z.literal("normal"), z.literal("bold")]),
@@ -391,10 +393,9 @@ const round = (value: number) => Math.round(value * 10_000) / 10_000
 
 export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecification): LayoutSchema {
   const source = pageSpecificationForLayout(schema)
-  const scale = Math.min(
-    target.mediaWidthMm / source.mediaWidthMm,
-    target.mediaHeightMm / source.mediaHeightMm
-  )
+  // DIN's integer millimetre dimensions are only approximately proportional. Using one canonical
+  // axis keeps the transform path-independent and makes repeated size changes reversible.
+  const scale = target.trimWidthMm / source.trimWidthMm
   const offsetX = (target.mediaWidthMm - source.mediaWidthMm * scale) / 2
   const offsetY = (target.mediaHeightMm - source.mediaHeightMm * scale) / 2
 
@@ -402,14 +403,36 @@ export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecificati
     ...schema,
     trim: { widthMm: target.trimWidthMm, heightMm: target.trimHeightMm },
     elements: schema.elements.map((element) => {
+      const touchesLeftBleed = Math.abs(element.geometry.x + source.bleedMm) < 0.0001
+      const touchesTopBleed = Math.abs(element.geometry.y + source.bleedMm) < 0.0001
+      const touchesRightBleed =
+        Math.abs(
+          element.geometry.x + element.geometry.width - (source.trimWidthMm + source.bleedMm)
+        ) < 0.0001
+      const touchesBottomBleed =
+        Math.abs(
+          element.geometry.y + element.geometry.height - (source.trimHeightMm + source.bleedMm)
+        ) < 0.0001
+      const x = touchesLeftBleed
+        ? -target.bleedMm
+        : round((element.geometry.x + source.bleedMm) * scale + offsetX - target.bleedMm)
+      const y = touchesTopBleed
+        ? -target.bleedMm
+        : round((element.geometry.y + source.bleedMm) * scale + offsetY - target.bleedMm)
+      const width = touchesRightBleed
+        ? round(target.trimWidthMm + target.bleedMm - x)
+        : round(element.geometry.width * scale)
+      const height = touchesBottomBleed
+        ? round(target.trimHeightMm + target.bleedMm - y)
+        : round(element.geometry.height * scale)
       const resized = {
         ...element,
         geometry: {
           ...element.geometry,
-          x: round((element.geometry.x + source.bleedMm) * scale + offsetX - target.bleedMm),
-          y: round((element.geometry.y + source.bleedMm) * scale + offsetY - target.bleedMm),
-          width: round(element.geometry.width * scale),
-          height: round(element.geometry.height * scale),
+          x,
+          y,
+          width,
+          height,
         },
       }
       if (resized.type === "bound-text" || resized.type === "static-text") {
@@ -417,8 +440,8 @@ export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecificati
           ...resized,
           text: {
             ...resized.text,
-            fontSize: Math.min(200, Math.max(4, round(resized.text.fontSize * scale))),
-            minFontSize: Math.min(200, Math.max(4, round(resized.text.minFontSize * scale))),
+            fontSize: round(resized.text.fontSize * scale),
+            minFontSize: round(resized.text.minFontSize * scale),
           },
         }
       }
