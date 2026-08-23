@@ -4,12 +4,15 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BookOpenIcon,
+  FileTextIcon,
   GripVerticalIcon,
   LayoutTemplateIcon,
+  LayoutGridIcon,
   LoaderCircleIcon,
   PlusIcon,
   RefreshCwIcon,
   ShuffleIcon,
+  SquareIcon,
   Trash2Icon,
   WandSparklesIcon,
 } from "lucide-react"
@@ -67,6 +70,7 @@ import {
   SelectValue,
 } from "#/components/ui/select.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group.tsx"
 import { LayoutPageElements } from "#/components/layout-page.tsx"
 import {
   type BookPage,
@@ -77,9 +81,12 @@ import {
   type StandaloneBookPage,
   type StandalonePageType,
 } from "#/domain/types.ts"
+import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
 
+// Standalone page text is sized in cqw like every submission-page element, so a preview stays a
+// faithful miniature at any width. Viewport units would ignore the preview's own size.
 export function PagePreview({
   page,
   project,
@@ -114,8 +121,8 @@ export function PagePreview({
       {page.kind === "standalone" ? (
         page.pageType !== "blank" && (
           <div className="absolute inset-[12%] flex flex-col justify-center">
-            <p className="font-heading text-[clamp(10px,3vw,28px)] leading-tight">{page.title}</p>
-            <p className="mt-2 line-clamp-5 whitespace-pre-wrap text-[clamp(5px,1.1vw,12px)] text-muted-foreground">
+            <p className="font-heading text-[3cqw] leading-tight">{page.title}</p>
+            <p className="mt-[1cqw] line-clamp-5 whitespace-pre-wrap text-[1.3cqw] text-muted-foreground">
               {page.body}
             </p>
           </div>
@@ -287,12 +294,89 @@ function ProblemList({
   )
 }
 
+function pageCaption(page: BookPage, project: Project) {
+  if (page.kind === "standalone") return page.pageType
+  return project.layouts.find((layout) => layout.id === page.layoutId)?.name ?? "Missing layout"
+}
+
+function pageLabel(page: BookPage, project: Project) {
+  if (page.kind === "standalone") return `${page.pageType}: ${page.title || "Blank"}`
+  const sequence = project.submissions?.find(
+    (submission) => submission.id === page.submissionId
+  )?.sequence
+  return `Response ${sequence ?? "?"}`
+}
+
+// The grid answers "does the book read well as a whole": every page at once, in order, captioned
+// with its layout so repeated layouts are visible at a glance.
+function PageGrid({
+  book,
+  project,
+  onOpenPage,
+}: {
+  book: GeneratedBook
+  project: Project
+  onOpenPage: (pageId: string) => void
+}) {
+  return (
+    <ol
+      className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+      data-testid="book-page-grid"
+    >
+      {book.pages.map((page, index) => {
+        const blocking = page.problems.filter((problem) => problem.blocking).length
+        return (
+          <li key={page.id}>
+            <button
+              type="button"
+              onClick={() => onOpenPage(page.id)}
+              data-testid="book-page-tile"
+              aria-label={`Open page ${index + 1}, ${pageLabel(page, project)}`}
+              className="group block w-full rounded-md text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              <span className="relative block">
+                <PagePreview
+                  page={page}
+                  project={project}
+                  className="w-full transition group-hover:ring-foreground/30"
+                  showProblems={false}
+                />
+                {blocking > 0 && (
+                  <Badge variant="destructive" className="absolute top-2 right-2">
+                    {blocking}
+                  </Badge>
+                )}
+              </span>
+              <span className="mt-1.5 flex items-center gap-1.5 text-xs">
+                <span className="tabular-nums text-muted-foreground">{index + 1}</span>
+                {page.kind === "standalone" ? (
+                  <FileTextIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                ) : (
+                  <LayoutTemplateIcon
+                    aria-hidden="true"
+                    className="size-3.5 text-muted-foreground"
+                  />
+                )}
+                <span className="truncate">{pageCaption(page, project)}</span>
+              </span>
+            </button>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 export function BookReview({
   project,
   onProjectChange,
+  view = "grid",
+  onViewChange,
 }: {
   project: Project
   onProjectChange: (project: Project) => void
+  view?: BookView
+  onViewChange?: (view: BookView) => void
 }) {
   const defaultSettings: GenerationSettings = {
     mode: "cycle",
@@ -354,6 +438,15 @@ export function BookReview({
   const selected = pages.find((page) => page.id === selectedId) ?? pages[0]
   const problems = pages.flatMap((page) => page.problems)
 
+  const changeView = (next: BookView, source: "toggle" | "page_tile" | "problem_shortcut") => {
+    captureAnalyticsEvent("book_review:view_change", {
+      view: next,
+      page_count: pages.length,
+      source,
+    })
+    onViewChange?.(next)
+  }
+
   const replaceBook = (updated: GeneratedBook, stale: boolean) =>
     onProjectChange({
       ...project,
@@ -408,7 +501,28 @@ export function BookReview({
             One submission creates exactly one page. Regeneration always rebuilds the complete book.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {book && (
+            <ToggleGroup
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={[view]}
+              onValueChange={(next: string[]) => {
+                const requested = parseBookView(next[0])
+                if (requested) changeView(requested, "toggle")
+              }}
+            >
+              <ToggleGroupItem value="grid" aria-label="All pages">
+                <LayoutGridIcon data-icon="inline-start" />
+                All pages
+              </ToggleGroupItem>
+              <ToggleGroupItem value="detail" aria-label="Single page">
+                <SquareIcon data-icon="inline-start" />
+                Single page
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
           {book && (
             <AddStandaloneDialog onAdd={(page) => void updatePages([...book.pages, page])} />
           )}
@@ -518,253 +632,293 @@ export function BookReview({
               </AlertDescription>
             </Alert>
           )}
-          <div className="grid gap-5 xl:grid-cols-[250px_minmax(0,1fr)_320px]">
-            <Card className="h-fit bg-card/90">
-              <CardHeader>
-                <CardTitle>Page order</CardTitle>
-                <CardDescription>Drag or use arrow buttons.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="max-h-[620px]">
-                  <ol className="flex flex-col gap-2 pr-2">
-                    {book.pages.map((page, index) => (
-                      <li
-                        key={page.id}
-                        draggable
-                        onDragStart={() => setDraggedId(page.id)}
-                        onDragOver={(event: DragEvent) => event.preventDefault()}
-                        onDrop={() => {
-                          if (draggedId) reorder(draggedId, page.id)
-                          setDraggedId(null)
-                        }}
-                        className="flex items-center gap-1 rounded-lg border bg-background p-1"
-                      >
-                        <GripVerticalIcon aria-hidden="true" className="text-muted-foreground" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedId(page.id)
-                            setSelectedProblemId(null)
-                            setSelectedElementId(null)
-                          }}
-                          className="min-w-0 flex-1 rounded px-1.5 py-1 text-left text-sm focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                          <span className="block truncate">
-                            {index + 1}.{" "}
-                            {page.kind === "submission"
-                              ? `Response ${project.submissions?.find((submission) => submission.id === page.submissionId)?.sequence ?? "?"}`
-                              : `${page.pageType}: ${page.title || "Blank"}`}
-                          </span>
-                          {page.problems.length > 0 && (
-                            <span className="text-xs text-destructive">
-                              {page.problems.length} problem
-                              {page.problems.length === 1 ? "" : "s"}
-                            </span>
-                          )}
-                        </button>
-                        <div className="flex flex-col">
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label={`Move page ${index + 1} up`}
-                            disabled={index === 0}
-                            onClick={() => reorder(page.id, book.pages[index - 1]!.id)}
-                          >
-                            <ArrowUpIcon />
-                          </Button>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label={`Move page ${index + 1} down`}
-                            disabled={index === book.pages.length - 1}
-                            onClick={() => reorder(page.id, book.pages[index + 1]!.id)}
-                          >
-                            <ArrowDownIcon />
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            <div className="min-w-0">
-              {selected && (
-                <PagePreview
-                  page={selected}
-                  project={project}
-                  className="w-full"
-                  selectedElementId={selectedElementId ?? undefined}
-                />
-              )}
-              {selected?.kind === "submission" && (
-                <Card className="mt-4 bg-card/90">
-                  <CardHeader>
-                    <CardTitle>Page layout</CardTitle>
-                    <CardDescription>
-                      An override becomes the stored manual assignment.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Select
-                      items={project.layouts.map((layout) => ({
-                        label: layout.name,
-                        value: layout.id,
-                      }))}
-                      value={selected.layoutId}
-                      onValueChange={async (layoutId) => {
-                        const manualAssignments = {
-                          ...book.settings.manualAssignments,
-                          [selected.submissionId]: layoutId,
-                        }
-                        const nextPages = book.pages.map((page) =>
-                          page.id === selected.id && page.kind === "submission"
-                            ? { ...page, layoutId }
-                            : page
-                        )
-                        const updated = await projectApi.updateBook(project.id, {
-                          pages: nextPages,
-                          settings: {
-                            ...book.settings,
-                            manualAssignments,
-                          },
-                        })
-                        replaceBook(updated, true)
-                        setSelectedProblemId(null)
-                        setSelectedElementId(null)
-                      }}
-                    >
-                      <SelectTrigger className="w-full" aria-label="Page layout">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {project.layouts.map((layout) => (
-                            <SelectItem key={layout.id} value={layout.id}>
-                              {layout.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </CardContent>
-                </Card>
-              )}
-              {selected?.kind === "standalone" && (
-                <Card className="mt-4 bg-card/90">
-                  <CardHeader>
-                    <CardTitle>Edit standalone page</CardTitle>
-                    <CardAction>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Delete standalone page"
-                        onClick={() =>
-                          void updatePages(book.pages.filter((page) => page.id !== selected.id))
-                        }
-                      >
-                        <Trash2Icon />
-                      </Button>
-                    </CardAction>
-                  </CardHeader>
-                  <CardContent>
-                    <FieldGroup>
-                      <Field>
-                        <FieldLabel>Title</FieldLabel>
-                        <Input
-                          value={selected.title}
-                          disabled={selected.pageType === "blank"}
-                          onChange={(event) =>
-                            void updatePages(
-                              book.pages.map((page) =>
-                                page.id === selected.id && page.kind === "standalone"
-                                  ? { ...page, title: event.target.value }
-                                  : page
-                              )
-                            )
-                          }
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>Body</FieldLabel>
-                        <Textarea
-                          value={selected.body}
-                          disabled={selected.pageType === "blank"}
-                          onChange={(event) =>
-                            void updatePages(
-                              book.pages.map((page) =>
-                                page.id === selected.id && page.kind === "standalone"
-                                  ? { ...page, body: event.target.value }
-                                  : page
-                              )
-                            )
-                          }
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>Background</FieldLabel>
-                        <Input
-                          type="color"
-                          value={selected.background}
-                          onChange={(event) =>
-                            void updatePages(
-                              book.pages.map((page) =>
-                                page.id === selected.id && page.kind === "standalone"
-                                  ? { ...page, background: event.target.value }
-                                  : page
-                              )
-                            )
-                          }
-                        />
-                      </Field>
-                    </FieldGroup>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            <Card className="h-fit bg-card/90">
-              <CardHeader>
-                <CardTitle>Problems</CardTitle>
-                <CardDescription>
+          {view === "grid" ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
                   {problems.filter((problem) => problem.blocking).length} blocking ·{" "}
                   {problems.filter((problem) => !problem.blocking).length} warnings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="max-h-[620px] pr-2">
-                  <ProblemList
-                    problems={problems}
-                    selectedProblemId={selectedProblemId ?? undefined}
-                    onSelect={(problem) => {
-                      captureAnalyticsEvent("book_review:problem_select", {
-                        problem_code: problem.code,
-                        blocking: problem.blocking,
-                        focuses_element: Boolean(problem.elementId),
-                      })
-                      setSelectedId(problem.pageId)
-                      setSelectedProblemId(problem.id)
-                      setSelectedElementId(problem.elementId ?? null)
-                    }}
-                    onOverride={async (assetId) => {
-                      const nextSettings = {
-                        ...book.settings,
-                        resolutionOverrides: Array.from(
-                          new Set([...book.settings.resolutionOverrides, assetId])
-                        ),
+                </p>
+                {problems.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const target = problems.find((problem) => problem.blocking) ?? problems[0]
+                      if (target) {
+                        setSelectedId(target.pageId)
+                        setSelectedProblemId(target.id)
+                        setSelectedElementId(target.elementId ?? null)
                       }
-                      const updated = await projectApi.updateBook(project.id, {
-                        settings: nextSettings,
-                      })
-                      replaceBook(updated, true)
-                      toast.success("Resolution override recorded; regenerate to re-run preflight")
+                      changeView("detail", "problem_shortcut")
                     }}
+                  >
+                    Review problems
+                  </Button>
+                )}
+              </div>
+              <PageGrid
+                book={book}
+                project={project}
+                onOpenPage={(pageId) => {
+                  setSelectedId(pageId)
+                  setSelectedProblemId(null)
+                  setSelectedElementId(null)
+                  changeView("detail", "page_tile")
+                }}
+              />
+            </div>
+          ) : (
+            <div className="grid gap-5 xl:grid-cols-[250px_minmax(0,1fr)_320px]">
+              <Card className="h-fit bg-card/90">
+                <CardHeader>
+                  <CardTitle>Page order</CardTitle>
+                  <CardDescription>Drag or use arrow buttons.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="max-h-[620px]">
+                    <ol className="flex flex-col gap-2 pr-2">
+                      {book.pages.map((page, index) => (
+                        <li
+                          key={page.id}
+                          draggable
+                          onDragStart={() => setDraggedId(page.id)}
+                          onDragOver={(event: DragEvent) => event.preventDefault()}
+                          onDrop={() => {
+                            if (draggedId) reorder(draggedId, page.id)
+                            setDraggedId(null)
+                          }}
+                          className="flex items-center gap-1 rounded-lg border bg-background p-1"
+                        >
+                          <GripVerticalIcon aria-hidden="true" className="text-muted-foreground" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedId(page.id)
+                              setSelectedProblemId(null)
+                              setSelectedElementId(null)
+                            }}
+                            className="min-w-0 flex-1 rounded px-1.5 py-1 text-left text-sm focus-visible:ring-3 focus-visible:ring-ring/50"
+                          >
+                            <span className="block truncate">
+                              {index + 1}.{" "}
+                              {page.kind === "submission"
+                                ? `Response ${project.submissions?.find((submission) => submission.id === page.submissionId)?.sequence ?? "?"}`
+                                : `${page.pageType}: ${page.title || "Blank"}`}
+                            </span>
+                            {page.problems.length > 0 && (
+                              <span className="text-xs text-destructive">
+                                {page.problems.length} problem
+                                {page.problems.length === 1 ? "" : "s"}
+                              </span>
+                            )}
+                          </button>
+                          <div className="flex flex-col">
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              aria-label={`Move page ${index + 1} up`}
+                              disabled={index === 0}
+                              onClick={() => reorder(page.id, book.pages[index - 1]!.id)}
+                            >
+                              <ArrowUpIcon />
+                            </Button>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              aria-label={`Move page ${index + 1} down`}
+                              disabled={index === book.pages.length - 1}
+                              onClick={() => reorder(page.id, book.pages[index + 1]!.id)}
+                            >
+                              <ArrowDownIcon />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              <div className="min-w-0">
+                {selected && (
+                  <PagePreview
+                    page={selected}
+                    project={project}
+                    className="w-full"
+                    selectedElementId={selectedElementId ?? undefined}
                   />
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
+                )}
+                {selected?.kind === "submission" && (
+                  <Card className="mt-4 bg-card/90">
+                    <CardHeader>
+                      <CardTitle>Page layout</CardTitle>
+                      <CardDescription>
+                        An override becomes the stored manual assignment.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Select
+                        items={project.layouts.map((layout) => ({
+                          label: layout.name,
+                          value: layout.id,
+                        }))}
+                        value={selected.layoutId}
+                        onValueChange={async (layoutId) => {
+                          const manualAssignments = {
+                            ...book.settings.manualAssignments,
+                            [selected.submissionId]: layoutId,
+                          }
+                          const nextPages = book.pages.map((page) =>
+                            page.id === selected.id && page.kind === "submission"
+                              ? { ...page, layoutId }
+                              : page
+                          )
+                          const updated = await projectApi.updateBook(project.id, {
+                            pages: nextPages,
+                            settings: {
+                              ...book.settings,
+                              manualAssignments,
+                            },
+                          })
+                          replaceBook(updated, true)
+                          setSelectedProblemId(null)
+                          setSelectedElementId(null)
+                        }}
+                      >
+                        <SelectTrigger className="w-full" aria-label="Page layout">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {project.layouts.map((layout) => (
+                              <SelectItem key={layout.id} value={layout.id}>
+                                {layout.name}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </CardContent>
+                  </Card>
+                )}
+                {selected?.kind === "standalone" && (
+                  <Card className="mt-4 bg-card/90">
+                    <CardHeader>
+                      <CardTitle>Edit standalone page</CardTitle>
+                      <CardAction>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="Delete standalone page"
+                          onClick={() =>
+                            void updatePages(book.pages.filter((page) => page.id !== selected.id))
+                          }
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </CardAction>
+                    </CardHeader>
+                    <CardContent>
+                      <FieldGroup>
+                        <Field>
+                          <FieldLabel>Title</FieldLabel>
+                          <Input
+                            value={selected.title}
+                            disabled={selected.pageType === "blank"}
+                            onChange={(event) =>
+                              void updatePages(
+                                book.pages.map((page) =>
+                                  page.id === selected.id && page.kind === "standalone"
+                                    ? { ...page, title: event.target.value }
+                                    : page
+                                )
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Body</FieldLabel>
+                          <Textarea
+                            value={selected.body}
+                            disabled={selected.pageType === "blank"}
+                            onChange={(event) =>
+                              void updatePages(
+                                book.pages.map((page) =>
+                                  page.id === selected.id && page.kind === "standalone"
+                                    ? { ...page, body: event.target.value }
+                                    : page
+                                )
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Background</FieldLabel>
+                          <Input
+                            type="color"
+                            value={selected.background}
+                            onChange={(event) =>
+                              void updatePages(
+                                book.pages.map((page) =>
+                                  page.id === selected.id && page.kind === "standalone"
+                                    ? { ...page, background: event.target.value }
+                                    : page
+                                )
+                              )
+                            }
+                          />
+                        </Field>
+                      </FieldGroup>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <Card className="h-fit bg-card/90">
+                <CardHeader>
+                  <CardTitle>Problems</CardTitle>
+                  <CardDescription>
+                    {problems.filter((problem) => problem.blocking).length} blocking ·{" "}
+                    {problems.filter((problem) => !problem.blocking).length} warnings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="max-h-[620px] pr-2">
+                    <ProblemList
+                      problems={problems}
+                      selectedProblemId={selectedProblemId ?? undefined}
+                      onSelect={(problem) => {
+                        captureAnalyticsEvent("book_review:problem_select", {
+                          problem_code: problem.code,
+                          blocking: problem.blocking,
+                          focuses_element: Boolean(problem.elementId),
+                        })
+                        setSelectedId(problem.pageId)
+                        setSelectedProblemId(problem.id)
+                        setSelectedElementId(problem.elementId ?? null)
+                      }}
+                      onOverride={async (assetId) => {
+                        const nextSettings = {
+                          ...book.settings,
+                          resolutionOverrides: Array.from(
+                            new Set([...book.settings.resolutionOverrides, assetId])
+                          ),
+                        }
+                        const updated = await projectApi.updateBook(project.id, {
+                          settings: nextSettings,
+                        })
+                        replaceBook(updated, true)
+                        toast.success(
+                          "Resolution override recorded; regenerate to re-run preflight"
+                        )
+                      }}
+                    />
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </>
       )}
     </div>

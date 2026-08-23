@@ -226,6 +226,7 @@ function ElementContent({
           src={source}
           alt=""
           aria-hidden="true"
+          loading="lazy"
           className="size-full object-cover"
           style={{
             objectPosition: `${element.focalPoint.x * 100}% ${element.focalPoint.y * 100}%`,
@@ -254,6 +255,7 @@ function ElementContent({
             src={image.previewUrl}
             alt=""
             aria-hidden="true"
+            loading="lazy"
             className="size-full object-cover"
             style={{ objectPosition: imagePosition(element, image) }}
           />
@@ -292,6 +294,7 @@ function ElementContent({
               src={image.previewUrl}
               alt=""
               aria-hidden="true"
+              loading="lazy"
               className="size-full object-cover"
               style={{ objectPosition: imagePosition(element, image) }}
             />
