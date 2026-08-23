@@ -166,16 +166,16 @@ function Privacy() {
           </p>
         </PrivacySection>
 
-        <PrivacySection title="7. File storage with Contabo">
+        <PrivacySection title="7. File storage with Hetzner">
           <p>
             Uploaded photos, the preview images generated from them, design files, and PDF exports
-            are stored in S3-compatible object storage provided by Contabo GmbH, Aschauer Straße
-            32a, 81549 Munich, Germany. Storage takes place to provide the features described in
-            section 6.
+            are stored in S3-compatible object storage provided by Hetzner Online GmbH,
+            Industriestraße 25, 91710 Gunzenhausen, Germany. Storage takes place to provide the
+            features described in section 6.
           </p>
           <p>
             Depending on the data subject, the legal basis is Art. 6(1)(b) or Art. 6(1)(a) GDPR. We
-            have entered into a data processing agreement with Contabo pursuant to Art. 28 GDPR.
+            have entered into a data processing agreement with Hetzner pursuant to Art. 28 GDPR.
             Files are removed in accordance with the deletion rules that apply to the respective
             project.
           </p>

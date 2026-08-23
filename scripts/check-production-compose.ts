@@ -8,6 +8,8 @@ const validationEnvironment = {
   ...process.env,
   POSTGRES_PASSWORD: postgresPassword,
   DATABASE_URL: databaseUrl,
+  S3_ENDPOINT: "https://objects.example.com",
+  S3_REGION: "eu-central-1",
   S3_ACCESS_KEY_ID: "compose-validation-access-key",
   S3_SECRET_ACCESS_KEY: "compose-validation-object-store-secret",
   S3_BUCKET: "sakekeep-compose-validation",
@@ -44,10 +46,10 @@ const config = JSON.parse(result.stdout) as {
 assert.equal(config.services.app?.environment.DATABASE_URL, databaseUrl)
 assert.equal(config.services.migrate?.environment.DATABASE_URL, databaseUrl)
 assert.equal(config.services.postgres?.environment.POSTGRES_PASSWORD, postgresPassword)
-assert.equal(config.services.app?.environment.S3_ENDPOINT, "https://eu2.contabostorage.com")
-assert.equal(config.services.migrate?.environment.S3_ENDPOINT, "https://eu2.contabostorage.com")
-assert.equal(config.services.app?.environment.S3_REGION, "default")
-assert.equal(config.services.migrate?.environment.S3_REGION, "default")
+assert.equal(config.services.app?.environment.S3_ENDPOINT, validationEnvironment.S3_ENDPOINT)
+assert.equal(config.services.migrate?.environment.S3_ENDPOINT, validationEnvironment.S3_ENDPOINT)
+assert.equal(config.services.app?.environment.S3_REGION, validationEnvironment.S3_REGION)
+assert.equal(config.services.migrate?.environment.S3_REGION, validationEnvironment.S3_REGION)
 assert.equal(config.services.rustfs, undefined)
 assert.equal(config.services["rustfs-permissions"], undefined)
 assert.equal(config.services.app?.ports, undefined)

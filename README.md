@@ -144,7 +144,7 @@ deployment.
   Base UI components
 - PostgreSQL with Drizzle migrations as the relational source of truth
 - S3-compatible object storage for print masters, previews, decorative assets,
-  and export artifacts (RustFS locally, Contabo Object Storage in production)
+  and export artifacts
 - Sharp for orientation normalization, metadata removal, color-managed print
   masters, and sRGB WebP previews
 - Fabric.js 7 as an interaction adapter over a typed, versioned canonical
@@ -174,7 +174,7 @@ manual Poppler verification procedure are documented in
 The production image uses the repository-pinned Bun runtime and serves the
 TanStack Start fetch handler through the native server in `server.ts`; it does
 not use Vite preview or Nitro. `docker-compose.coolify.yml` adds the application,
-one-shot migrations, internal-only PostgreSQL, external Contabo Object Storage,
+one-shot migrations, internal-only PostgreSQL, external S3-compatible object storage,
 health checks, and a persistent database volume. The complete Coolify,
 Cloudflare, backup, restore, migration, cleanup, logging, sizing, and smoke-test
 procedure is in

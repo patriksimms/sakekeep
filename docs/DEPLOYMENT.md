@@ -11,8 +11,8 @@ untrusted users.
 `docker-compose.coolify.yml` builds one image with separate `runtime` and
 `migrate` targets. The one-shot migration container must complete before the
 application starts. PostgreSQL is reachable only by Compose service DNS, while
-the app uses Contabo Object Storage at `https://eu2.contabostorage.com`. Only
-the `app` service receives a Coolify domain.
+the app uses external S3-compatible object storage. Only the `app` service
+receives a Coolify domain.
 
 Configure these Coolify build-time and runtime values:
 
@@ -20,11 +20,11 @@ Configure these Coolify build-time and runtime values:
 | ---------------------------- | ------------- | ------------------------------------------------ |
 | `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                        |
 | `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password     |
-| `S3_ENDPOINT`                | Runtime       | Fixed to `https://eu2.contabostorage.com`        |
-| `S3_REGION`                  | Runtime       | Fixed to `default`                               |
-| `S3_ACCESS_KEY_ID`           | Runtime       | Contabo access key                               |
-| `S3_SECRET_ACCESS_KEY`       | Runtime       | Contabo secret key                               |
-| `S3_BUCKET`                  | Runtime       | Existing Contabo bucket name                     |
+| `S3_ENDPOINT`                | Runtime       | Object-store HTTPS endpoint                      |
+| `S3_REGION`                  | Runtime       | Region used to sign S3 requests                  |
+| `S3_ACCESS_KEY_ID`           | Runtime       | Object-store access key                          |
+| `S3_SECRET_ACCESS_KEY`       | Runtime       | Object-store secret key                          |
+| `S3_BUCKET`                  | Runtime       | Existing object-store bucket name                |
 | `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable       |
 | `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin                |
 | `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                                 |
@@ -72,7 +72,7 @@ bun run scripts/check-production-compose.ts
    sign-up from issue #23 have been verified.
 
 The `postgres-data` named volume survives app rebuilds and normal redeployments.
-Objects persist in the external Contabo bucket. Never select a destructive
+Objects persist in the external object-store bucket. Never select a destructive
 database volume reset or empty the bucket for a routine deployment.
 
 ## Cloudflare and firewall
@@ -88,8 +88,8 @@ database volume reset or empty the bucket for a routine deployment.
 
 The server firewall should expose only SSH as operationally required and the
 Coolify proxy's HTTP/HTTPS ports. Port 3000 and PostgreSQL 5432 must not be
-reachable from the public network. Allow outbound HTTPS from the app to
-`eu2.contabostorage.com`.
+reachable from the public network. Allow outbound HTTPS from the app to the
+configured object-store endpoint.
 
 ## Verification
 
@@ -99,7 +99,7 @@ After deployment:
 curl --fail --silent https://<hostname>/api/health
 ```
 
-The endpoint returns `200` only when both PostgreSQL and Contabo Object Storage respond.
+The endpoint returns `200` only when both PostgreSQL and the object store respond.
 Stopping either dependency must change it to `503`.
 
 For a destructive, isolated local production-stack smoke test, create a Clerk
@@ -118,11 +118,11 @@ inserts test fixtures explicitly, signs into the organizer UI, exercises an
 anonymous image submission, and creates a PDF export. It then recreates the app
 container and retrieves the submission, uploaded image, and PDF before removing
 its test volumes. The override tests the S3 integration without reading from or
-writing to Contabo. It never uses production credentials or volumes.
+writing to the production object store. It never uses production credentials or volumes.
 
 ## Backups and restore
 
-Treat the PostgreSQL dump and Contabo bucket backup as one timestamped recovery
+Treat the PostgreSQL dump and object-store bucket backup as one timestamped recovery
 set. A database record can reference an object, so restoring only one side can
 produce missing assets or orphaned objects.
 
@@ -137,7 +137,7 @@ For a consistent logical backup:
      pg_dump -U sakekeep -d sakekeep --format=custom > sakekeep-YYYYMMDD.dump
    ```
 
-4. Mirror or archive the Contabo bucket to a separate, encrypted backup
+4. Mirror or archive the object-store bucket to a separate, encrypted backup
    location using an S3-compatible backup tool.
 5. Store the dump, bucket backup, deployed SHA, and checksums as one recovery
    set outside the Coolify host and outside the production bucket.
