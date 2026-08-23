@@ -1538,23 +1538,17 @@ export function LayoutsPanel({
     )
   }
 
-  const updateLayouts = useCallback(
-    (layouts: LayoutRecord[]) =>
-      onProjectChange({
-        ...projectRef.current,
-        layouts,
-        bookStatus: projectRef.current.bookStatus === "not-generated" ? "not-generated" : "stale",
-      }),
-    [onProjectChange]
-  )
+  const updateLayouts = (layouts: LayoutRecord[]) =>
+    onProjectChange({
+      ...projectRef.current,
+      layouts,
+      bookStatus: projectRef.current.bookStatus === "not-generated" ? "not-generated" : "stale",
+    })
 
-  const onEditorSaved = useCallback(
-    (updated: LayoutRecord) =>
-      updateLayouts(
-        projectRef.current.layouts.map((layout) => (layout.id === updated.id ? updated : layout))
-      ),
-    [updateLayouts]
-  )
+  const onEditorSaved = (updated: LayoutRecord) =>
+    updateLayouts(
+      projectRef.current.layouts.map((layout) => (layout.id === updated.id ? updated : layout))
+    )
 
   const selectLayout = async (layoutId: string) => {
     if (layoutId === selected?.id || formatChanging || layoutChanging) return

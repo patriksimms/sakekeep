@@ -146,4 +146,18 @@ describe("layout editor saves", () => {
         .getAttribute("aria-selected")
     ).toBe("true")
   })
+
+  it("can become archived while the panel remains mounted", () => {
+    const value = project([layoutFixture()])
+    const { rerender } = render(<LayoutsPanel project={value} onProjectChange={vi.fn()} />)
+
+    rerender(
+      <LayoutsPanel
+        project={{ ...value, archivedAt: new Date(0).toISOString() }}
+        onProjectChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText("This project is archived")).toBeTruthy()
+  })
 })
