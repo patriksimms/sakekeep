@@ -1467,20 +1467,11 @@ export function LayoutsPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <h2 className="font-heading text-2xl">Page layouts</h2>
-          <p className="text-sm text-muted-foreground">
-            Canonical millimetre geometry powers Fabric interaction and final rendering.
-          </p>
-        </div>
+      <div className="flex flex-col gap-4">
+        <h2 className="font-heading text-2xl">Page layouts</h2>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1">
-            <Tabs
-              className="min-w-0 flex-1"
-              value={selected?.id ?? ""}
-              onValueChange={setSelectedId}
-            >
+            <Tabs className="min-w-0" value={selected?.id ?? ""} onValueChange={setSelectedId}>
               <TabsList className="max-w-full justify-start overflow-x-auto">
                 {project.layouts.map((layout) => {
                   const active = layout.id === selected?.id
