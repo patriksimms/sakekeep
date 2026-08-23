@@ -19,10 +19,12 @@ export const PAGE_SPEC = pageSpecification()
 
 const finite = z.number().finite()
 const geometrySchema = z.object({
-  x: finite.min(-1000).max(1000),
-  y: finite.min(-1000).max(1000),
-  width: finite.positive().max(2000),
-  height: finite.positive().max(2000),
+  // The complete layout validator applies format-aware bounds. These storage bounds
+  // accommodate every proportional A4/A5/A6 transform.
+  x: finite.min(-5000).max(5000),
+  y: finite.min(-5000).max(5000),
+  width: finite.positive().max(5000),
+  height: finite.positive().max(5000),
   rotation: finite.min(-36000).max(36000),
 })
 
@@ -115,6 +117,7 @@ export const layoutSchemaValidator = z
     const ids = new Set<string>()
     const specification = pageSpecificationForLayout(layout)
     const limits = layoutStyleLimits(specification)
+    const geometryLimits = layoutGeometryLimits(specification)
     const checkRange = (
       value: number,
       minimum: number,
@@ -138,6 +141,34 @@ export const layoutSchemaValidator = z
         })
       }
       ids.add(element.id)
+      checkRange(
+        element.geometry.x,
+        geometryLimits.x.min,
+        geometryLimits.x.max,
+        ["elements", index, "geometry", "x"],
+        "Horizontal position"
+      )
+      checkRange(
+        element.geometry.y,
+        geometryLimits.y.min,
+        geometryLimits.y.max,
+        ["elements", index, "geometry", "y"],
+        "Vertical position"
+      )
+      checkRange(
+        element.geometry.width,
+        Number.MIN_VALUE,
+        geometryLimits.widthMax,
+        ["elements", index, "geometry", "width"],
+        "Width"
+      )
+      checkRange(
+        element.geometry.height,
+        Number.MIN_VALUE,
+        geometryLimits.heightMax,
+        ["elements", index, "geometry", "height"],
+        "Height"
+      )
       if ("text" in element && element.text.minFontSize > element.text.fontSize) {
         context.addIssue({
           code: "custom",
@@ -454,6 +485,24 @@ export function layoutStyleLimits(specification: PageSpecification) {
   }
 }
 
+export function layoutGeometryLimits(specification: PageSpecification) {
+  const canonical = pageSpecification("a5", specification.orientation)
+  const scale = specification.trimWidthMm / canonical.trimWidthMm
+  const offsetX = (specification.mediaWidthMm - canonical.mediaWidthMm * scale) / 2
+  const offsetY = (specification.mediaHeightMm - canonical.mediaHeightMm * scale) / 2
+  const transformX = (value: number) =>
+    (value + canonical.bleedMm) * scale + offsetX - specification.bleedMm
+  const transformY = (value: number) =>
+    (value + canonical.bleedMm) * scale + offsetY - specification.bleedMm
+
+  return {
+    x: { min: transformX(-1000), max: transformX(1000) },
+    y: { min: transformY(-1000), max: transformY(1000) },
+    widthMax: 2000 * scale,
+    heightMax: 2000 * scale,
+  }
+}
+
 export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecification): LayoutSchema {
   const source = pageSpecificationForLayout(schema)
   // DIN's integer millimetre dimensions are only approximately proportional. Using one canonical
@@ -484,10 +533,10 @@ export function resizeLayoutSchema(schema: LayoutSchema, target: PageSpecificati
         : round((element.geometry.y + source.bleedMm) * scale + offsetY - target.bleedMm)
       const width = touchesRightBleed
         ? round(target.trimWidthMm + target.bleedMm - x)
-        : round(element.geometry.width * scale)
+        : element.geometry.width * scale
       const height = touchesBottomBleed
         ? round(target.trimHeightMm + target.bleedMm - y)
-        : round(element.geometry.height * scale)
+        : element.geometry.height * scale
       const resized = {
         ...element,
         geometry: {

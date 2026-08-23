@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest"
 
-import { inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
+import { fitSingleLineTextSize, inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
 import { pageSpecification } from "../domain/page-format.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
 
 describe("PDF renderer", () => {
+  it("fits standalone titles to the available page width", () => {
+    expect(fitSingleLineTextSize(30, 200, 100)).toBe(15)
+    expect(fitSingleLineTextSize(30, 80, 100)).toBe(30)
+  })
+
   it("emits individual A5 landscape pages with bleed, fonts, and output intent", async () => {
     const pages = [
       {

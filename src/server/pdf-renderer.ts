@@ -75,6 +75,15 @@ function pt(mm: number): number {
   return mm * POINTS_PER_MM
 }
 
+export function fitSingleLineTextSize(
+  preferredSize: number,
+  measuredWidth: number,
+  availableWidth: number
+): number {
+  if (measuredWidth <= availableWidth || measuredWidth === 0) return preferredSize
+  return preferredSize * (availableWidth / measuredWidth)
+}
+
 function color(value: string) {
   const hex = /^#([0-9a-f]{6})$/i.exec(value)?.[1] ?? "000000"
   return rgb(
@@ -539,11 +548,18 @@ export async function renderBookPdf(input: {
       })
       const content = standaloneText(bookPage)
       if (bookPage.pageType !== "blank") {
+        const titleFont = embeddedFont(fonts, STANDALONE_TITLE_CUT)
+        const titleWidth = pt(Math.max(20, specification.trimWidthMm - 30))
+        const titleSize = fitSingleLineTextSize(
+          30,
+          titleFont.widthOfTextAtSize(content.title, 30),
+          titleWidth
+        )
         page.drawText(content.title, {
           x: pt(specification.bleedMm + 15),
           y: pt(specification.bleedMm + specification.trimHeightMm * 0.68),
-          size: 30,
-          font: embeddedFont(fonts, STANDALONE_TITLE_CUT),
+          size: titleSize,
+          font: titleFont,
           color: color("#292524"),
         })
         const bodyFont = embeddedFont(fonts, STANDALONE_BODY_CUT)

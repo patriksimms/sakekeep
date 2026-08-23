@@ -31,7 +31,16 @@ import {
   XCircleIcon,
   type LucideIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactElement } from "react"
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactElement,
+} from "react"
 import { toast } from "sonner"
 
 import {
@@ -773,17 +782,21 @@ function ElementInspector({
   )
 }
 
-function Editor({
-  project,
-  layout,
-  onSaved,
-  onSaveStateChange,
-}: {
-  project: Project
-  layout: LayoutRecord
-  onSaved: (layout: LayoutRecord) => void
-  onSaveStateChange: (state: SaveState) => void
-}) {
+interface EditorHandle {
+  discard: () => void
+  flush: () => Promise<boolean>
+  settle: () => Promise<void>
+}
+
+const Editor = forwardRef<
+  EditorHandle,
+  {
+    project: Project
+    layout: LayoutRecord
+    onSaved: (layout: LayoutRecord) => void
+    onSaveStateChange: (state: SaveState) => void
+  }
+>(function Editor({ project, layout, onSaved, onSaveStateChange }, ref) {
   const [schema, setSchema] = useState(layout.schema)
   const [name, setName] = useState(layout.name)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -801,14 +814,18 @@ function Editor({
   const nameRef = useRef(name)
   const editVersion = useRef(0)
   const savedVersion = useRef(0)
-  const saveInFlight = useRef(false)
+  const saveInFlight = useRef<Promise<boolean> | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onSavedRef = useRef(onSaved)
+  const onSaveStateChangeRef = useRef(onSaveStateChange)
   schemaRef.current = schema
   nameRef.current = name
+  onSavedRef.current = onSaved
+  onSaveStateChangeRef.current = onSaveStateChange
   const pageSpecification = pageSpecificationForLayout(schema)
   const styleLimits = layoutStyleLimits(pageSpecification)
 
-  useEffect(() => onSaveStateChange(saveState), [onSaveStateChange, saveState])
+  useEffect(() => onSaveStateChangeRef.current(saveState), [saveState])
 
   useEffect(() => {
     const node = container.current
@@ -821,44 +838,78 @@ function Editor({
     return () => observer.disconnect()
   }, [])
 
-  const save = useCallback(async () => {
-    if (savedVersion.current === editVersion.current) return
-    if (saveInFlight.current) return
-    saveInFlight.current = true
+  const save = useCallback(
+    async (reschedule = true): Promise<boolean> => {
+      if (saveInFlight.current) return saveInFlight.current
+      if (savedVersion.current === editVersion.current) return true
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+      }
+      const version = editVersion.current
+      setSaveState("saving")
+      const request = (async () => {
+        try {
+          const updated = await projectApi.updateLayout<LayoutRecord>(project.id, layout.id, {
+            expectedRevision: revision.current,
+            name: nameRef.current,
+            schema: schemaRef.current,
+          })
+          revision.current = updated.revision
+          savedVersion.current = version
+          onSavedRef.current(updated)
+          setSaveState(savedVersion.current === editVersion.current ? "saved" : "unsaved")
+          if (reschedule && savedVersion.current !== editVersion.current) {
+            if (timer.current) clearTimeout(timer.current)
+            timer.current = setTimeout(() => void save(), 400)
+          }
+          return true
+        } catch (error) {
+          setSaveState("failed")
+          toast.error(error instanceof Error ? error.message : "Layout save failed")
+          return false
+        } finally {
+          saveInFlight.current = null
+        }
+      })()
+      saveInFlight.current = request
+      return request
+    },
+    [layout.id, project.id]
+  )
+
+  const flush = useCallback(async () => {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
     }
-    const version = editVersion.current
-    setSaveState("saving")
-    try {
-      const updated = await projectApi.updateLayout<LayoutRecord>(project.id, layout.id, {
-        expectedRevision: revision.current,
-        name: nameRef.current,
-        schema: schemaRef.current,
-      })
-      revision.current = updated.revision
-      savedVersion.current = version
-      onSaved(updated)
-      setSaveState(savedVersion.current === editVersion.current ? "saved" : "unsaved")
-      if (savedVersion.current !== editVersion.current) {
-        if (timer.current) clearTimeout(timer.current)
-        timer.current = setTimeout(() => void save(), 400)
-      }
-    } catch (error) {
-      setSaveState("failed")
-      toast.error(error instanceof Error ? error.message : "Layout save failed")
-    } finally {
-      saveInFlight.current = false
+    while (savedVersion.current !== editVersion.current) {
+      if (!(await save(false))) return false
     }
-  }, [layout.id, onSaved, project.id])
+    return true
+  }, [save])
+
+  const settle = useCallback(async () => {
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+    await saveInFlight.current
+  }, [])
+
+  const discard = useCallback(() => {
+    savedVersion.current = editVersion.current
+    setSaveState("saved")
+  }, [])
+
+  useImperativeHandle(ref, () => ({ discard, flush, settle }), [discard, flush, settle])
 
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current)
-      void save()
+      void flush()
     },
-    [save]
+    [flush]
   )
 
   useEffect(() => {
@@ -1435,7 +1486,7 @@ function Editor({
       </Card>
     </div>
   )
-}
+})
 
 export function LayoutsPanel({
   project,
@@ -1448,8 +1499,12 @@ export function LayoutsPanel({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editorSaveState, setEditorSaveState] = useState<SaveState>("saved")
   const [formatChanging, setFormatChanging] = useState(false)
+  const [layoutChanging, setLayoutChanging] = useState(false)
   const [pendingOrientation, setPendingOrientation] = useState<PageOrientation | null>(null)
   const [editorEpoch, setEditorEpoch] = useState(0)
+  const editorRef = useRef<EditorHandle>(null)
+  const projectRef = useRef(project)
+  projectRef.current = project
   const selected = project.layouts.find((layout) => layout.id === selectedId) ?? project.layouts[0]
 
   useEffect(() => {
@@ -1483,26 +1538,67 @@ export function LayoutsPanel({
     )
   }
 
-  const updateLayouts = (layouts: LayoutRecord[]) =>
-    onProjectChange({
-      ...project,
-      layouts,
-      bookStatus: project.bookStatus === "not-generated" ? "not-generated" : "stale",
-    })
+  const updateLayouts = useCallback(
+    (layouts: LayoutRecord[]) =>
+      onProjectChange({
+        ...projectRef.current,
+        layouts,
+        bookStatus: projectRef.current.bookStatus === "not-generated" ? "not-generated" : "stale",
+      }),
+    [onProjectChange]
+  )
+
+  const onEditorSaved = useCallback(
+    (updated: LayoutRecord) =>
+      updateLayouts(
+        projectRef.current.layouts.map((layout) => (layout.id === updated.id ? updated : layout))
+      ),
+    [updateLayouts]
+  )
+
+  const selectLayout = async (layoutId: string) => {
+    if (layoutId === selected?.id || formatChanging || layoutChanging) return
+    setLayoutChanging(true)
+    try {
+      if ((await editorRef.current?.flush()) === false) return
+      setEditorSaveState("saved")
+      setSelectedId(layoutId)
+    } finally {
+      setLayoutChanging(false)
+    }
+  }
+
+  async function runAfterEditorSave<Result>(action: () => Promise<Result>) {
+    if (formatChanging || layoutChanging) return undefined
+    setLayoutChanging(true)
+    try {
+      if ((await editorRef.current?.flush()) === false) return undefined
+      return await action()
+    } finally {
+      setLayoutChanging(false)
+    }
+  }
 
   const deleteSelectedLayout = async () => {
-    if (!selected) return
+    if (!selected || formatChanging || layoutChanging) return
 
+    setLayoutChanging(true)
     try {
+      await editorRef.current?.settle()
       await projectApi.deleteLayout(project.id, selected.id)
+      editorRef.current?.discard()
       const index = project.layouts.findIndex((layout) => layout.id === selected.id)
       const remaining = project.layouts
         .filter((layout) => layout.id !== selected.id)
         .map((layout, position) => ({ ...layout, position }))
       setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
+      setEditorSaveState("saved")
       updateLayouts(remaining)
     } catch (error) {
+      void editorRef.current?.flush()
       toast.error(error instanceof Error ? error.message : "Delete failed")
+    } finally {
+      setLayoutChanging(false)
     }
   }
 
@@ -1511,8 +1607,10 @@ export function LayoutsPanel({
     pageOrientation: PageOrientation,
     resetLayouts = false
   ) => {
+    if (formatChanging || layoutChanging) return
     setFormatChanging(true)
     try {
+      if ((await editorRef.current?.flush()) === false) return
       const updated = await projectApi.layoutAction<Project>(project.id, {
         action: "set-page-format",
         pageFormat,
@@ -1540,7 +1638,8 @@ export function LayoutsPanel({
     }
   }
 
-  const formatControlsDisabled = formatChanging || editorSaveState !== "saved"
+  const workspaceDisabled = formatChanging || layoutChanging
+  const formatControlsDisabled = workspaceDisabled || editorSaveState !== "saved"
 
   return (
     <div className="flex flex-col gap-5">
@@ -1604,9 +1703,17 @@ export function LayoutsPanel({
             </Field>
           </div>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-2"
+          inert={workspaceDisabled || undefined}
+          aria-busy={workspaceDisabled}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-1">
-            <Tabs className="min-w-0" value={selected?.id ?? ""} onValueChange={setSelectedId}>
+            <Tabs
+              className="min-w-0"
+              value={selected?.id ?? ""}
+              onValueChange={(value) => void selectLayout(value)}
+            >
               <TabsList className="max-w-full justify-start overflow-x-auto">
                 {project.layouts.map((layout) => {
                   const active = layout.id === selected?.id
@@ -1643,14 +1750,17 @@ export function LayoutsPanel({
               pageFormat={project.pageFormat}
               pageOrientation={project.pageOrientation}
               onCreate={async (preset) => {
-                const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                  action: "create",
-                  name:
-                    preset.id === "blank"
-                      ? `Layout ${project.layouts.length + 1}`
-                      : `${preset.name} background`,
-                  backgroundPresetId: preset.id,
-                })
+                const layout = await runAfterEditorSave(() =>
+                  projectApi.layoutAction<LayoutRecord>(project.id, {
+                    action: "create",
+                    name:
+                      preset.id === "blank"
+                        ? `Layout ${project.layouts.length + 1}`
+                        : `${preset.name} background`,
+                    backgroundPresetId: preset.id,
+                  })
+                )
+                if (!layout) return
                 updateLayouts([...project.layouts, layout])
                 setSelectedId(layout.id)
               }}
@@ -1685,12 +1795,16 @@ export function LayoutsPanel({
                   disabled={selected.position === 0}
                   onClick={async () => {
                     if (selected.position === 0) return
-                    const ids = project.layouts.map((layout) => layout.id)
-                    const index = ids.indexOf(selected.id)
-                    ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
-                    const result = await projectApi.layoutAction<{
-                      layouts: LayoutRecord[]
-                    }>(project.id, { action: "reorder", layoutIds: ids })
+                    const result = await runAfterEditorSave(async () => {
+                      const ids = project.layouts.map((layout) => layout.id)
+                      const index = ids.indexOf(selected.id)
+                      ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
+                      return projectApi.layoutAction<{ layouts: LayoutRecord[] }>(project.id, {
+                        action: "reorder",
+                        layoutIds: ids,
+                      })
+                    })
+                    if (!result) return
                     updateLayouts(result.layouts)
                   }}
                 >
@@ -1708,12 +1822,16 @@ export function LayoutsPanel({
                   disabled={selected.position === project.layouts.length - 1}
                   onClick={async () => {
                     if (selected.position === project.layouts.length - 1) return
-                    const ids = project.layouts.map((layout) => layout.id)
-                    const index = ids.indexOf(selected.id)
-                    ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
-                    const result = await projectApi.layoutAction<{
-                      layouts: LayoutRecord[]
-                    }>(project.id, { action: "reorder", layoutIds: ids })
+                    const result = await runAfterEditorSave(async () => {
+                      const ids = project.layouts.map((layout) => layout.id)
+                      const index = ids.indexOf(selected.id)
+                      ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
+                      return projectApi.layoutAction<{ layouts: LayoutRecord[] }>(project.id, {
+                        action: "reorder",
+                        layoutIds: ids,
+                      })
+                    })
+                    if (!result) return
                     updateLayouts(result.layouts)
                   }}
                 >
@@ -1723,10 +1841,13 @@ export function LayoutsPanel({
               <Button
                 variant="outline"
                 onClick={async () => {
-                  const duplicate = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                    action: "duplicate",
-                    layoutId: selected.id,
-                  })
+                  const duplicate = await runAfterEditorSave(() =>
+                    projectApi.layoutAction<LayoutRecord>(project.id, {
+                      action: "duplicate",
+                      layoutId: selected.id,
+                    })
+                  )
+                  if (!duplicate) return
                   updateLayouts([...project.layouts, duplicate])
                   setSelectedId(duplicate.id)
                 }}
@@ -1740,17 +1861,16 @@ export function LayoutsPanel({
       </div>
 
       {selected ? (
-        <Editor
-          key={`${selected.id}:${editorEpoch}`}
-          project={project}
-          layout={selected}
-          onSaveStateChange={setEditorSaveState}
-          onSaved={(updated) =>
-            updateLayouts(
-              project.layouts.map((layout) => (layout.id === updated.id ? updated : layout))
-            )
-          }
-        />
+        <div inert={workspaceDisabled || undefined} aria-busy={workspaceDisabled}>
+          <Editor
+            ref={editorRef}
+            key={`${selected.id}:${editorEpoch}`}
+            project={project}
+            layout={selected}
+            onSaveStateChange={setEditorSaveState}
+            onSaved={onEditorSaved}
+          />
+        </div>
       ) : (
         <Card className="min-h-80 bg-card/80">
           <CardHeader className="m-auto place-items-center text-center">

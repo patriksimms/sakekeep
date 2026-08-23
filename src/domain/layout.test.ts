@@ -7,6 +7,7 @@ import {
   emptyLayoutSchema,
   gallerySlots,
   layoutSchemaValidator,
+  layoutGeometryLimits,
   layoutStyleLimits,
   mmToCanvas,
   resizeLayoutSchema,
@@ -224,6 +225,29 @@ describe("canonical layout schema", () => {
 
         for (const targetFormat of PAGE_FORMATS) {
           const resized = resizeLayoutSchema(source, pageSpecification(targetFormat, orientation))
+          expect(layoutSchemaValidator.safeParse(resized).success).toBe(true)
+        }
+      }
+    }
+  })
+
+  it("keeps every accepted geometry boundary valid across same-orientation sizes", () => {
+    for (const sourceFormat of PAGE_FORMATS) {
+      for (const orientation of PAGE_ORIENTATIONS) {
+        const source = addElement(emptyLayoutSchema(sourceFormat, orientation), "rectangle")
+        const limits = layoutGeometryLimits(pageSpecification(sourceFormat, orientation))
+        source.elements[0]!.geometry = {
+          x: limits.x.min,
+          y: limits.y.max,
+          width: limits.widthMax,
+          height: 0.00001,
+          rotation: 0,
+        }
+        expect(layoutSchemaValidator.safeParse(source).success).toBe(true)
+
+        for (const targetFormat of PAGE_FORMATS) {
+          const resized = resizeLayoutSchema(source, pageSpecification(targetFormat, orientation))
+          expect(resized.elements[0]!.geometry.height).toBeGreaterThan(0)
           expect(layoutSchemaValidator.safeParse(resized).success).toBe(true)
         }
       }
