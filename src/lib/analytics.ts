@@ -1,5 +1,6 @@
 import type { PostHog } from "posthog-js"
 
+import type { BackgroundPresetId } from "#/domain/layout-backgrounds.ts"
 import type { PageProblem } from "#/domain/types.ts"
 import { isDemoMode } from "#/lib/demo-mode.ts"
 
@@ -19,7 +20,7 @@ let userKnown = false
 
 interface AnalyticsEvents {
   "layout_editor:background_created": {
-    background_id: "blank" | "geometric-collage"
+    background_id: BackgroundPresetId
   }
   "layout_editor:answer_label_edit": {
     cleared: boolean

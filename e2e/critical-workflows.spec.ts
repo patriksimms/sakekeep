@@ -611,6 +611,12 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(
         page.getByRole("button", { name: "Create Geometric collage background" })
       ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Create Sunset arches background" })
+      ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Create Postcard frame background" })
+      ).toBeVisible()
 
       await page.getByRole("button", { name: "Create Geometric collage background" }).click()
       await expect(page.getByRole("heading", { name: "Choose a background" })).not.toBeVisible()
