@@ -4,6 +4,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BookOpenIcon,
+  FileTextIcon,
   GripVerticalIcon,
   LayoutTemplateIcon,
   LayoutGridIcon,
@@ -346,8 +347,16 @@ function PageGrid({
                   </Badge>
                 )}
               </span>
-              <span className="mt-1.5 flex items-baseline gap-2 text-xs">
+              <span className="mt-1.5 flex items-center gap-1.5 text-xs">
                 <span className="tabular-nums text-muted-foreground">{index + 1}</span>
+                {page.kind === "standalone" ? (
+                  <FileTextIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                ) : (
+                  <LayoutTemplateIcon
+                    aria-hidden="true"
+                    className="size-3.5 text-muted-foreground"
+                  />
+                )}
                 <span className="truncate">{pageCaption(page, project)}</span>
               </span>
             </button>
