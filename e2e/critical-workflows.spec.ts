@@ -843,11 +843,17 @@ test.describe.serial("critical local prototype workflows", () => {
     await page.goto(`/projects/${closedProjectId}`)
     await page.getByRole("tab", { name: "4. Book review" }).click()
     await expect(page.getByText("0 blocking · 0 warnings")).toBeVisible()
-    await expect(page.getByRole("combobox", { name: "Page layout" })).toContainText("Warm quote")
+    const pageTiles = page.getByTestId("book-page-tile")
+    await expect(pageTiles).toHaveCount(3)
     await page.screenshot({
       path: resolve(screenshots, "generated-book-desktop.png"),
       fullPage: true,
     })
+    await expectAccessible(page)
+
+    await pageTiles.first().click()
+    await expect(page).toHaveURL(/bookView=detail/)
+    await expect(page.getByRole("combobox", { name: "Page layout" })).toContainText("Warm quote")
     await expectAccessible(page)
 
     await page.getByRole("tab", { name: "5. Export" }).click()

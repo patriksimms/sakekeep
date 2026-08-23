@@ -53,14 +53,20 @@ import { Input } from "#/components/ui/input.tsx"
 import { Skeleton } from "#/components/ui/skeleton.tsx"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs.tsx"
 import { type Project } from "#/domain/types.ts"
-import { parseWorkspaceStep, type WorkspaceStep } from "#/domain/workspace-tabs.ts"
+import {
+  parseBookView,
+  parseWorkspaceStep,
+  type BookView,
+  type WorkspaceStep,
+} from "#/domain/workspace-tabs.ts"
 import { projectApi } from "#/lib/api.ts"
 
 export const Route = createFileRoute("/projects/$projectId")({
-  validateSearch: (search): { tab?: WorkspaceStep } => {
-    const tab = parseWorkspaceStep(search.tab)
-    return tab ? { ...search, tab } : { ...search, tab: undefined }
-  },
+  validateSearch: (search): { tab?: WorkspaceStep; bookView?: BookView } => ({
+    ...search,
+    tab: parseWorkspaceStep(search.tab),
+    bookView: parseBookView(search.bookView),
+  }),
   component: ProjectWorkspace,
 })
 
@@ -382,7 +388,22 @@ function ProjectWorkspace() {
           <LayoutsPanel project={project} onProjectChange={setProject} />
         </TabsContent>
         <TabsContent value="book">
-          <BookReview project={project} onProjectChange={setProject} />
+          <BookReview
+            project={project}
+            onProjectChange={setProject}
+            view={search.bookView ?? "grid"}
+            onViewChange={(bookView) => {
+              void navigate({
+                to: "/projects/$projectId",
+                params: { projectId },
+                // Grid is the default, so it stays out of the URL.
+                search: (current) => ({
+                  ...current,
+                  bookView: bookView === "grid" ? undefined : bookView,
+                }),
+              })
+            }}
+          />
         </TabsContent>
         <TabsContent value="export">
           <ExportPanel project={project} />

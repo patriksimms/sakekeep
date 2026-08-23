@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { type Project } from "#/domain/types.ts"
+import { type BookPage, type Project } from "#/domain/types.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "#/test/fixtures.ts"
 
 const updateBook = vi.fn()
@@ -69,7 +69,7 @@ describe("book review problems", () => {
       },
     } as Project
 
-    render(<BookReview project={project} onProjectChange={() => undefined} />)
+    render(<BookReview project={project} onProjectChange={() => undefined} view="detail" />)
     fireEvent.click(screen.getByRole("button", { name: /A memory overflows on Response 2/ }))
 
     const renderedLines = Array.from(
@@ -133,7 +133,7 @@ describe("book review problems", () => {
       pages: [{ ...page, layoutId: replacement.id }],
     })
 
-    render(<BookReview project={project} onProjectChange={() => undefined} />)
+    render(<BookReview project={project} onProjectChange={() => undefined} view="detail" />)
     const problemButton = screen.getByRole("button", { name: /A memory overflows/ })
     fireEvent.click(problemButton)
     expect(problemButton.getAttribute("aria-pressed")).toBe("true")
@@ -149,5 +149,93 @@ describe("book review problems", () => {
     expect(
       document.querySelector(`[data-layout-element-id="${textElement.id}"]`)?.getAttribute("style")
     ).not.toContain("outline: 2px solid var(--destructive)")
+  })
+})
+
+describe("book review page grid", () => {
+  function gridProject() {
+    const layout = layoutFixture()
+    const submission = submissionFixture("10000000-0000-4000-8000-000000000001", 1)
+    const pages: BookPage[] = [
+      {
+        id: "standalone:cover",
+        kind: "standalone",
+        pageType: "cover",
+        title: "A book of memories",
+        body: "For Lea",
+        background: "#f4ede1",
+        problems: [],
+      },
+      {
+        id: `submission:${submission.id}`,
+        kind: "submission",
+        submissionId: submission.id,
+        layoutId: layout.id,
+        problems: [],
+      },
+    ]
+    return {
+      id: layout.projectId,
+      title: "Test book",
+      occasion: null,
+      state: "closed",
+      formSchema: completeForm,
+      layouts: [layout],
+      submissions: [submission],
+      bookStatus: "current",
+      archivedAt: null,
+      book: {
+        projectId: layout.projectId,
+        settings: cycleSettings,
+        pages,
+        sourceFingerprint: "test",
+        generatedAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      },
+    } as Project
+  }
+
+  it("shows every generated page in book order", () => {
+    const project = gridProject()
+
+    render(<BookReview project={project} onProjectChange={() => undefined} view="grid" />)
+
+    const tiles = screen.getAllByTestId("book-page-tile")
+    expect(tiles).toHaveLength(2)
+    expect(tiles[0]!.getAttribute("aria-label")).toContain("cover: A book of memories")
+    expect(tiles[1]!.getAttribute("aria-label")).toContain("Response 1")
+    expect(screen.queryByRole("combobox", { name: "Page layout" })).toBeNull()
+  })
+
+  it("opens the detail view on the page that was clicked", () => {
+    const project = gridProject()
+    const onViewChange = vi.fn()
+
+    const { rerender } = render(
+      <BookReview
+        project={project}
+        onProjectChange={() => undefined}
+        view="grid"
+        onViewChange={onViewChange}
+      />
+    )
+    fireEvent.click(screen.getAllByTestId("book-page-tile")[1]!)
+
+    expect(onViewChange).toHaveBeenCalledWith("detail")
+
+    rerender(
+      <BookReview
+        project={project}
+        onProjectChange={() => undefined}
+        view="detail"
+        onViewChange={onViewChange}
+      />
+    )
+    const renderedLines = Array.from(
+      screen.getByTestId("preview-layout-elements").querySelectorAll("span")
+    )
+      .map((line) => line.textContent)
+      .join(" ")
+    expect(renderedLines).toContain(project.submissions![0]!.answers.memory)
   })
 })
