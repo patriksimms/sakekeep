@@ -81,6 +81,7 @@ import {
   type StandaloneBookPage,
   type StandalonePageType,
 } from "#/domain/types.ts"
+import { submissionLabel } from "#/domain/submission-label.ts"
 import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
@@ -307,10 +308,8 @@ function pageCaption(page: BookPage, project: Project) {
 
 function pageLabel(page: BookPage, project: Project) {
   if (page.kind === "standalone") return `${page.pageType}: ${page.title || "Blank"}`
-  const sequence = project.submissions?.find(
-    (submission) => submission.id === page.submissionId
-  )?.sequence
-  return `Response ${sequence ?? "?"}`
+  const submission = project.submissions?.find((candidate) => candidate.id === page.submissionId)
+  return submission ? submissionLabel(project.formSchema, submission) : "Response ?"
 }
 
 // The grid answers "does the book read well as a whole": every page at once, in order, captioned
@@ -707,10 +706,7 @@ export function BookReview({
                             className="min-w-0 flex-1 rounded px-1.5 py-1 text-left text-sm focus-visible:ring-3 focus-visible:ring-ring/50"
                           >
                             <span className="block truncate">
-                              {index + 1}.{" "}
-                              {page.kind === "submission"
-                                ? `Response ${project.submissions?.find((submission) => submission.id === page.submissionId)?.sequence ?? "?"}`
-                                : `${page.pageType}: ${page.title || "Blank"}`}
+                              {index + 1}. {pageLabel(page, project)}
                             </span>
                             {page.problems.length > 0 && (
                               <span className="text-xs text-destructive">

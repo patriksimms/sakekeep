@@ -203,7 +203,7 @@ describe("book review page grid", () => {
     const tiles = screen.getAllByTestId("book-page-tile")
     expect(tiles).toHaveLength(2)
     expect(tiles[0]!.getAttribute("aria-label")).toContain("cover: A book of memories")
-    expect(tiles[1]!.getAttribute("aria-label")).toContain("Response 1")
+    expect(tiles[1]!.getAttribute("aria-label")).toContain("Person 1")
     expect(screen.queryByRole("combobox", { name: "Page layout" })).toBeNull()
   })
 
@@ -231,6 +231,7 @@ describe("book review page grid", () => {
         onViewChange={onViewChange}
       />
     )
+    expect(screen.getByText("2. Person 1")).toBeTruthy()
     const renderedLines = Array.from(
       screen.getByTestId("preview-layout-elements").querySelectorAll("span")
     )
