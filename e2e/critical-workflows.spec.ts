@@ -229,8 +229,7 @@ test.describe.serial("critical local prototype workflows", () => {
       id,
       geometry,
     }))
-    const layoutSelect = page.getByRole("combobox", { name: "Choose a layout" })
-    await expect(layoutSelect).toContainText("Warm quote")
+    await expect(page.getByRole("tab", { name: "Warm quote", selected: true })).toBeVisible()
     await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
     await expect(page.getByRole("button", { name: /^Add text for / }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: /^Add image for / }).first()).toBeVisible()
@@ -249,6 +248,7 @@ test.describe.serial("critical local prototype workflows", () => {
     }
     const canvasDocumentBounds = async () => {
       await renderedCanvas.waitFor({ state: "visible" })
+      await expect.poll(() => renderedCanvas.boundingBox()).not.toBeNull()
       const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
       const scroll = await page.evaluate(() => ({
@@ -623,12 +623,11 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(
         page.getByRole("tab", { name: "Geometric collage background", selected: true })
       ).toBeVisible()
-      await expect(
-        page.getByRole("button", { name: "Delete Geometric collage background" })
-      ).toBeVisible()
+      const closeLayout = page.getByLabel("Delete Geometric collage background")
+      await expect(closeLayout).toBeVisible()
       await expect(page.getByRole("combobox", { name: "Choose a layout" })).toHaveCount(0)
 
-      await page.getByRole("button", { name: "Delete Geometric collage background" }).click()
+      await closeLayout.click()
       await expect(page.getByRole("heading", { name: "Delete this layout?" })).toBeVisible()
       await page.getByRole("button", { name: "Cancel" }).click()
 
