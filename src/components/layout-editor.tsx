@@ -27,6 +27,7 @@ import {
   TypeIcon,
   Undo2Icon,
   UnlockIcon,
+  XIcon,
   XCircleIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -84,6 +85,7 @@ import {
 } from "#/components/ui/select.tsx"
 import { Separator } from "#/components/ui/separator.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
+import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.tsx"
 import {
@@ -116,7 +118,13 @@ import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
-function BackgroundPicker({ onCreate }: { onCreate: (preset: BackgroundPreset) => Promise<void> }) {
+function BackgroundPicker({
+  compact = false,
+  onCreate,
+}: {
+  compact?: boolean
+  onCreate: (preset: BackgroundPreset) => Promise<void>
+}) {
   const [open, setOpen] = useState(false)
   const [creatingId, setCreatingId] = useState<BackgroundPreset["id"] | null>(null)
 
@@ -137,9 +145,17 @@ function BackgroundPicker({ onCreate }: { onCreate: (preset: BackgroundPreset) =
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
-        <PlusIcon data-icon="inline-start" />
-        New layout
+      <DialogTrigger
+        render={
+          <Button
+            variant={compact ? "ghost" : "default"}
+            size={compact ? "icon-sm" : "default"}
+            aria-label={compact ? "New layout" : undefined}
+          />
+        }
+      >
+        <PlusIcon data-icon={compact ? undefined : "inline-start"} />
+        {!compact && "New layout"}
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
@@ -1442,44 +1458,86 @@ export function LayoutsPanel({
             Canonical millimetre geometry powers Fabric interaction and final rendering.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            items={project.layouts.map((layout) => ({
-              label: layout.name,
-              value: layout.id,
-            }))}
-            value={selected?.id}
-            onValueChange={(value) => {
-              if (value) setSelectedId(value)
-            }}
-          >
-            <SelectTrigger className="w-56" aria-label="Choose a layout">
-              <SelectValue placeholder="Choose a layout" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {project.layouts.map((layout) => (
-                  <SelectItem key={layout.id} value={layout.id}>
-                    {layout.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <BackgroundPicker
-            onCreate={async (preset) => {
-              const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
-                action: "create",
-                name:
-                  preset.id === "blank"
-                    ? `Layout ${project.layouts.length + 1}`
-                    : `${preset.name} background`,
-                backgroundPresetId: preset.id,
-              })
-              updateLayouts([...project.layouts, layout])
-              setSelectedId(layout.id)
-            }}
-          />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Tabs className="min-w-0 flex-1" value={selected?.id ?? ""} onValueChange={setSelectedId}>
+            <TabsList className="max-w-full justify-start overflow-x-auto">
+              {project.layouts.map((layout) => {
+                const active = layout.id === selected?.id
+
+                return (
+                  <span key={layout.id} className="flex shrink-0 items-center">
+                    <TabsTrigger value={layout.id} className="max-w-56">
+                      <span className="truncate">{layout.name}</span>
+                    </TabsTrigger>
+                    {active && (
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Delete ${layout.name}`}
+                            />
+                          }
+                        >
+                          <XIcon />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete this layout?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              If this layout is used in the generated book, you must regenerate
+                              before export.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              variant="destructive"
+                              onClick={async () => {
+                                try {
+                                  await projectApi.deleteLayout(project.id, layout.id)
+                                  const index = project.layouts.findIndex(
+                                    (candidate) => candidate.id === layout.id
+                                  )
+                                  const remaining = project.layouts
+                                    .filter((candidate) => candidate.id !== layout.id)
+                                    .map((candidate, position) => ({ ...candidate, position }))
+                                  setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
+                                  updateLayouts(remaining)
+                                } catch (error) {
+                                  toast.error(
+                                    error instanceof Error ? error.message : "Delete failed"
+                                  )
+                                }
+                              }}
+                            >
+                              Delete layout
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </span>
+                )
+              })}
+              <BackgroundPicker
+                compact
+                onCreate={async (preset) => {
+                  const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
+                    action: "create",
+                    name:
+                      preset.id === "blank"
+                        ? `Layout ${project.layouts.length + 1}`
+                        : `${preset.name} background`,
+                    backgroundPresetId: preset.id,
+                  })
+                  updateLayouts([...project.layouts, layout])
+                  setSelectedId(layout.id)
+                }}
+              />
+            </TabsList>
+          </Tabs>
           {selected && (
             <>
               <IconAction label="Move layout up" disabled={selected.position === 0}>
@@ -1539,44 +1597,6 @@ export function LayoutsPanel({
                 <CopyIcon data-icon="inline-start" />
                 Duplicate layout
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="outline" />}>
-                  <Trash2Icon data-icon="inline-start" />
-                  Delete
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete this layout?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      If this layout is used in the generated book, you must regenerate before
-                      export.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      variant="destructive"
-                      onClick={async () => {
-                        try {
-                          await projectApi.deleteLayout(project.id, selected.id)
-                          updateLayouts(
-                            project.layouts
-                              .filter((layout) => layout.id !== selected.id)
-                              .map((layout, position) => ({
-                                ...layout,
-                                position,
-                              }))
-                          )
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Delete failed")
-                        }
-                      }}
-                    >
-                      Delete layout
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </>
           )}
         </div>

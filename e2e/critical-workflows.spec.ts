@@ -620,6 +620,17 @@ test.describe.serial("critical local prototype workflows", () => {
 
       await page.getByRole("button", { name: "Create Geometric collage background" }).click()
       await expect(page.getByRole("heading", { name: "Choose a background" })).not.toBeVisible()
+      await expect(
+        page.getByRole("tab", { name: "Geometric collage background", selected: true })
+      ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Delete Geometric collage background" })
+      ).toBeVisible()
+      await expect(page.getByRole("combobox", { name: "Choose a layout" })).toHaveCount(0)
+
+      await page.getByRole("button", { name: "Delete Geometric collage background" }).click()
+      await expect(page.getByRole("heading", { name: "Delete this layout?" })).toBeVisible()
+      await page.getByRole("button", { name: "Cancel" }).click()
 
       const project = (await (
         await request.get(`/api/projects/${closedProjectId}`)
