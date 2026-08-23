@@ -4,8 +4,13 @@ import { layoutSchemaValidator } from "./layout.ts"
 import { BACKGROUND_PRESETS, backgroundSchema } from "./layout-backgrounds.ts"
 
 describe("layout background presets", () => {
-  it("provides a blank page and a visual-only geometric collage", () => {
-    expect(BACKGROUND_PRESETS.map(({ id }) => id)).toEqual(["blank", "geometric-collage"])
+  it("provides a blank page and visual-only decorated pages", () => {
+    expect(BACKGROUND_PRESETS.map(({ id }) => id)).toEqual([
+      "blank",
+      "geometric-collage",
+      "sunset-arches",
+      "postcard-frame",
+    ])
 
     for (const preset of BACKGROUND_PRESETS) {
       expect(layoutSchemaValidator.safeParse(preset.schema).success).toBe(true)
@@ -33,4 +38,23 @@ describe("layout background presets", () => {
     })
     expect(first.elements.map(({ id }) => id)).not.toEqual(second.elements.map(({ id }) => id))
   })
+
+  // Rotation is intentionally avoided in the newer presets: the browser rotates around an
+  // element's top-left corner and the PDF export around its bottom-left, so a rotated preset
+  // would not print the way it previews.
+  it.each(["sunset-arches", "postcard-frame"] as const)(
+    "keeps %s axis-aligned and inside the printable media area",
+    (presetId) => {
+      const { elements } = backgroundSchema(presetId)
+
+      expect(elements.length).toBeGreaterThan(0)
+      for (const { geometry } of elements) {
+        expect(geometry.rotation).toBe(0)
+        expect(geometry.x).toBeGreaterThanOrEqual(-3)
+        expect(geometry.y).toBeGreaterThanOrEqual(-3)
+        expect(geometry.x + geometry.width).toBeLessThanOrEqual(213)
+        expect(geometry.y + geometry.height).toBeLessThanOrEqual(151)
+      }
+    }
+  )
 })

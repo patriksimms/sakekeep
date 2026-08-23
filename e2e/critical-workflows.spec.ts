@@ -395,6 +395,53 @@ test.describe.serial("critical local prototype workflows", () => {
     await expectAccessible(page)
   })
 
+  test("layout editor flags photo slots that do not match the question", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`/projects/${closedProjectId}?tab=layouts`)
+    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    const originalProject = (await (
+      await request.get(`/api/projects/${closedProjectId}`)
+    ).json()) as Project
+    const originalLayout = originalProject.layouts.find(
+      (layout) => layout.name === "Warm quote"
+    ) as LayoutRecord
+
+    const photoPrompt = "Add one or two favourite photos"
+    const mismatch = page.getByText(/photo slots? for up to/)
+    await expect(mismatch).toHaveCount(0)
+
+    try {
+      await page.getByRole("button", { name: `Add image for ${photoPrompt}` }).click()
+      await expect(mismatch).toHaveText("1 photo slot for up to 2 uploads")
+
+      await page.getByRole("button", { name: `Add image for ${photoPrompt}` }).click()
+      await expect(mismatch).toHaveCount(0)
+
+      await page.getByRole("button", { name: `Add gallery for ${photoPrompt}` }).click()
+      await expect(mismatch).toHaveText("6 photo slots for up to 2 uploads")
+    } finally {
+      const changedProject = (await (
+        await request.get(`/api/projects/${closedProjectId}`)
+      ).json()) as Project
+      const changedLayout = changedProject.layouts.find(
+        (layout) => layout.id === originalLayout.id
+      ) as LayoutRecord
+      expect(
+        (
+          await request.patch(`/api/projects/${closedProjectId}/layouts/${changedLayout.id}`, {
+            data: {
+              expectedRevision: changedLayout.revision,
+              schema: originalLayout.schema,
+            },
+          })
+        ).ok()
+      ).toBe(true)
+    }
+  })
+
   test("answer labels edit directly on the layout canvas", async ({ page, request }) => {
     test.setTimeout(60_000)
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -563,6 +610,12 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByRole("button", { name: "Create Blank background" })).toBeVisible()
       await expect(
         page.getByRole("button", { name: "Create Geometric collage background" })
+      ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Create Sunset arches background" })
+      ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Create Postcard frame background" })
       ).toBeVisible()
 
       await page.getByRole("button", { name: "Create Geometric collage background" }).click()

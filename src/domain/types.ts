@@ -190,6 +190,9 @@ export type ProblemCode =
   | "image-low-resolution"
   | "image-blocking-resolution"
   | "unsupported-asset"
+  | "photo-slot-mismatch"
+  // Superseded by "photo-slot-mismatch"; still accepted so books persisted before the rename
+  // stay loadable and re-saveable until they are regenerated.
   | "gallery-overflow"
   | "outside-print-area"
   | "missing-required-answer"

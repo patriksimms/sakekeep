@@ -23,6 +23,7 @@ import {
   SaveIcon,
   SendToBackIcon,
   Trash2Icon,
+  TriangleAlertIcon,
   TypeIcon,
   Undo2Icon,
   UnlockIcon,
@@ -98,6 +99,7 @@ import {
   questionPrompt,
 } from "#/domain/layout-question-palette.ts"
 import { addElement, PAGE_SPEC } from "#/domain/layout.ts"
+import { photoSlotMismatches } from "#/domain/photo-assignment.ts"
 import { enforceMinimumTextBoxHeight } from "#/domain/text-layout.ts"
 import {
   type FormQuestion,
@@ -144,7 +146,7 @@ function BackgroundPicker({ onCreate }: { onCreate: (preset: BackgroundPreset) =
             Decorative elements start locked and can be unlocked in the editor.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {BACKGROUND_PRESETS.map((preset) => (
             <Button
               key={preset.id}
@@ -833,6 +835,12 @@ function Editor({
 
   const selected = schema.elements.find((element) => element.id === selectedId)
   const questionPalette = layoutQuestionPalette(project.formSchema.questions)
+  const slotMismatches = new Map(
+    photoSlotMismatches(schema.elements, project.formSchema.questions).map((mismatch) => [
+      mismatch.questionId,
+      mismatch,
+    ])
+  )
 
   const add = (
     type: LayoutElement["type"],
@@ -1040,34 +1048,46 @@ function Editor({
         <Card className="mb-4 bg-card/90">
           <CardContent className="flex flex-col gap-3">
             <div className="grid gap-2 sm:grid-cols-2">
-              {questionPalette.map((item) => (
-                <div
-                  key={item.questionId}
-                  className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/70 p-2"
-                >
-                  <span className="min-w-0 truncate text-sm font-medium" title={item.prompt}>
-                    {item.prompt}
-                  </span>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                    {item.actions.map((action) => (
-                      <PaletteAction
-                        key={action.elementType}
-                        label={action.label}
-                        addLabel={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
-                        icon={
-                          action.elementType === "bound-text"
-                            ? TypeIcon
-                            : action.elementType === "image-frame"
-                              ? ImageIcon
-                              : GalleryHorizontalIcon
-                        }
-                        dragData={{ type: action.elementType, questionId: item.questionId }}
-                        onAdd={() => add(action.elementType, item.questionId)}
-                      />
-                    ))}
+              {questionPalette.map((item) => {
+                const mismatch = slotMismatches.get(item.questionId)
+                return (
+                  <div
+                    key={item.questionId}
+                    className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/70 p-2"
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="min-w-0 truncate text-sm font-medium" title={item.prompt}>
+                        {item.prompt}
+                      </span>
+                      {mismatch && (
+                        <span className="flex items-center gap-1 text-xs text-destructive">
+                          <TriangleAlertIcon aria-hidden="true" className="size-3 shrink-0" />
+                          {mismatch.slotCount} photo slot{mismatch.slotCount === 1 ? "" : "s"} for
+                          up to {mismatch.maxImages} upload{mismatch.maxImages === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      {item.actions.map((action) => (
+                        <PaletteAction
+                          key={action.elementType}
+                          label={action.label}
+                          addLabel={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
+                          icon={
+                            action.elementType === "bound-text"
+                              ? TypeIcon
+                              : action.elementType === "image-frame"
+                                ? ImageIcon
+                                : GalleryHorizontalIcon
+                          }
+                          dragData={{ type: action.elementType, questionId: item.questionId }}
+                          onAdd={() => add(action.elementType, item.questionId)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <Separator />
             <div className="flex flex-wrap items-center gap-1.5">
