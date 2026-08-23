@@ -1568,12 +1568,12 @@ export function LayoutsPanel({
     }
   }
 
-  async function runAfterEditorSave<Result>(action: () => Promise<Result>) {
-    if (formatChanging || layoutChanging) return undefined
+  async function runAfterEditorSave(action: () => Promise<void>) {
+    if (formatChanging || layoutChanging) return
     setLayoutChanging(true)
     try {
-      if ((await editorRef.current?.flush()) === false) return undefined
-      return await action()
+      if ((await editorRef.current?.flush()) === false) return
+      await action()
     } finally {
       setLayoutChanging(false)
     }
@@ -1750,8 +1750,8 @@ export function LayoutsPanel({
               pageFormat={project.pageFormat}
               pageOrientation={project.pageOrientation}
               onCreate={async (preset) => {
-                const layout = await runAfterEditorSave(() =>
-                  projectApi.layoutAction<LayoutRecord>(project.id, {
+                await runAfterEditorSave(async () => {
+                  const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
                     action: "create",
                     name:
                       preset.id === "blank"
@@ -1759,10 +1759,9 @@ export function LayoutsPanel({
                         : `${preset.name} background`,
                     backgroundPresetId: preset.id,
                   })
-                )
-                if (!layout) return
-                updateLayouts([...project.layouts, layout])
-                setSelectedId(layout.id)
+                  updateLayouts([...project.layouts, layout])
+                  setSelectedId(layout.id)
+                })
               }}
             />
           </div>
@@ -1795,17 +1794,19 @@ export function LayoutsPanel({
                   disabled={selected.position === 0}
                   onClick={async () => {
                     if (selected.position === 0) return
-                    const result = await runAfterEditorSave(async () => {
+                    await runAfterEditorSave(async () => {
                       const ids = project.layouts.map((layout) => layout.id)
                       const index = ids.indexOf(selected.id)
                       ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
-                      return projectApi.layoutAction<{ layouts: LayoutRecord[] }>(project.id, {
-                        action: "reorder",
-                        layoutIds: ids,
-                      })
+                      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(
+                        project.id,
+                        {
+                          action: "reorder",
+                          layoutIds: ids,
+                        }
+                      )
+                      updateLayouts(result.layouts)
                     })
-                    if (!result) return
-                    updateLayouts(result.layouts)
                   }}
                 >
                   <ArrowUpIcon />
@@ -1822,17 +1823,19 @@ export function LayoutsPanel({
                   disabled={selected.position === project.layouts.length - 1}
                   onClick={async () => {
                     if (selected.position === project.layouts.length - 1) return
-                    const result = await runAfterEditorSave(async () => {
+                    await runAfterEditorSave(async () => {
                       const ids = project.layouts.map((layout) => layout.id)
                       const index = ids.indexOf(selected.id)
                       ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
-                      return projectApi.layoutAction<{ layouts: LayoutRecord[] }>(project.id, {
-                        action: "reorder",
-                        layoutIds: ids,
-                      })
+                      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(
+                        project.id,
+                        {
+                          action: "reorder",
+                          layoutIds: ids,
+                        }
+                      )
+                      updateLayouts(result.layouts)
                     })
-                    if (!result) return
-                    updateLayouts(result.layouts)
                   }}
                 >
                   <ArrowDownIcon />
@@ -1841,15 +1844,14 @@ export function LayoutsPanel({
               <Button
                 variant="outline"
                 onClick={async () => {
-                  const duplicate = await runAfterEditorSave(() =>
-                    projectApi.layoutAction<LayoutRecord>(project.id, {
+                  await runAfterEditorSave(async () => {
+                    const duplicate = await projectApi.layoutAction<LayoutRecord>(project.id, {
                       action: "duplicate",
                       layoutId: selected.id,
                     })
-                  )
-                  if (!duplicate) return
-                  updateLayouts([...project.layouts, duplicate])
-                  setSelectedId(duplicate.id)
+                    updateLayouts([...project.layouts, duplicate])
+                    setSelectedId(duplicate.id)
+                  })
                 }}
               >
                 <CopyIcon data-icon="inline-start" />

@@ -8,6 +8,7 @@ import { FORM_SCHEMA_VERSION, type LayoutRecord, type Project } from "#/domain/t
 import { layoutFixture } from "#/test/fixtures.ts"
 
 const updateLayout = vi.fn()
+const layoutAction = vi.fn()
 
 vi.mock("#/lib/api.ts", async () => {
   const actual = await vi.importActual<typeof import("#/lib/api.ts")>("#/lib/api.ts")
@@ -15,6 +16,7 @@ vi.mock("#/lib/api.ts", async () => {
     ...actual,
     projectApi: {
       ...actual.projectApi,
+      layoutAction: (...args: unknown[]) => layoutAction(...args),
       updateLayout: (...args: unknown[]) => updateLayout(...args),
     },
   }
@@ -57,6 +59,7 @@ function Harness({ initial }: { initial: Project }) {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  layoutAction.mockReset()
   updateLayout.mockReset()
   vi.stubGlobal(
     "ResizeObserver",
@@ -122,5 +125,25 @@ describe("layout editor saves", () => {
 
     await act(async () => finishSave?.(first))
     expect((screen.getByLabelText("Layout name") as HTMLInputElement).value).toBe("Layout 2")
+  })
+
+  it("selects a newly created background after the serialized mutation", async () => {
+    const existing = layoutFixture()
+    const created = {
+      ...layoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 1),
+      name: "Geometric collage background",
+    }
+    layoutAction.mockResolvedValue(created)
+    render(<Harness initial={project([existing])} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "New layout" }))
+    fireEvent.click(screen.getByRole("button", { name: "Create Geometric collage background" }))
+    await act(async () => {})
+
+    expect(
+      screen
+        .getByRole("tab", { name: /Geometric collage background/ })
+        .getAttribute("aria-selected")
+    ).toBe("true")
   })
 })
