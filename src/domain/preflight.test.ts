@@ -79,4 +79,33 @@ describe("preflight", () => {
     )
     expect(hasFailedPreflight(report)).toBe(false)
   })
+
+  it("allows export when a static element extends beyond the bleed boundary", () => {
+    const generated = book()
+    generated.pages[0]!.problems.push({
+      id: "static-outside-print-area",
+      code: "outside-print-area",
+      pageId: generated.pages[0]!.id,
+      elementId: "static-element",
+      message: "A static element extends beyond the bleed boundary.",
+      blocking: false,
+    })
+    const report = createPreflightReport({
+      projectId: generated.projectId,
+      book: generated,
+      bookStatus: "current",
+      pageCount: generated.pages.length,
+      fontsEmbedded: true,
+      outputIntentEmbedded: true,
+      pageBoxesValid: true,
+      assetResolutionMetadata: true,
+      assetResolutionCount: 0,
+      marks: false,
+    })
+
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({ id: "blocking-problems", status: "pass" })
+    )
+    expect(hasFailedPreflight(report)).toBe(false)
+  })
 })

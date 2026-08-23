@@ -202,7 +202,7 @@ export function inspectSubmissionPage(
           pageId,
           "outside-print-area",
           "An element extends beyond the 3 mm bleed boundary.",
-          true,
+          element.type === "bound-text",
           { elementId: element.id }
         )
       )
