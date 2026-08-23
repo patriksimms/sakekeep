@@ -429,6 +429,15 @@ export function BookReview({
   const selected = pages.find((page) => page.id === selectedId) ?? pages[0]
   const problems = pages.flatMap((page) => page.problems)
 
+  const changeView = (next: BookView, source: "toggle" | "page_tile" | "problem_shortcut") => {
+    captureAnalyticsEvent("book_review:view_change", {
+      view: next,
+      page_count: pages.length,
+      source,
+    })
+    onViewChange?.(next)
+  }
+
   const replaceBook = (updated: GeneratedBook, stale: boolean) =>
     onProjectChange({
       ...project,
@@ -492,7 +501,7 @@ export function BookReview({
               value={[view]}
               onValueChange={(next: string[]) => {
                 const requested = parseBookView(next[0])
-                if (requested) onViewChange?.(requested)
+                if (requested) changeView(requested, "toggle")
               }}
             >
               <ToggleGroupItem value="grid" aria-label="All pages">
@@ -632,7 +641,7 @@ export function BookReview({
                         setSelectedProblemId(target.id)
                         setSelectedElementId(target.elementId ?? null)
                       }
-                      onViewChange?.("detail")
+                      changeView("detail", "problem_shortcut")
                     }}
                   >
                     Review problems
@@ -646,7 +655,7 @@ export function BookReview({
                   setSelectedId(pageId)
                   setSelectedProblemId(null)
                   setSelectedElementId(null)
-                  onViewChange?.("detail")
+                  changeView("detail", "page_tile")
                 }}
               />
             </div>

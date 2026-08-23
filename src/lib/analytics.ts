@@ -2,6 +2,7 @@ import type { PostHog } from "posthog-js"
 
 import type { BackgroundPresetId } from "#/domain/layout-backgrounds.ts"
 import type { PageProblem } from "#/domain/types.ts"
+import type { BookView } from "#/domain/workspace-tabs.ts"
 import { isDemoMode } from "#/lib/demo-mode.ts"
 
 const configuredToken: string | undefined = import.meta.env.VITE_POSTHOG_PROJECT_TOKEN as
@@ -25,6 +26,13 @@ interface AnalyticsEvents {
   "layout_editor:answer_label_edit": {
     cleared: boolean
     input_method: "double_click" | "keyboard"
+  }
+  // Answers how organizers move between the all-pages grid and the single-page view, and how
+  // large real books get, which decides whether page previews need a cheaper thumbnail.
+  "book_review:view_change": {
+    view: BookView
+    page_count: number
+    source: "toggle" | "page_tile" | "problem_shortcut"
   }
   "book_review:problem_select": {
     problem_code: PageProblem["code"]
