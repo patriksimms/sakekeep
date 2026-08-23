@@ -7,7 +7,13 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Backstop: a wedged step should not hold a runner for the default six hours.
+    timeout-minutes: 30
     env:
+      # apt runs inside `playwright install --with-deps`; without these it can block forever
+      # on a debconf or needrestart prompt instead of failing.
+      DEBIAN_FRONTEND: noninteractive
+      NEEDRESTART_MODE: a
       DATABASE_URL: postgresql://sakekeep:sakekeep@127.0.0.1:54321/sakekeep
       S3_ENDPOINT: http://127.0.0.1:19000
       S3_REGION: us-east-1
@@ -34,7 +40,16 @@ jobs:
       - run: docker compose up -d --wait
       - run: bun run db:migrate
       - run: bun run db:seed
-      - run: bunx playwright install --with-deps chromium
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      # Hosted runners have hung here for hours with no output. Cap the step so a stuck
+      # package install fails fast and can be rerun.
+      - name: Install Chromium and its system dependencies
+        timeout-minutes: 10
+        run: bunx playwright install --with-deps chromium
       - run: bun run verify
       - if: always()
         run: docker compose logs --no-color
