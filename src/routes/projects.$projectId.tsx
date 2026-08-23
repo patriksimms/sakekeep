@@ -53,7 +53,12 @@ import { Input } from "#/components/ui/input.tsx"
 import { Skeleton } from "#/components/ui/skeleton.tsx"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs.tsx"
 import { type Project } from "#/domain/types.ts"
-import { parseWorkspaceStep, type WorkspaceStep } from "#/domain/workspace-tabs.ts"
+import {
+  defaultWorkspaceStep,
+  parseWorkspaceStep,
+  workspaceStepAfterStateChange,
+  type WorkspaceStep,
+} from "#/domain/workspace-tabs.ts"
 import { projectApi } from "#/lib/api.ts"
 
 export const Route = createFileRoute("/projects/$projectId")({
@@ -76,14 +81,6 @@ const steps: Array<{
   { value: "export", label: "Export", icon: FileOutputIcon },
 ]
 
-function initialStep(project: Project): WorkspaceStep {
-  if (project.state === "draft") return "form"
-  if (project.state === "collecting") return "responses"
-  if (project.layouts.length === 0) return "layouts"
-  if (!project.book) return "book"
-  return project.bookStatus === "current" ? "export" : "book"
-}
-
 function ProjectWorkspace() {
   const { projectId } = Route.useParams()
   const search = Route.useSearch()
@@ -94,20 +91,41 @@ function ProjectWorkspace() {
     queryFn: () => projectApi.get(projectId, true),
     refetchInterval: (query) => (query.state.data?.state === "collecting" ? 5_000 : false),
   })
-  const [defaultStep, setDefaultStep] = useState<WorkspaceStep>("form")
-  const [workspaceInitialized, setWorkspaceInitialized] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [title, setTitle] = useState("")
 
   const project = projectQuery.data
   useEffect(() => {
-    if (!project || workspaceInitialized) return
-    setDefaultStep(initialStep(project))
+    if (!project) return
     setTitle(project.title)
-    setWorkspaceInitialized(true)
-  }, [project, workspaceInitialized])
+  }, [project?.id, project?.title])
+
+  useEffect(() => {
+    if (!project || search.tab) return
+    void navigate({
+      to: "/projects/$projectId",
+      params: { projectId },
+      search: (current) => ({
+        ...current,
+        tab: defaultWorkspaceStep(project.state),
+      }),
+      replace: true,
+    })
+  }, [navigate, project, projectId, search.tab])
 
   const setProject = (updated: Project) => {
+    const nextStep = project && workspaceStepAfterStateChange(project.state, updated.state)
+    if (nextStep) {
+      void navigate({
+        to: "/projects/$projectId",
+        params: { projectId },
+        search: (current) => ({
+          ...current,
+          tab: nextStep,
+        }),
+        replace: true,
+      })
+    }
     queryClient.setQueryData(["project", projectId], updated)
     void queryClient.invalidateQueries({ queryKey: ["projects"] })
   }
@@ -338,7 +356,7 @@ function ProjectWorkspace() {
       )}
 
       <Tabs
-        value={search.tab ?? defaultStep}
+        value={search.tab ?? defaultWorkspaceStep(project.state)}
         onValueChange={(value) => {
           void navigate({
             to: "/projects/$projectId",
