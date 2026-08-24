@@ -105,6 +105,47 @@ describe("SubmissionsPanel", () => {
     expect(onProjectChange).toHaveBeenCalledWith(updatedProject)
   })
 
+  it("keeps the starting revision when refreshed during an edit", async () => {
+    const currentProject = project()
+    const refreshedProject = project()
+    refreshedProject.submissions![0]!.answers.name = "Another organizer's correction"
+    refreshedProject.submissions![0]!.revision = 1
+    const updateSubmission = vi
+      .spyOn(projectApi, "updateSubmission")
+      .mockRejectedValue(
+        new Error("This response changed while you were editing it. Refresh and try again.")
+      )
+    const onProjectChange = vi.fn()
+    const { rerender } = render(
+      <SubmissionsPanel
+        project={currentProject}
+        onProjectChange={onProjectChange}
+        onRefresh={() => undefined}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Person 1/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Edit response" }))
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "My correction" } })
+    rerender(
+      <SubmissionsPanel
+        project={refreshedProject}
+        onProjectChange={onProjectChange}
+        onRefresh={() => undefined}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Review changes" }))
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
+
+    await waitFor(() =>
+      expect(updateSubmission).toHaveBeenCalledWith("project-id", "submission-id", {
+        expectedRevision: 0,
+        answers: { name: "My correction" },
+      })
+    )
+    expect(onProjectChange).not.toHaveBeenCalled()
+  })
+
   it("validates edited text before opening the confirmation", () => {
     render(
       <SubmissionsPanel
@@ -130,7 +171,11 @@ describe("SubmissionsPanel", () => {
         id: "edit-id",
         editorName: "Patrik Simms",
         editedAt: "2026-08-24T18:00:00.000Z",
-        changes: [{ questionId: "name", previousValue: "Persno 1", newValue: "Person 1" }],
+        changes: [
+          { questionId: "name", previousValue: "Persno 1", newValue: "Person 1" },
+          { questionId: "website", previousValue: "", newValue: "https://example.com" },
+          { questionId: "memory", previousValue: "Removed memory", newValue: "  " },
+        ],
       },
     ]
     render(
@@ -146,6 +191,11 @@ describe("SubmissionsPanel", () => {
     expect(screen.getByText("Edit history")).toBeTruthy()
     expect(screen.getByText(/Patrik Simms/)).toBeTruthy()
     expect(screen.getByText("Persno 1")).toBeTruthy()
+    expect(
+      screen.getAllByText("No answer").filter((element) => element.tagName === "SPAN")
+    ).toHaveLength(2)
+    expect(screen.getByText("https://example.com")).toBeTruthy()
+    expect(screen.getByText("Removed memory")).toBeTruthy()
     expect(
       screen
         .getAllByText("Person 1")

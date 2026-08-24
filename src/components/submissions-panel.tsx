@@ -68,6 +68,10 @@ function questionAnswerLabel(question: FormQuestion, answer: SubmissionAnswer | 
   return `${answer.length} image${answer.length === 1 ? "" : "s"}`
 }
 
+function editHistoryValue(value: string) {
+  return value.trim() ? value : "No answer"
+}
+
 function Images({ answer }: { answer: SubmissionAnswer | undefined }) {
   if (!Array.isArray(answer)) return null
   const images = answer.filter(
@@ -108,7 +112,11 @@ export function SubmissionsPanel({
   onRefresh: () => void
 }) {
   const [copied, setCopied] = useState(false)
-  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null)
+  const [editStart, setEditStart] = useState<{
+    submissionId: string
+    revision: number
+    answers: Record<string, string>
+  } | null>(null)
   const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({})
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [confirmingSubmission, setConfirmingSubmission] = useState<SubmissionSummary | null>(null)
@@ -119,25 +127,21 @@ export function SubmissionsPanel({
   )
 
   const startEditing = (submission: SubmissionSummary) => {
-    setEditingSubmissionId(submission.id)
-    setDraftAnswers(
-      Object.fromEntries(
-        textQuestions.map((question) => {
-          const answer = submission.answers[question.id]
-          return [question.id, typeof answer === "string" ? answer : ""]
-        })
-      )
+    const answers = Object.fromEntries(
+      textQuestions.map((question) => {
+        const answer = submission.answers[question.id]
+        return [question.id, typeof answer === "string" ? answer : ""]
+      })
     )
+    setEditStart({ submissionId: submission.id, revision: submission.revision, answers })
+    setDraftAnswers(answers)
     setIssues([])
   }
 
-  const changedAnswers = (submission: SubmissionSummary) =>
+  const changedAnswers = () =>
     Object.fromEntries(
       textQuestions
-        .filter((question) => {
-          const answer = submission.answers[question.id]
-          return draftAnswers[question.id] !== (typeof answer === "string" ? answer : "")
-        })
+        .filter((question) => draftAnswers[question.id] !== editStart?.answers[question.id])
         .map((question) => [question.id, draftAnswers[question.id] ?? ""])
     )
 
@@ -148,7 +152,7 @@ export function SubmissionsPanel({
     })
     setIssues(nextIssues)
     if (nextIssues.length > 0) return
-    if (Object.keys(changedAnswers(submission)).length === 0) {
+    if (Object.keys(changedAnswers()).length === 0) {
       toast.info("Change at least one text answer")
       return
     }
@@ -295,7 +299,7 @@ export function SubmissionsPanel({
                 <dl className="grid gap-5 pb-3">
                   {project.formSchema.questions.map((question) => {
                     const answer = submission.answers[question.id]
-                    const editing = editingSubmissionId === submission.id
+                    const editing = editStart?.submissionId === submission.id
                     const editable =
                       question.type === "single-line" || question.type === "multiline"
                     const questionIssues = issues.filter(
@@ -399,11 +403,13 @@ export function SubmissionsPanel({
                                     {question?.prompt ?? "Removed question"}
                                   </dt>
                                   <dd className="whitespace-pre-wrap">
-                                    <span className="line-through">{change.previousValue}</span>
+                                    <span className="line-through">
+                                      {editHistoryValue(change.previousValue)}
+                                    </span>
                                     <span className="mx-1" aria-hidden="true">
                                       →
                                     </span>
-                                    <span>{change.newValue}</span>
+                                    <span>{editHistoryValue(change.newValue)}</span>
                                   </dd>
                                 </div>
                               )
@@ -416,12 +422,12 @@ export function SubmissionsPanel({
                 )}
                 {project.state === "closed" && !project.archivedAt && textQuestions.length > 0 && (
                   <div className="flex justify-end gap-2 border-t pt-3">
-                    {editingSubmissionId === submission.id ? (
+                    {editStart?.submissionId === submission.id ? (
                       <>
                         <Button
                           variant="ghost"
                           onClick={() => {
-                            setEditingSubmissionId(null)
+                            setEditStart(null)
                             setIssues([])
                           }}
                         >
@@ -459,7 +465,7 @@ export function SubmissionsPanel({
           </AlertDialogHeader>
           {confirmingSubmission && (
             <ul className="list-disc pl-5 text-sm">
-              {Object.keys(changedAnswers(confirmingSubmission)).map((questionId) => (
+              {Object.keys(changedAnswers()).map((questionId) => (
                 <li key={questionId}>
                   {project.formSchema.questions.find((question) => question.id === questionId)
                     ?.prompt ?? "Removed question"}
@@ -473,15 +479,15 @@ export function SubmissionsPanel({
               variant="destructive"
               disabled={saving}
               onClick={async () => {
-                if (!confirmingSubmission) return
-                const answers = changedAnswers(confirmingSubmission)
+                if (!confirmingSubmission || !editStart) return
+                const answers = changedAnswers()
                 setSaving(true)
                 try {
                   const updated = await projectApi.updateSubmission(
                     project.id,
-                    confirmingSubmission.id,
+                    editStart.submissionId,
                     {
-                      expectedRevision: confirmingSubmission.revision,
+                      expectedRevision: editStart.revision,
                       answers,
                     }
                   )
@@ -490,7 +496,7 @@ export function SubmissionsPanel({
                     changed_answer_count: Object.keys(answers).length,
                     previous_edit_count: confirmingSubmission.edits.length,
                   })
-                  setEditingSubmissionId(null)
+                  setEditStart(null)
                   setConfirmingSubmission(null)
                   setIssues([])
                   toast.success("Response updated")
