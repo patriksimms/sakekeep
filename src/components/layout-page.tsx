@@ -34,12 +34,16 @@ import {
   type LayoutSchema,
   type SubmissionSummary,
 } from "#/domain/types.ts"
+import { PhotoFocusSlot, type PhotoFocusControls } from "#/components/photo-focus-slot.tsx"
+import { effectiveFocalPoint } from "#/domain/photo-focus.ts"
 
 export interface LayoutPageContent {
   questions?: FormQuestion[]
   submission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
   decorativePlaceholderUrl?: string
+  /** Supplied only by the book review, which lets the organizer pan each printed photo. */
+  photoFocus?: PhotoFocusControls
 }
 
 function elementStyle(
@@ -85,12 +89,57 @@ export function textElementStyle(
   }
 }
 
-function imagePosition(
+function renderedFocalPoint(
   element: Extract<LayoutElement, { type: "image-frame" | "gallery-frame" }>,
-  image: ImageAnswer
-): string {
-  const focalPoint = element.focalPoint ?? image.focalPoint ?? { x: 0.5, y: 0.5 }
+  image: ImageAnswer,
+  content: LayoutPageContent
+): { x: number; y: number } {
+  return content.photoFocus?.draft[image.assetId] ?? effectiveFocalPoint(element, image)
+}
+
+function imagePosition(focalPoint: { x: number; y: number }): string {
   return `${focalPoint.x * 100}% ${focalPoint.y * 100}%`
+}
+
+/**
+ * One photo as it prints. The book review passes `photoFocus`, which turns the same rendering into
+ * a grab handle; everywhere else this stays the plain image the PDF renderer mirrors.
+ */
+function PrintedPhoto({
+  element,
+  image,
+  content,
+  borderRadius,
+}: {
+  element: Extract<LayoutElement, { type: "image-frame" | "gallery-frame" }>
+  image: ImageAnswer
+  content: LayoutPageContent
+  borderRadius?: string | number
+}) {
+  const focalPoint = renderedFocalPoint(element, image, content)
+  const photo = (
+    <img
+      src={image.previewUrl}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      className="size-full object-cover"
+      style={{ objectPosition: imagePosition(focalPoint) }}
+    />
+  )
+  if (!content.photoFocus) return photo
+  return (
+    <PhotoFocusSlot
+      image={image}
+      focalPoint={focalPoint}
+      controls={content.photoFocus}
+      rotation={element.geometry.rotation}
+      borderRadius={borderRadius}
+      label={`Move the crop of ${image.name}`}
+    >
+      {photo}
+    </PhotoFocusSlot>
+  )
 }
 
 function textElementRuns(
@@ -377,13 +426,11 @@ function ElementContent({
         }}
       >
         {image?.previewUrl ? (
-          <img
-            src={image.previewUrl}
-            alt=""
-            aria-hidden="true"
-            loading="lazy"
-            className="size-full object-cover"
-            style={{ objectPosition: imagePosition(element, image) }}
+          <PrintedPhoto
+            element={element}
+            image={image}
+            content={content}
+            borderRadius={millimetresToContainerWidth(element.cornerRadius, specification)}
           />
         ) : content.submission ? (
           <FillerArt
@@ -422,14 +469,7 @@ function ElementContent({
         }
         return image?.previewUrl ? (
           <div key={`${image.assetId}-${index}`} style={slotStyle}>
-            <img
-              src={image.previewUrl}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              className="size-full object-cover"
-              style={{ objectPosition: imagePosition(element, image) }}
-            />
+            <PrintedPhoto element={element} image={image} content={content} />
           </div>
         ) : content.submission ? (
           <div key={index} style={slotStyle}>
