@@ -46,6 +46,7 @@ import {
   AccordionTrigger,
 } from "#/components/ui/accordion.tsx"
 import { projectApi } from "#/lib/api.ts"
+import { submissionLabel } from "#/domain/submission-label.ts"
 
 function questionAnswerLabel(question: FormQuestion, answer: SubmissionAnswer | undefined) {
   if (answer === undefined) return "No answer"
@@ -228,7 +229,9 @@ export function SubmissionsPanel({
             >
               <AccordionTrigger>
                 <span className="flex flex-1 items-center justify-between gap-4 pr-3 text-left">
-                  <span className="font-medium">Response {submission.sequence}</span>
+                  <span className="font-medium">
+                    {submissionLabel(project.formSchema, submission)}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {new Date(submission.submittedAt).toLocaleString()}
                   </span>
