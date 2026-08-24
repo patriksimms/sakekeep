@@ -19,6 +19,7 @@ import {
   setProjectPageFormat,
   unarchiveProject,
   updateProject,
+  updateSubmissionTextAnswers,
 } from "./repository.ts"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
 import { FORM_SCHEMA_VERSION, type FormSchema } from "../domain/types.ts"
@@ -35,6 +36,121 @@ afterEach(async () => {
 })
 
 describe("repository state machine", () => {
+  it("edits closed response text with history and stale-book protection", async () => {
+    const project = await createProject({ title: "Response corrections" })
+    createdProjectIds.add(project.id)
+    await updateProject({
+      projectId: project.id,
+      formSchema: completeForm,
+      expectedRevision: 0,
+    })
+    await publishProject(project.id)
+    const { submission } = await createSubmissionRecord({
+      projectId: project.id,
+      idempotencyKey: crypto.randomUUID(),
+      answers: {
+        name: "Nroa",
+        website: "https://example.com",
+        memory: "A memroy",
+        role: ["friend"],
+        traits: ["kind"],
+        photos: [],
+      },
+      pendingAssets: [],
+    })
+    const editor = { userId: "user-1", name: "Patrik Simms" }
+
+    await expect(
+      updateSubmissionTextAnswers({
+        projectId: project.id,
+        submissionId: submission.id,
+        expectedRevision: 0,
+        answers: { name: "Nora" },
+        editor,
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    await closeProject(project.id)
+    await createLayout(project.id)
+    await generateProjectBook(project.id, {
+      mode: "cycle",
+      seed: "response-edit",
+      manualAssignments: {},
+      resolutionOverrides: [],
+    })
+
+    await expect(
+      updateSubmissionTextAnswers({
+        projectId: project.id,
+        submissionId: submission.id,
+        expectedRevision: 0,
+        answers: { name: "" },
+        editor,
+      })
+    ).rejects.toMatchObject({ status: 422 })
+    await expect(
+      updateSubmissionTextAnswers({
+        projectId: project.id,
+        submissionId: submission.id,
+        expectedRevision: 0,
+        answers: { name: "x".repeat(41) },
+        editor,
+      })
+    ).rejects.toMatchObject({ status: 422 })
+    await expect(
+      updateSubmissionTextAnswers({
+        projectId: project.id,
+        submissionId: submission.id,
+        expectedRevision: 0,
+        answers: { role: "family" },
+        editor,
+      })
+    ).rejects.toMatchObject({ status: 422 })
+
+    const updated = await updateSubmissionTextAnswers({
+      projectId: project.id,
+      submissionId: submission.id,
+      expectedRevision: 0,
+      answers: { name: "Nora", memory: "A memory" },
+      editor,
+    })
+    expect(updated.bookStatus).toBe("stale")
+    expect(updated.submissions?.[0]).toMatchObject({
+      revision: 1,
+      answers: { name: "Nora", memory: "A memory" },
+      edits: [
+        {
+          editorName: "Patrik Simms",
+          changes: [
+            { questionId: "name", previousValue: "Nroa", newValue: "Nora" },
+            { questionId: "memory", previousValue: "A memroy", newValue: "A memory" },
+          ],
+        },
+      ],
+    })
+
+    await expect(
+      updateSubmissionTextAnswers({
+        projectId: project.id,
+        submissionId: submission.id,
+        expectedRevision: 0,
+        answers: { name: "Nora M." },
+        editor,
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    await archiveProject(project.id)
+    await expect(
+      updateSubmissionTextAnswers({
+        projectId: project.id,
+        submissionId: submission.id,
+        expectedRevision: 1,
+        answers: { name: "Nora M." },
+        editor,
+      })
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
   it("uses optimistic form revisions to reject concurrent autosaves", async () => {
     const project = await createProject({ title: "Autosave race" })
     createdProjectIds.add(project.id)

@@ -18,6 +18,7 @@ const organizerRequests = [
   ["POST", "/api/projects/project-id/layouts"],
   ["PATCH", "/api/projects/project-id/layouts/layout-id"],
   ["DELETE", "/api/projects/project-id/layouts/layout-id"],
+  ["PATCH", "/api/projects/project-id/submissions/submission-id"],
   ["POST", "/api/projects/project-id/book"],
   ["PATCH", "/api/projects/project-id/book"],
   ["POST", "/api/projects/project-id/export"],

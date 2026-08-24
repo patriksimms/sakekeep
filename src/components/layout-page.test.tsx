@@ -254,8 +254,10 @@ describe("photo distribution in the preview", () => {
   const submission: SubmissionSummary = {
     id: "submission",
     sequence: 1,
+    revision: 0,
     submittedAt: "2026-07-18T00:00:00.000Z",
     answers: { photos: [photo("first"), photo("second")] },
+    edits: [],
   }
 
   it("renders a different photo in each frame bound to one question", () => {

@@ -116,14 +116,18 @@ describe("applying a crop centre across a response", () => {
     {
       id: "first",
       sequence: 1,
+      revision: 0,
       submittedAt: "2026-07-18T00:00:00.000Z",
       answers: { memory: "A note", photos: [photo("left"), photo("right")] },
+      edits: [],
     },
     {
       id: "second",
       sequence: 2,
+      revision: 0,
       submittedAt: "2026-07-19T00:00:00.000Z",
       answers: { photos: [photo("other")] },
+      edits: [],
     },
   ]
 

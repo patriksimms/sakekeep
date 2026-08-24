@@ -1,6 +1,11 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm"
 
-import { emptyFormSchema, validateFormForDraft, validateFormForPublish } from "../domain/form"
+import {
+  emptyFormSchema,
+  validateEditedTextAnswers,
+  validateFormForDraft,
+  validateFormForPublish,
+} from "../domain/form"
 import { generateBook } from "../domain/generation"
 import { type BackgroundPresetId, backgroundSchema } from "../domain/layout-backgrounds"
 import { emptyLayoutSchema, layoutSchemaValidator, resizeLayoutSchema } from "../domain/layout"
@@ -19,7 +24,9 @@ import {
   type Project,
   type ProjectSummary,
   type SubmissionAnswers,
+  type SubmissionEdit,
   type SubmissionSummary,
+  type SubmissionTextChange,
 } from "../domain/types"
 import { db } from "./db"
 import {
@@ -29,6 +36,7 @@ import {
   exportsTable,
   layouts,
   projects,
+  submissionEdits,
   submissions,
 } from "./db/schema"
 import { env } from "./env"
@@ -52,12 +60,17 @@ function layoutRecord(row: typeof layouts.$inferSelect): LayoutRecord {
   }
 }
 
-function submissionSummary(row: typeof submissions.$inferSelect): SubmissionSummary {
+function submissionSummary(
+  row: typeof submissions.$inferSelect,
+  edits: SubmissionEdit[] = []
+): SubmissionSummary {
   return {
     id: row.id,
     sequence: row.sequence,
+    revision: row.revision,
     submittedAt: iso(row.submittedAt),
     answers: row.answers,
+    edits,
   }
 }
 
@@ -135,31 +148,52 @@ export async function getProject(projectId: string, includeSubmissions = false):
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
   if (!project) throw new HttpError(404, "Project not found.")
 
-  const [layoutRows, bookRows, submissionRows, focalPointRows, countRows] = await Promise.all([
-    db
-      .select()
-      .from(layouts)
-      .where(eq(layouts.projectId, projectId))
-      .orderBy(asc(layouts.position)),
-    db.select().from(books).where(eq(books.projectId, projectId)).limit(1),
-    includeSubmissions
-      ? db
-          .select()
-          .from(submissions)
-          .where(eq(submissions.projectId, projectId))
-          .orderBy(asc(submissions.sequence))
-      : Promise.resolve([]),
-    includeSubmissions
-      ? db
-          .select({ id: assets.id, focalPoint: assets.focalPoint })
-          .from(assets)
-          .where(and(eq(assets.projectId, projectId), isNotNull(assets.focalPoint)))
-      : Promise.resolve([]),
-    db.select({ value: count() }).from(submissions).where(eq(submissions.projectId, projectId)),
-  ])
+  const [layoutRows, bookRows, submissionRows, submissionEditRows, focalPointRows, countRows] =
+    await Promise.all([
+      db
+        .select()
+        .from(layouts)
+        .where(eq(layouts.projectId, projectId))
+        .orderBy(asc(layouts.position)),
+      db.select().from(books).where(eq(books.projectId, projectId)).limit(1),
+      includeSubmissions
+        ? db
+            .select()
+            .from(submissions)
+            .where(eq(submissions.projectId, projectId))
+            .orderBy(asc(submissions.sequence))
+        : Promise.resolve([]),
+      includeSubmissions
+        ? db
+            .select()
+            .from(submissionEdits)
+            .innerJoin(submissions, eq(submissionEdits.submissionId, submissions.id))
+            .where(eq(submissions.projectId, projectId))
+            .orderBy(asc(submissionEdits.editedAt))
+        : Promise.resolve([]),
+      includeSubmissions
+        ? db
+            .select({ id: assets.id, focalPoint: assets.focalPoint })
+            .from(assets)
+            .where(and(eq(assets.projectId, projectId), isNotNull(assets.focalPoint)))
+        : Promise.resolve([]),
+      db.select({ value: count() }).from(submissions).where(eq(submissions.projectId, projectId)),
+    ])
   const focalPoints = new Map(
     focalPointRows.flatMap((row) => (row.focalPoint ? [[row.id, row.focalPoint] as const] : []))
   )
+
+  const editsBySubmission = new Map<string, SubmissionEdit[]>()
+  for (const { submission_edits: edit } of submissionEditRows) {
+    const edits = editsBySubmission.get(edit.submissionId) ?? []
+    edits.push({
+      id: edit.id,
+      editorName: edit.editorName,
+      editedAt: iso(edit.editedAt),
+      changes: edit.changes,
+    })
+    editsBySubmission.set(edit.submissionId, edits)
+  }
 
   return {
     id: project.id,
@@ -176,12 +210,94 @@ export async function getProject(projectId: string, includeSubmissions = false):
     layouts: layoutRows.map(layoutRecord),
     book: bookRows[0]?.generatedBook ?? null,
     submissions: includeSubmissions
-      ? submissionRows.map((row) => withAssetFocalPoints(submissionSummary(row), focalPoints))
+      ? submissionRows.map((submission) =>
+          withAssetFocalPoints(
+            submissionSummary(submission, editsBySubmission.get(submission.id)),
+            focalPoints
+          )
+        )
       : undefined,
     archivedAt: project.archivedAt ? iso(project.archivedAt) : null,
     createdAt: iso(project.createdAt),
     updatedAt: iso(project.updatedAt),
   }
+}
+
+export async function updateSubmissionTextAnswers(input: {
+  projectId: string
+  submissionId: string
+  expectedRevision: number
+  answers: Record<string, string>
+  editor: { userId: string; name: string }
+}): Promise<Project> {
+  await db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
+    if (project.state !== "closed") {
+      throw new HttpError(409, "Close collection before editing responses.")
+    }
+
+    const [submission] = await tx
+      .select()
+      .from(submissions)
+      .where(
+        and(eq(submissions.id, input.submissionId), eq(submissions.projectId, input.projectId))
+      )
+      .for("update")
+    if (!submission) throw new HttpError(404, "Response not found.")
+    if (submission.revision !== input.expectedRevision) {
+      throw new HttpError(409, "This response changed elsewhere. Refresh it before editing again.")
+    }
+
+    const questions = new Map(
+      project.formSchema.questions.map((question) => [question.id, question])
+    )
+    const changes: SubmissionTextChange[] = []
+    for (const [questionId, newValue] of Object.entries(input.answers)) {
+      const question = questions.get(questionId)
+      if (!question || (question.type !== "single-line" && question.type !== "multiline")) {
+        throw new HttpError(422, "Only text answers can be edited.")
+      }
+      const storedValue = submission.answers[questionId]
+      if (storedValue !== undefined && typeof storedValue !== "string") {
+        throw new HttpError(422, "The stored text answer is invalid and cannot be edited.")
+      }
+      const previousValue = storedValue ?? ""
+      if (previousValue !== newValue) changes.push({ questionId, previousValue, newValue })
+    }
+    if (changes.length === 0) throw new HttpError(400, "Change at least one text answer.")
+
+    const updatedAnswers: SubmissionAnswers = { ...submission.answers, ...input.answers }
+    const issues = validateEditedTextAnswers(project.formSchema, updatedAnswers)
+    if (issues.length > 0) {
+      throw new HttpError(422, "Resolve the response errors and try again.", { issues })
+    }
+
+    await tx
+      .update(submissions)
+      .set({ answers: updatedAnswers, revision: submission.revision + 1 })
+      .where(eq(submissions.id, submission.id))
+    await tx.insert(submissionEdits).values({
+      id: crypto.randomUUID(),
+      submissionId: submission.id,
+      editorUserId: input.editor.userId,
+      editorName: input.editor.name,
+      changes,
+    })
+    await tx
+      .update(projects)
+      .set({
+        bookStatus: markBookStaleSet(project.bookStatus),
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, project.id))
+  })
+  return getProject(input.projectId, true)
 }
 
 export async function createProject(input: {
@@ -782,7 +898,7 @@ export async function generateProjectBook(
     const book = generateBook({
       projectId,
       form: project.formSchema,
-      submissions: submissionRows.map(submissionSummary),
+      submissions: submissionRows.map((submission) => submissionSummary(submission)),
       layouts: layoutRows.map(layoutRecord),
       settings,
       previousBook: previousRows[0]?.generatedBook,

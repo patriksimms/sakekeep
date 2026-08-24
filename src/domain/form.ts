@@ -421,6 +421,24 @@ export function validateSubmission(
   return issues
 }
 
+/** Validate the editable part of an existing response without revalidating stored image uploads. */
+export function validateEditedTextAnswers(
+  form: FormSchema,
+  answers: SubmissionAnswers
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  for (const question of form.questions) {
+    if (question.type !== "single-line" && question.type !== "multiline") continue
+    const answer = answers[question.id]
+    if (question.required && isBlank(answer)) {
+      issues.push({ path: `answers.${question.id}`, message: "This question is required." })
+      continue
+    }
+    validateText(question, answer, issues)
+  }
+  return issues
+}
+
 export function emptyFormSchema(): FormSchema {
   return { version: FORM_SCHEMA_VERSION, questions: [] }
 }

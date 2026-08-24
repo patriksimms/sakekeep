@@ -48,6 +48,11 @@ export const projectApi = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  updateSubmission: (projectId: string, submissionId: string, input: object) =>
+    api<Project>(`/api/projects/${projectId}/submissions/${submissionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   remove: (projectId: string) => api<void>(`/api/projects/${projectId}`, { method: "DELETE" }),
   action: (
     projectId: string,

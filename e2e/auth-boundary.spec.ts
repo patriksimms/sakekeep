@@ -23,6 +23,7 @@ const organizerRequests = [
   ["POST", `/api/projects/${missingProjectId}/layouts`],
   ["PATCH", `/api/projects/${missingProjectId}/layouts/${missingResourceId}`],
   ["DELETE", `/api/projects/${missingProjectId}/layouts/${missingResourceId}`],
+  ["PATCH", `/api/projects/${missingProjectId}/submissions/${missingResourceId}`],
   ["POST", `/api/projects/${missingProjectId}/book`],
   ["PATCH", `/api/projects/${missingProjectId}/book`],
   ["POST", `/api/projects/${missingProjectId}/export`],
@@ -81,6 +82,12 @@ async function sendAdmitted(
   if (method === "PATCH" && pathname.includes("/layouts/")) {
     return context.patch(pathname, {
       data: { expectedRevision: 0, name: "Auth boundary layout" },
+      maxRedirects: 0,
+    })
+  }
+  if (method === "PATCH" && pathname.includes("/submissions/")) {
+    return context.patch(pathname, {
+      data: { expectedRevision: 0, answers: { name: "Auth boundary" } },
       maxRedirects: 0,
     })
   }
