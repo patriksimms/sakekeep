@@ -41,6 +41,41 @@ describe("filler art palette", () => {
     expect(palette.primary).not.toBe(palette.secondary)
   })
 
+  it("reads a line's colour from its stroke, which is all a line paints", () => {
+    const schema = emptyLayoutSchema()
+    schema.elements = [
+      {
+        id: "rule",
+        type: "line",
+        geometry: { x: 0, y: 0, width: 60, height: 1, rotation: 0 },
+        opacity: 1,
+        fill: "transparent",
+        stroke: "#7a3b8f",
+        strokeWidth: 1.2,
+      },
+    ]
+
+    expect([fillerPalette(schema).primary, fillerPalette(schema).secondary]).toContain("#7a3b8f")
+  })
+
+  it("ignores colours on an element the layout does not actually paint", () => {
+    const schema = emptyLayoutSchema()
+    schema.elements = [
+      {
+        id: "hidden",
+        type: "rectangle",
+        geometry: { x: 0, y: 0, width: 90, height: 90, rotation: 0 },
+        opacity: 0,
+        fill: "#7a3b8f",
+        stroke: "#7a3b8f",
+        strokeWidth: 2,
+      },
+    ]
+    const palette = fillerPalette(schema)
+
+    expect([palette.primary, palette.secondary, palette.ink]).not.toContain("#7a3b8f")
+  })
+
   it("skips shape colours that would be invisible against the page background", () => {
     const palette = fillerPalette(schemaWithShapes("#fbf3e7", ["#faf2e6", "#b45f52"]))
 

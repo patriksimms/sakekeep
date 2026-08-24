@@ -292,6 +292,18 @@ function isShape(element: LayoutElement): element is Extract<LayoutElement, { fi
 }
 
 /**
+ * The colour a shape contributes to the palette. A line has no interior, so it reads through its
+ * stroke; everything else reads through its fill. Outlines are deliberately not collected: accents
+ * rank by contrast against the page, so a dark hairline border would outrank the panel it edges.
+ * A fully transparent element paints nothing and contributes nothing.
+ */
+function paintedColor(element: Extract<LayoutElement, { fill: string }>): string | undefined {
+  if (element.opacity === 0) return undefined
+  if (element.type !== "line") return element.fill
+  return element.strokeWidth > 0 ? element.stroke : undefined
+}
+
+/**
  * Colours the filler art from the layout itself rather than from a fixed theme, so art on a sage
  * and terracotta page does not arrive in someone else's palette. Background presets are copied
  * into a layout's elements when applied and their preset id is not stored, so the accents are
@@ -306,7 +318,8 @@ export function fillerPalette(schema: LayoutSchema): FillerPalette {
   const candidates = schema.elements
     .filter(isShape)
     .flatMap((element) => {
-      const channels = parseHex(element.fill)
+      const painted = paintedColor(element)
+      const channels = painted ? parseHex(painted) : null
       return channels
         ? [{ channels, area: element.geometry.width * element.geometry.height, id: element.id }]
         : []
