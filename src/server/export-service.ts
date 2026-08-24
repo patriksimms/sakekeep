@@ -9,7 +9,11 @@ import { getProject, recordExport } from "./repository"
 
 export async function exportProject(
   projectId: string,
-  options: { marks: boolean; allowBlockingProblems: boolean }
+  options: {
+    marks: boolean
+    allowBlockingProblems: boolean
+    reviewedBookFingerprint: string | null
+  }
 ): Promise<ExportArtifact> {
   const project = await getProject(projectId, true)
   if (project.archivedAt) {
@@ -22,6 +26,15 @@ export async function exportProject(
     throw new HttpError(
       409,
       "This preview is stale. Regenerate the complete book before exporting."
+    )
+  }
+  if (
+    options.allowBlockingProblems &&
+    options.reviewedBookFingerprint !== project.book.sourceFingerprint
+  ) {
+    throw new HttpError(
+      409,
+      "The book changed after you accepted its problems. Review it again before exporting."
     )
   }
   const problems = blockingProblems(project.book)

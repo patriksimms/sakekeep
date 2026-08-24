@@ -92,7 +92,11 @@ describe("print export blocking problem override", () => {
     await waitFor(() =>
       expect(exportProject).toHaveBeenCalledExactlyOnceWith(
         "99999999-9999-4999-8999-999999999999",
-        { marks: false, allowBlockingProblems: true }
+        {
+          marks: false,
+          allowBlockingProblems: true,
+          reviewedBookFingerprint: "current-source",
+        }
       )
     )
   })

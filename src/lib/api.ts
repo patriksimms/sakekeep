@@ -91,7 +91,14 @@ export const projectApi = {
       method: "PATCH",
       body: JSON.stringify({ focalPoint }),
     }),
-  export: (projectId: string, options: { marks: boolean; allowBlockingProblems: boolean }) =>
+  export: (
+    projectId: string,
+    options: {
+      marks: boolean
+      allowBlockingProblems: boolean
+      reviewedBookFingerprint: string | null
+    }
+  ) =>
     api<ExportArtifact>(`/api/projects/${projectId}/export`, {
       method: "POST",
       body: JSON.stringify(options),

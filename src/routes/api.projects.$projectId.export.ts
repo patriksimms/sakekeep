@@ -7,6 +7,7 @@ import { jsonError, readJson } from "#/server/http.ts"
 const exportSchema = z.object({
   marks: z.boolean().default(false),
   allowBlockingProblems: z.boolean().default(false),
+  reviewedBookFingerprint: z.string().nullable().default(null),
 })
 
 export const Route = createFileRoute("/api/projects/$projectId/export")({

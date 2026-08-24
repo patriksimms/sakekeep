@@ -64,7 +64,11 @@ export function ExportPanel({ project }: { project: Project }) {
     setExporting(true)
     setArtifact(null)
     try {
-      const result = await projectApi.export(project.id, { marks, allowBlockingProblems })
+      const result = await projectApi.export(project.id, {
+        marks,
+        allowBlockingProblems,
+        reviewedBookFingerprint: project.book?.sourceFingerprint ?? null,
+      })
       setArtifact(result)
       captureAnalyticsEvent("export:completed", {
         blocking_override: allowBlockingProblems && blocking > 0,
