@@ -40,6 +40,7 @@ import {
   useState,
   type DragEvent,
   type ReactElement,
+  type ReactNode,
 } from "react"
 import { toast } from "sonner"
 
@@ -511,6 +512,7 @@ function ElementInspector({
   element,
   questions,
   limits,
+  actions,
   onChange,
   onChooseDecorative,
   decorativeUploading,
@@ -518,6 +520,7 @@ function ElementInspector({
   element: LayoutElement
   questions: FormQuestion[]
   limits: ReturnType<typeof layoutStyleLimits>
+  actions: ReactNode
   onChange: (element: LayoutElement) => void
   onChooseDecorative: (file: File) => void
   decorativeUploading: boolean
@@ -536,9 +539,12 @@ function ElementInspector({
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <p className="font-heading text-lg">{elementLabel(element, questions)}</p>
-        <p className="text-xs text-muted-foreground">{element.type}</p>
+      <div className="flex flex-col gap-2">
+        <div>
+          <p className="font-heading text-lg">{elementLabel(element, questions)}</p>
+          <p className="text-xs text-muted-foreground">{element.type}</p>
+        </div>
+        <div className="-mx-1 flex flex-wrap items-center gap-0.5">{actions}</div>
       </div>
       <FieldGroup>
         <div className="grid grid-cols-2 gap-3">
@@ -1284,134 +1290,6 @@ const Editor = forwardRef<
           </CardContent>
         </Card>
 
-        <Card aria-label="Selection tools" className="mb-4 bg-card/90">
-          <CardContent className="flex min-h-8 flex-wrap items-center gap-1">
-            {selected ? (
-              <>
-                <IconAction label="Align horizontal centre">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Align horizontal centre"
-                    onClick={() =>
-                      changeSelected({
-                        ...selected,
-                        geometry: {
-                          ...selected.geometry,
-                          x: (pageSpecification.trimWidthMm - selected.geometry.width) / 2,
-                        },
-                      })
-                    }
-                  >
-                    <AlignCenterHorizontalIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Align vertical centre">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Align vertical centre"
-                    onClick={() =>
-                      changeSelected({
-                        ...selected,
-                        geometry: {
-                          ...selected.geometry,
-                          y: (pageSpecification.trimHeightMm - selected.geometry.height) / 2,
-                        },
-                      })
-                    }
-                  >
-                    <AlignCenterVerticalIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Send backward one layer" disabled={isBackmost}>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Send backward one layer"
-                    disabled={isBackmost}
-                    onClick={() => moveLayer("backward")}
-                  >
-                    <ArrowDownIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Bring forward one layer" disabled={isFrontmost}>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Bring forward one layer"
-                    disabled={isFrontmost}
-                    onClick={() => moveLayer("forward")}
-                  >
-                    <ArrowUpIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Send to back" disabled={isBackmost}>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Send to back"
-                    disabled={isBackmost}
-                    onClick={() => moveLayer("back")}
-                  >
-                    <SendToBackIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Bring to front" disabled={isFrontmost}>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Bring to front"
-                    disabled={isFrontmost}
-                    onClick={() => moveLayer("front")}
-                  >
-                    <BringToFrontIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Duplicate selected element">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Duplicate selected element"
-                    onClick={() => {
-                      const duplicate = {
-                        ...structuredClone(selected),
-                        id: crypto.randomUUID(),
-                        geometry: {
-                          ...selected.geometry,
-                          x: selected.geometry.x + 4,
-                          y: selected.geometry.y + 4,
-                        },
-                      }
-                      markChanged({
-                        ...schema,
-                        elements: [...schema.elements, duplicate],
-                      })
-                      setSelectedId(duplicate.id)
-                    }}
-                  >
-                    <CopyIcon />
-                  </Button>
-                </IconAction>
-                <IconAction label="Delete selected element">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Delete selected element"
-                    onClick={deleteSelected}
-                  >
-                    <Trash2Icon />
-                  </Button>
-                </IconAction>
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Select an element to use alignment and layer actions.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
         <div
           ref={container}
           className="print-canvas flex min-h-[420px] items-center justify-center overflow-auto rounded-xl border p-3 sm:p-6"
@@ -1434,7 +1312,6 @@ const Editor = forwardRef<
         className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
       >
         <CardHeader>
-          <CardTitle>Inspector</CardTitle>
           <CardAction>
             <SaveIndicator state={saveState} />
           </CardAction>
@@ -1475,6 +1352,125 @@ const Editor = forwardRef<
                 onChange={changeSelected}
                 onChooseDecorative={(file) => void uploadDecorative(selected.id, file)}
                 decorativeUploading={decorativeUploadingId === selected.id}
+                actions={
+                  <>
+                    <IconAction label="Align horizontal centre">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Align horizontal centre"
+                        onClick={() =>
+                          changeSelected({
+                            ...selected,
+                            geometry: {
+                              ...selected.geometry,
+                              x: (pageSpecification.trimWidthMm - selected.geometry.width) / 2,
+                            },
+                          })
+                        }
+                      >
+                        <AlignCenterHorizontalIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Align vertical centre">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Align vertical centre"
+                        onClick={() =>
+                          changeSelected({
+                            ...selected,
+                            geometry: {
+                              ...selected.geometry,
+                              y: (pageSpecification.trimHeightMm - selected.geometry.height) / 2,
+                            },
+                          })
+                        }
+                      >
+                        <AlignCenterVerticalIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Send backward one layer" disabled={isBackmost}>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Send backward one layer"
+                        disabled={isBackmost}
+                        onClick={() => moveLayer("backward")}
+                      >
+                        <ArrowDownIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Bring forward one layer" disabled={isFrontmost}>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Bring forward one layer"
+                        disabled={isFrontmost}
+                        onClick={() => moveLayer("forward")}
+                      >
+                        <ArrowUpIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Send to back" disabled={isBackmost}>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Send to back"
+                        disabled={isBackmost}
+                        onClick={() => moveLayer("back")}
+                      >
+                        <SendToBackIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Bring to front" disabled={isFrontmost}>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Bring to front"
+                        disabled={isFrontmost}
+                        onClick={() => moveLayer("front")}
+                      >
+                        <BringToFrontIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Duplicate selected element">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Duplicate selected element"
+                        onClick={() => {
+                          const duplicate = {
+                            ...structuredClone(selected),
+                            id: crypto.randomUUID(),
+                            geometry: {
+                              ...selected.geometry,
+                              x: selected.geometry.x + 4,
+                              y: selected.geometry.y + 4,
+                            },
+                          }
+                          markChanged({
+                            ...schema,
+                            elements: [...schema.elements, duplicate],
+                          })
+                          setSelectedId(duplicate.id)
+                        }}
+                      >
+                        <CopyIcon />
+                      </Button>
+                    </IconAction>
+                    <IconAction label="Delete selected element">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Delete selected element"
+                        onClick={deleteSelected}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    </IconAction>
+                  </>
+                }
               />
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">
