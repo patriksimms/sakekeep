@@ -145,11 +145,16 @@ describe("adjusting where a photo is cropped", () => {
     render(<BookReview project={reviewProject()} onProjectChange={vi.fn()} view="detail" />)
 
     fireEvent.keyDown(handle(), { key: "ArrowUp", shiftKey: true })
+    fireEvent.keyDown(handle(), { key: "ArrowUp", shiftKey: true })
+
+    // A held key repeats, so the run is saved once on release rather than on every repeat.
+    expect(setPhotoFocalPoint).not.toHaveBeenCalled()
+    fireEvent.keyUp(handle(), { key: "ArrowUp" })
 
     // Shift moves 16px of the 600px hidden below the frame, downwards through the photo.
     await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(1))
     const [, , focalPoint] = setPhotoFocalPoint.mock.calls[0]!
-    expect((focalPoint as { y: number }).y).toBeCloseTo(0.5 + 16 / 600)
+    expect((focalPoint as { y: number }).y).toBeCloseTo(0.5 + 32 / 600)
   })
 
   it("resets an adjusted photo back to the layout's own focus", async () => {

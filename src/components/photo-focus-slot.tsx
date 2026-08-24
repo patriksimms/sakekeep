@@ -115,17 +115,27 @@ export function PhotoFocusSlot({
     pointerY: number
     focalPoint: FocalPoint
   } | null>(null)
+  const nudgingRef = useRef(false)
   const [geometry, setGeometry] = useState<FrameGeometry | null>(null)
 
   const source = image.previewUrl
   const imageSize = { width: image.width, height: image.height }
 
+  // Held arrow keys repeat, so a nudge only moves the crop and the whole run is saved on release.
   const nudge = (deltaX: number, deltaY: number) => {
     const node = frameRef.current
     if (!node) return
-    const next = panFocalPoint(focalPoint, frameGeometry(node).size, imageSize, deltaX, deltaY)
-    controls.onChange(image.assetId, next)
-    controls.onCommit(image.assetId, next)
+    nudgingRef.current = true
+    controls.onChange(
+      image.assetId,
+      panFocalPoint(focalPoint, frameGeometry(node).size, imageSize, deltaX, deltaY)
+    )
+  }
+
+  const commitNudge = () => {
+    if (!nudgingRef.current) return
+    nudgingRef.current = false
+    controls.onCommit(image.assetId, focalPoint)
   }
 
   const pointerDown = (event: PointerEvent<HTMLButtonElement>) => {
@@ -179,6 +189,8 @@ export function PhotoFocusSlot({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onFocus={() => controls.onSelect(image.assetId)}
+        onBlur={commitNudge}
+        onKeyUp={commitNudge}
         onKeyDown={(event) => {
           const step = event.shiftKey ? FOCUS_NUDGE_SHIFT_PX : FOCUS_NUDGE_PX
           const moves: Record<string, [number, number]> = {
