@@ -25,81 +25,60 @@ function schemaWithShapes(background: string, fills: string[]): LayoutSchema {
   return { ...emptyLayoutSchema(), background, elements }
 }
 
+function colourDistance(left: string, right: string): number {
+  const channels = (colour: string) =>
+    [1, 3, 5].map((start) => Number.parseInt(colour.slice(start, start + 2), 16))
+  const leftChannels = channels(left)
+  const rightChannels = channels(right)
+  return Math.hypot(...leftChannels.map((channel, index) => channel - rightChannels[index]!))
+}
+
 describe("filler art palette", () => {
-  it("draws its accents from the colours the layout itself uses", () => {
-    const palette = fillerPalette(schemaWithShapes("#fbf3e7", ["#5b927b", "#b45f52", "#27485b"]))
-
-    expect([palette.primary, palette.secondary, palette.ink].sort()).toEqual(
-      ["#27485b", "#5b927b", "#b45f52"].sort()
-    )
-  })
-
-  it("falls back to the house palette when a layout has no shapes to borrow from", () => {
+  it("uses companion colours instead of borrowing colours painted by the layout", () => {
     const palette = fillerPalette(emptyLayoutSchema())
 
-    expect(palette.ink).toBe("#27485b")
-    expect(palette.primary).not.toBe(palette.secondary)
+    expect(palette).toEqual({ primary: "#586aa0", secondary: "#d184a6", ink: "#6b4c6f" })
   })
 
-  it("reads a line's colour from its stroke, which is all a line paints", () => {
-    const schema = emptyLayoutSchema()
-    schema.elements = [
-      {
-        id: "rule",
-        type: "line",
-        geometry: { x: 0, y: 0, width: 60, height: 1, rotation: 0 },
-        opacity: 1,
-        fill: "transparent",
-        stroke: "#7a3b8f",
-        strokeWidth: 1.2,
-      },
-    ]
+  it("keeps every tone visibly distinct from the standard layouts", () => {
+    for (const orientation of ["landscape", "portrait"] as const) {
+      for (const preset of backgroundPresets("a5", orientation)) {
+        const paintedColours = new Set([
+          preset.schema.background,
+          ...preset.schema.elements.flatMap((element) => {
+            if (element.type === "line") return [element.stroke]
+            if (element.type === "rectangle" || element.type === "circle") return [element.fill]
+            return []
+          }),
+        ])
+        const palette = fillerPalette(preset.schema)
 
-    expect([fillerPalette(schema).primary, fillerPalette(schema).secondary]).toContain("#7a3b8f")
+        expect(
+          [palette.primary, palette.secondary, palette.ink].every((colour) =>
+            [...paintedColours].every((paintedColour) =>
+              Boolean(paintedColour && colourDistance(colour, paintedColour) >= 45)
+            )
+          ),
+          preset.id
+        ).toBe(true)
+      }
+    }
   })
 
-  it("ignores colours on an element the layout does not actually paint", () => {
-    const schema = emptyLayoutSchema()
-    schema.elements = [
-      {
-        id: "hidden",
-        type: "rectangle",
-        geometry: { x: 0, y: 0, width: 90, height: 90, rotation: 0 },
-        opacity: 0,
-        fill: "#7a3b8f",
-        stroke: "#7a3b8f",
-        strokeWidth: 2,
-      },
-    ]
-    const palette = fillerPalette(schema)
+  it("chooses alternate companion colours around user-painted layout colours", () => {
+    const paintedColours = ["#586aa0", "#d184a6", "#6b4c6f"]
+    const palette = fillerPalette(schemaWithShapes("#fffdf7", paintedColours))
 
-    expect([palette.primary, palette.secondary, palette.ink]).not.toContain("#7a3b8f")
-  })
-
-  it("skips shape colours that would be invisible against the page background", () => {
-    const palette = fillerPalette(schemaWithShapes("#fbf3e7", ["#faf2e6", "#b45f52"]))
-
-    expect([palette.primary, palette.secondary, palette.ink]).not.toContain("#faf2e6")
-    expect([palette.primary, palette.secondary, palette.ink]).toContain("#b45f52")
-  })
-
-  it("inks with a light tone on a dark page and a dark tone on a pale one", () => {
-    const pale = fillerPalette(schemaWithShapes("#fffdf7", ["#27485b", "#f0c66f", "#b45f52"]))
-    const dark = fillerPalette(schemaWithShapes("#101014", ["#27485b", "#f0c66f", "#b45f52"]))
-
-    expect(pale.ink).toBe("#27485b")
-    expect(dark.ink).toBe("#f0c66f")
-  })
-
-  it("keeps every tone clear of the page it will be drawn on", () => {
-    const preset = backgroundPresets("a5", "landscape").find(
-      (candidate) => candidate.id === "geometric-collage"
-    )!
-    const palette = fillerPalette(preset.schema)
-
-    expect([palette.primary, palette.secondary, palette.ink]).not.toContain(
-      preset.schema.background
-    )
+    expect([palette.primary, palette.secondary, palette.ink]).toEqual([
+      "#2d7f9c",
+      "#cf4f8c",
+      "#a47ac2",
+    ])
+    expect(
+      [palette.primary, palette.secondary, palette.ink].every((colour) =>
+        paintedColours.every((paintedColour) => colourDistance(colour, paintedColour) >= 45)
+      )
+    ).toBe(true)
   })
 })
 

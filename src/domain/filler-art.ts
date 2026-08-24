@@ -251,10 +251,12 @@ export const FILLER_MOTIFS: FillerMotif[] = [
 ]
 
 /**
- * Fallback accents for layouts that carry no shapes of their own, matching the colours the
- * background presets already use. The dark tone leads so a blank layout still gets an ink.
+ * A companion palette for filler art. These muted colors belong with the warm layout presets but
+ * do not repeat any color painted by them. Reusing layout colors made motif parts disappear when
+ * a transparent photo slot crossed a matching background shape.
  */
-const HOUSE_ACCENTS = ["#27485b", "#5b927b", "#b45f52", "#f0c66f"]
+const FILLER_ACCENTS = ["#586aa0", "#d184a6", "#6b4c6f", "#2d7f9c", "#cf4f8c", "#a47ac2", "#7f4bc0"]
+const MINIMUM_ACCENT_DISTANCE = 45
 
 interface Channels {
   r: number
@@ -272,96 +274,60 @@ function parseHex(value: string): Channels | null {
   }
 }
 
-function toHex({ r, g, b }: Channels): string {
-  return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`
-}
-
-function distance(left: Channels, right: Channels): number {
+function colourDistance(left: Channels, right: Channels): number {
   return Math.hypot(left.r - right.r, left.g - right.g, left.b - right.b)
 }
-
-function luminance({ r, g, b }: Channels): number {
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-}
-
-/** Below this an accent reads as the page background rather than as art on top of it. */
-const MINIMUM_ACCENT_CONTRAST = 45
 
 function isShape(element: LayoutElement): element is Extract<LayoutElement, { fill: string }> {
   return element.type === "rectangle" || element.type === "circle" || element.type === "line"
 }
 
-/**
- * The colour a shape contributes to the palette. A line has no interior, so it reads through its
- * stroke; everything else reads through its fill. Outlines are deliberately not collected: accents
- * rank by contrast against the page, so a dark hairline border would outrank the panel it edges.
- * A fully transparent element paints nothing and contributes nothing.
- */
-function paintedColor(element: Extract<LayoutElement, { fill: string }>): string | undefined {
+function paintedColour(element: Extract<LayoutElement, { fill: string }>): string | undefined {
   if (element.opacity === 0) return undefined
   if (element.type !== "line") return element.fill
   return element.strokeWidth > 0 ? element.stroke : undefined
 }
 
-/**
- * Colours the filler art from the layout itself rather than from a fixed theme, so art on a sage
- * and terracotta page does not arrive in someone else's palette. Background presets are copied
- * into a layout's elements when applied and their preset id is not stored, so the accents are
- * read back off the shapes the layout actually contains. This also covers hand-built layouts and
- * presets the organizer has since recoloured.
- *
- * Accents are ordered by how far they sit from the page background, so the most legible colour
- * leads rather than whichever panel happens to be largest.
- */
 export function fillerPalette(schema: LayoutSchema): FillerPalette {
-  const background = parseHex(schema.background) ?? { r: 255, g: 255, b: 255 }
-  const candidates = schema.elements
-    .filter(isShape)
-    .flatMap((element) => {
-      const painted = paintedColor(element)
-      const channels = painted ? parseHex(painted) : null
-      return channels
-        ? [{ channels, area: element.geometry.width * element.geometry.height, id: element.id }]
-        : []
-    })
-    .sort(
-      (left, right) =>
-        distance(right.channels, background) - distance(left.channels, background) ||
-        right.area - left.area ||
-        (left.id < right.id ? -1 : 1)
+  const painted = [
+    schema.background,
+    ...schema.elements.filter(isShape).map(paintedColour),
+  ].flatMap((colour) => {
+    const channels = colour ? parseHex(colour) : null
+    return channels ? [channels] : []
+  })
+  const selected: string[] = []
+
+  for (const accent of FILLER_ACCENTS) {
+    const channels = parseHex(accent)!
+    const clearOfPainted = painted.every(
+      (paintedColour) => colourDistance(channels, paintedColour) >= MINIMUM_ACCENT_DISTANCE
     )
-
-  const accents: Channels[] = []
-  const push = (channels: Channels) => {
-    if (distance(channels, background) < MINIMUM_ACCENT_CONTRAST) return
-    if (accents.some((accent) => distance(accent, channels) < 24)) return
-    accents.push(channels)
+    const clearOfSelected = selected.every(
+      (selectedColour) =>
+        colourDistance(channels, parseHex(selectedColour)!) >= MINIMUM_ACCENT_DISTANCE
+    )
+    if (clearOfPainted && clearOfSelected) selected.push(accent)
+    if (selected.length === 3) break
   }
-  for (const candidate of candidates) push(candidate.channels)
-  for (const accent of HOUSE_ACCENTS) {
-    if (accents.length >= 3) break
-    const channels = parseHex(accent)
-    if (channels) push(channels)
-  }
-  // A page coloured close to every house accent rejects them all; fall back to a paper tone.
-  while (accents.length < 3) accents.push({ r: 245, g: 240, b: 232 })
-  accents.sort((left, right) => distance(right, background) - distance(left, background))
 
-  // One tone carries the line work: the accent furthest from the page in lightness, which is the
-  // darkest on paper tones and the lightest on a dark page. The two most legible of the rest fill.
-  const backgroundLuminance = luminance(background)
-  const ink = accents.reduce((left, right) =>
-    Math.abs(luminance(left) - backgroundLuminance) >=
-    Math.abs(luminance(right) - backgroundLuminance)
-      ? left
-      : right
+  // A heavily customised layout can sit close to the entire curated set. Keep the three accents
+  // defined in that edge case and prefer the remaining colours furthest from what the page paints.
+  const remaining = FILLER_ACCENTS.filter((accent) => !selected.includes(accent)).sort(
+    (left, right) => {
+      const minimumDistance = (accent: string) => {
+        const channels = parseHex(accent)!
+        return Math.min(...painted.map((paintedColour) => colourDistance(channels, paintedColour)))
+      }
+      return minimumDistance(right) - minimumDistance(left)
+    }
   )
-  const [primary, secondary] = accents.filter((accent) => accent !== ink)
+  while (selected.length < 3) selected.push(remaining.shift()!)
 
   return {
-    primary: toHex(primary!),
-    secondary: toHex(secondary!),
-    ink: toHex(ink),
+    primary: selected[0]!,
+    secondary: selected[1]!,
+    ink: selected[2]!,
   }
 }
 
