@@ -475,6 +475,30 @@ function TextSettingsEditor({
           </SelectContent>
         </Select>
       </Field>
+      <Field>
+        <FieldLabel>Vertical alignment</FieldLabel>
+        <Select
+          value={settings.verticalAlignment}
+          onValueChange={(value) =>
+            onChange({
+              ...settings,
+              verticalAlignment: value as TextSettings["verticalAlignment"],
+            })
+          }
+        >
+          <SelectTrigger className="w-full" aria-label="Vertical text alignment">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="top">Top</SelectItem>
+              <SelectItem value="middle">Middle</SelectItem>
+              <SelectItem value="bottom">Bottom</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <FieldDescription>Where the text sits inside its bounding box.</FieldDescription>
+      </Field>
       <NumericField
         label="Line height"
         value={settings.lineHeight}

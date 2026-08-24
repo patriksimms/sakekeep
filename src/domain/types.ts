@@ -68,6 +68,7 @@ export interface SubmissionSummary {
 
 export type OverflowPolicy = "shrink" | "truncate" | "flag"
 export type TextAlignment = "left" | "center" | "right"
+export type VerticalTextAlignment = "top" | "middle" | "bottom"
 export type FontStyle = "normal" | "italic"
 export type FontWeight = "normal" | "bold"
 export type LayoutElementType =
@@ -104,6 +105,7 @@ export interface TextSettings {
   fontStyle: FontStyle
   fontWeight: FontWeight
   alignment: TextAlignment
+  verticalAlignment: VerticalTextAlignment
   lineHeight: number
   overflow: OverflowPolicy
 }

@@ -380,6 +380,7 @@ test.describe.serial("critical local prototype workflows", () => {
       .click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
+    await expect(page.getByRole("combobox", { name: "Vertical text alignment" })).toBeVisible()
     await expect(deleteAction).toBeVisible()
     await expect(
       inspectorCard.getByRole("button", { name: "Align horizontal centre" })

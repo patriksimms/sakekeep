@@ -56,10 +56,14 @@ function elementStyle(
 export function textElementStyle(
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
   effectiveFontSize = element.text.fontSize,
-  specification = pageSpecification()
+  specification = pageSpecification(),
+  offsetYMm = 0
 ): React.CSSProperties {
   return {
     ...elementStyle(element, specification),
+    // Padding rather than a transform: the box keeps its geometry, so selection outlines,
+    // overflow flagging, and the Fabric hit target stay put while only the text moves down.
+    paddingTop: offsetYMm > 0 ? millimetresToContainerWidth(offsetYMm, specification) : undefined,
     color: element.text.color,
     fontFamily: cssFontStack(element.text.fontFamily),
     fontKerning: "none",
@@ -80,6 +84,38 @@ function imagePosition(
 ): string {
   const focalPoint = element.focalPoint ?? image.focalPoint ?? { x: 0.5, y: 0.5 }
   return `${focalPoint.x * 100}% ${focalPoint.y * 100}%`
+}
+
+function textElementRuns(
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
+  content: LayoutPageContent,
+  question: FormQuestion | undefined
+) {
+  const answer =
+    element.type === "bound-text" && content.submission
+      ? (content.submission.answers[element.questionId] ?? "")
+      : undefined
+  const placeholder =
+    element.type === "bound-text" && !content.submission
+      ? boundQuestionPlaceholder(content.questions ?? [], element.questionId)
+      : ""
+  return textRunsForElement(element, question, answer, placeholder)
+}
+
+/**
+ * Where the text block starts inside its box. The inline editor overlays the rendered text, so it
+ * has to read the same number the rendered element does or the caret drifts away from the glyphs.
+ */
+export function textElementVerticalOffsetMm(
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
+  content: LayoutPageContent
+): number {
+  const question =
+    element.type === "bound-text"
+      ? content.questions?.find((candidate) => candidate.id === element.questionId)
+      : undefined
+  const runs = textElementRuns(element, content, question)
+  return layoutText(runs, element.geometry.width, element.geometry.height, element.text).offsetYMm
 }
 
 function ElementContent({
@@ -117,15 +153,7 @@ function ElementContent({
       : undefined
 
   if (element.type === "static-text" || element.type === "bound-text") {
-    const answer =
-      element.type === "bound-text" && content.submission
-        ? (content.submission.answers[element.questionId] ?? "")
-        : undefined
-    const placeholder =
-      element.type === "bound-text" && !content.submission
-        ? boundQuestionPlaceholder(content.questions ?? [], element.questionId)
-        : ""
-    const runs = textRunsForElement(element, question, answer, placeholder)
+    const runs = textElementRuns(element, content, question)
     const layout = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
     const hasLabel = element.type === "bound-text" && element.showLabel
     const labelLineCount = hasLabel
@@ -140,13 +168,23 @@ function ElementContent({
       element.type === "bound-text" && editingElementId === element.id
         ? boundTextLabel({ ...element, showLabel: true }, question)
         : ""
+    // While a label is being edited the schema hides it, so the plain layout above measures only
+    // the answer. Re-measure with the label back in, or the block would sit too low in its box.
+    const offsetYMm = editedLabel
+      ? layoutText(
+          [{ text: editedLabel, fontWeight: "bold" as const }, ...runs],
+          element.geometry.width,
+          element.geometry.height,
+          element.text
+        ).offsetYMm
+      : layout.offsetYMm
     return (
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
         data-text-overflow={!layout.fits || undefined}
         style={{
-          ...textElementStyle(element, layout.effectiveFontSize, specification),
+          ...textElementStyle(element, layout.effectiveFontSize, specification, offsetYMm),
           outline: !layout.fits ? "1px solid var(--destructive)" : undefined,
           background: !layout.fits
             ? "color-mix(in srgb, var(--destructive) 8%, transparent)"

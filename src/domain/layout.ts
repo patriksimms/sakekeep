@@ -49,6 +49,11 @@ const textSettingsSchema = z.object({
   fontStyle: z.union([z.literal("normal"), z.literal("italic")]),
   fontWeight: z.union([z.literal("normal"), z.literal("bold")]),
   alignment: z.union([z.literal("left"), z.literal("center"), z.literal("right")]),
+  // Defaulted rather than required so layouts persisted before vertical alignment existed
+  // keep loading, and keep rendering exactly where they always did.
+  verticalAlignment: z
+    .union([z.literal("top"), z.literal("middle"), z.literal("bottom")])
+    .default("top"),
   lineHeight: finite.min(0.5).max(4),
   overflow: z.union([z.literal("shrink"), z.literal("truncate"), z.literal("flag")]),
 })
@@ -224,6 +229,7 @@ export const DEFAULT_TEXT_SETTINGS: TextSettings = {
   fontStyle: "normal",
   fontWeight: "normal",
   alignment: "left",
+  verticalAlignment: "top",
   lineHeight: 1.25,
   overflow: "flag",
 }

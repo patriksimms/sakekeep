@@ -1,7 +1,12 @@
 import { Canvas, FabricObject, Rect } from "fabric"
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
-import { LayoutPageElements, textElementStyle } from "#/components/layout-page.tsx"
+import {
+  LayoutPageElements,
+  textElementStyle,
+  textElementVerticalOffsetMm,
+  type LayoutPageContent,
+} from "#/components/layout-page.tsx"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
@@ -134,12 +139,14 @@ function elementName(element: LayoutElement) {
 function InlineTextEditor({
   element,
   content,
+  offsetYMm,
   onCommit,
   onCancel,
   specification,
 }: {
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
   content: string
+  offsetYMm: number
   onCommit: (content: string) => void
   onCancel: () => void
   specification: PageSpecification
@@ -177,7 +184,7 @@ function InlineTextEditor({
         onCancel()
       }}
       style={{
-        ...textElementStyle(element, element.text.fontSize, specification),
+        ...textElementStyle(element, element.text.fontSize, specification, offsetYMm),
         zIndex: 2,
         cursor: "text",
         fontWeight: element.type === "bound-text" ? "bold" : element.text.fontWeight,
@@ -460,6 +467,13 @@ export function LayoutCanvas({
     canvas.requestRenderAll()
   }, [questions, schema, selectedId, specification.mediaWidthMm, width])
 
+  const pageContent: LayoutPageContent = {
+    questions,
+    submission: previewSubmission,
+    decorativeAssetUrl,
+    decorativePlaceholderUrl: "/layout-decorative-placeholder.svg",
+  }
+
   const editingElement = editingElementId
     ? schema.elements.find(
         (candidate): candidate is Extract<LayoutElement, { type: "static-text" | "bound-text" }> =>
@@ -557,12 +571,7 @@ export function LayoutCanvas({
     >
       <LayoutPageElements
         schema={displaySchema}
-        content={{
-          questions,
-          submission: previewSubmission,
-          decorativeAssetUrl,
-          decorativePlaceholderUrl: "/layout-decorative-placeholder.svg",
-        }}
+        content={pageContent}
         testId="editor-layout-elements"
         ariaHidden
         showEditorPlaceholders
@@ -575,6 +584,14 @@ export function LayoutCanvas({
       {editingElement && (
         <InlineTextEditor
           element={editingElement}
+          offsetYMm={textElementVerticalOffsetMm(
+            // The rendered element always measures the label back in while it is being edited,
+            // including when the element had none yet. Measure the same way or the two disagree.
+            editingElement.type === "bound-text"
+              ? { ...editingElement, showLabel: true }
+              : editingElement,
+            pageContent
+          )}
           content={
             editingElement.type === "static-text"
               ? editingElement.content

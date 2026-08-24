@@ -112,6 +112,83 @@ describe("canonical text layout", () => {
     })
   })
 
+  it("distributes the slack left in the box according to the vertical alignment", () => {
+    const line = [{ text: "One line" }]
+    const at = (verticalAlignment: "top" | "middle" | "bottom") =>
+      layoutText(line, 100, 40, { ...DEFAULT_TEXT_SETTINGS, verticalAlignment })
+
+    const rendered = at("top").renderedLines.length * at("top").lineHeightMm
+    const slack = 40 - rendered
+
+    expect(slack).toBeGreaterThan(0)
+    expect(at("top").offsetYMm).toBe(0)
+    expect(at("middle").offsetYMm).toBeCloseTo(slack / 2, 10)
+    expect(at("bottom").offsetYMm).toBeCloseTo(slack, 10)
+  })
+
+  it("keeps overflowing text top-anchored instead of pushing it off the page", () => {
+    const content = [{ text: "A memory with enough words to wrap onto several lines" }]
+
+    for (const verticalAlignment of ["top", "middle", "bottom"] as const) {
+      const flagged = layoutText(content, 30, 8, {
+        ...DEFAULT_TEXT_SETTINGS,
+        overflow: "flag",
+        verticalAlignment,
+      })
+
+      expect(flagged.fits).toBe(false)
+      expect(flagged.offsetYMm).toBe(0)
+    }
+  })
+
+  it("offsets by the slack remaining after shrinking, not before", () => {
+    const settings = {
+      ...DEFAULT_TEXT_SETTINGS,
+      fontSize: 20,
+      minFontSize: 8,
+      overflow: "shrink" as const,
+      verticalAlignment: "bottom" as const,
+    }
+    const result = layoutText([{ text: "A memory that needs some room" }], 35, 12, settings)
+
+    expect(result.fits).toBe(true)
+    expect(result.effectiveFontSize).toBeLessThan(20)
+    expect(result.offsetYMm).toBeCloseTo(12 - result.requiredHeightMm, 10)
+  })
+
+  it("centres the lines that survive truncation rather than the ones it dropped", () => {
+    const result = layoutText(
+      [{ text: "A memory with enough words to wrap onto several lines" }],
+      30,
+      8,
+      {
+        ...DEFAULT_TEXT_SETTINGS,
+        overflow: "truncate",
+        verticalAlignment: "middle",
+      }
+    )
+
+    expect(result.truncated).toBe(true)
+    const renderedHeight = result.renderedLines.length * result.lineHeightMm
+    expect(renderedHeight).toBeLessThanOrEqual(8)
+    expect(result.offsetYMm).toBeCloseTo((8 - renderedHeight) / 2, 10)
+  })
+
+  it("has no slack to distribute when the box height is unbounded", () => {
+    const result = layoutText([{ text: "One line" }], 100, Number.POSITIVE_INFINITY, {
+      ...DEFAULT_TEXT_SETTINGS,
+      verticalAlignment: "bottom",
+    })
+
+    expect(result.offsetYMm).toBe(0)
+    expect(
+      minimumTextBoxHeight({
+        ...staticText,
+        text: { ...staticText.text, verticalAlignment: "bottom" },
+      })
+    ).toBeCloseTo(minimumTextBoxHeight(staticText), 10)
+  })
+
   it("enforces one useful static line and separate label and answer lines", () => {
     expect(minimumTextBoxHeight(staticText)).toBeCloseTo(7.0556, 3)
     expect(minimumTextBoxHeight(boundText)).toBeCloseTo(14.1111, 3)

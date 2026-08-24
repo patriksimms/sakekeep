@@ -164,7 +164,7 @@ function drawTextElement(input: {
   const size = layout.effectiveFontSize
   const width = pt(input.geometry.width)
   const lineHeight = pt(layout.lineHeightMm)
-  const top = pdfY(input.geometry.y, 0, input.specification)
+  const top = pdfY(input.geometry.y + layout.offsetYMm, 0, input.specification)
   layout.renderedLines.forEach((line, index) => {
     const textWidth = pt(line.widthMm)
     const offset =

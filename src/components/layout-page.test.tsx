@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import { addElement, emptyLayoutSchema } from "#/domain/layout.ts"
+import { pageSpecification } from "#/domain/page-format.ts"
+import { layoutText, textRunsForElement } from "#/domain/text-layout.ts"
 import { type ImageAnswer, type SubmissionSummary } from "#/domain/types.ts"
 
 import { LayoutPageElements } from "./layout-page.tsx"
@@ -54,6 +56,60 @@ describe("canonical text rendering", () => {
 
     expect(markup).not.toContain("data-text-overflow")
     expect(markup).toContain("…")
+  })
+})
+
+describe("vertical text alignment", () => {
+  const roomyStaticText = (verticalAlignment: "top" | "middle" | "bottom") => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "A short note"
+    element.geometry = { ...element.geometry, width: 80, height: 40 }
+    element.text = { ...element.text, verticalAlignment }
+    return { schema, element }
+  }
+
+  it("leaves top-aligned text without any offset", () => {
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements schema={roomyStaticText("top").schema} />
+    )
+
+    expect(markup).not.toContain("padding-top")
+  })
+
+  it("offsets the text block by the same slack the PDF renderer uses", () => {
+    for (const [verticalAlignment, share] of [
+      ["middle", 0.5],
+      ["bottom", 1],
+    ] as const) {
+      const { schema, element } = roomyStaticText(verticalAlignment)
+      const layout = layoutText(
+        textRunsForElement(element),
+        element.geometry.width,
+        element.geometry.height,
+        element.text
+      )
+      const slack = element.geometry.height - layout.renderedLines.length * layout.lineHeightMm
+      expect(layout.offsetYMm).toBeCloseTo(slack * share, 10)
+
+      const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+      const expected = (layout.offsetYMm / pageSpecification().mediaWidthMm) * 100
+
+      expect(markup).toContain(`padding-top:${expected}cqw`)
+    }
+  })
+
+  it("keeps overflowing text top-anchored so a flagged page is not pushed further off the page", () => {
+    const { schema, element } = roomyStaticText("bottom")
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "A memory with enough words to wrap onto several lines"
+    element.geometry = { ...element.geometry, width: 30, height: 8 }
+
+    const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+
+    expect(markup).toContain('data-text-overflow="true"')
+    expect(markup).not.toContain("padding-top")
   })
 })
 
