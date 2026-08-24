@@ -1,4 +1,4 @@
-import { type LayoutElement, type LayoutSchema } from "./types.ts"
+import { type LayoutSchema } from "./types.ts"
 
 /**
  * Placeholder art for photo slots a contributor left unfilled. A layout with five frames and
@@ -251,118 +251,18 @@ export const FILLER_MOTIFS: FillerMotif[] = [
 ]
 
 /**
- * Fallback accents for layouts that carry no shapes of their own, matching the colours the
- * background presets already use. The dark tone leads so a blank layout still gets an ink.
+ * A companion palette for filler art. These muted colors belong with the warm layout presets but
+ * do not repeat any color painted by them. Reusing layout colors made motif parts disappear when
+ * a transparent photo slot crossed a matching background shape.
  */
-const HOUSE_ACCENTS = ["#27485b", "#5b927b", "#b45f52", "#f0c66f"]
-
-interface Channels {
-  r: number
-  g: number
-  b: number
+const FILLER_PALETTE: FillerPalette = {
+  primary: "#586aa0",
+  secondary: "#d184a6",
+  ink: "#6b4c6f",
 }
 
-function parseHex(value: string): Channels | null {
-  const hex = /^#([0-9a-f]{6})$/i.exec(value.trim())?.[1]
-  if (!hex) return null
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16),
-  }
-}
-
-function toHex({ r, g, b }: Channels): string {
-  return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`
-}
-
-function distance(left: Channels, right: Channels): number {
-  return Math.hypot(left.r - right.r, left.g - right.g, left.b - right.b)
-}
-
-function luminance({ r, g, b }: Channels): number {
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-}
-
-/** Below this an accent reads as the page background rather than as art on top of it. */
-const MINIMUM_ACCENT_CONTRAST = 45
-
-function isShape(element: LayoutElement): element is Extract<LayoutElement, { fill: string }> {
-  return element.type === "rectangle" || element.type === "circle" || element.type === "line"
-}
-
-/**
- * The colour a shape contributes to the palette. A line has no interior, so it reads through its
- * stroke; everything else reads through its fill. Outlines are deliberately not collected: accents
- * rank by contrast against the page, so a dark hairline border would outrank the panel it edges.
- * A fully transparent element paints nothing and contributes nothing.
- */
-function paintedColor(element: Extract<LayoutElement, { fill: string }>): string | undefined {
-  if (element.opacity === 0) return undefined
-  if (element.type !== "line") return element.fill
-  return element.strokeWidth > 0 ? element.stroke : undefined
-}
-
-/**
- * Colours the filler art from the layout itself rather than from a fixed theme, so art on a sage
- * and terracotta page does not arrive in someone else's palette. Background presets are copied
- * into a layout's elements when applied and their preset id is not stored, so the accents are
- * read back off the shapes the layout actually contains. This also covers hand-built layouts and
- * presets the organizer has since recoloured.
- *
- * Accents are ordered by how far they sit from the page background, so the most legible colour
- * leads rather than whichever panel happens to be largest.
- */
-export function fillerPalette(schema: LayoutSchema): FillerPalette {
-  const background = parseHex(schema.background) ?? { r: 255, g: 255, b: 255 }
-  const candidates = schema.elements
-    .filter(isShape)
-    .flatMap((element) => {
-      const painted = paintedColor(element)
-      const channels = painted ? parseHex(painted) : null
-      return channels
-        ? [{ channels, area: element.geometry.width * element.geometry.height, id: element.id }]
-        : []
-    })
-    .sort(
-      (left, right) =>
-        distance(right.channels, background) - distance(left.channels, background) ||
-        right.area - left.area ||
-        (left.id < right.id ? -1 : 1)
-    )
-
-  const accents: Channels[] = []
-  const push = (channels: Channels) => {
-    if (distance(channels, background) < MINIMUM_ACCENT_CONTRAST) return
-    if (accents.some((accent) => distance(accent, channels) < 24)) return
-    accents.push(channels)
-  }
-  for (const candidate of candidates) push(candidate.channels)
-  for (const accent of HOUSE_ACCENTS) {
-    if (accents.length >= 3) break
-    const channels = parseHex(accent)
-    if (channels) push(channels)
-  }
-  // A page coloured close to every house accent rejects them all; fall back to a paper tone.
-  while (accents.length < 3) accents.push({ r: 245, g: 240, b: 232 })
-  accents.sort((left, right) => distance(right, background) - distance(left, background))
-
-  // One tone carries the line work: the accent furthest from the page in lightness, which is the
-  // darkest on paper tones and the lightest on a dark page. The two most legible of the rest fill.
-  const backgroundLuminance = luminance(background)
-  const ink = accents.reduce((left, right) =>
-    Math.abs(luminance(left) - backgroundLuminance) >=
-    Math.abs(luminance(right) - backgroundLuminance)
-      ? left
-      : right
-  )
-  const [primary, secondary] = accents.filter((accent) => accent !== ink)
-
-  return {
-    primary: toHex(primary!),
-    secondary: toHex(secondary!),
-    ink: toHex(ink),
-  }
+export function fillerPalette(_schema: LayoutSchema): FillerPalette {
+  return FILLER_PALETTE
 }
 
 function hash(value: string): number {
