@@ -284,7 +284,7 @@ test("Fabric interactions track real HTML geometry through every transform", asy
   }
 })
 
-test("static text remains editable on the HTML layer", async ({ page }) => {
+test("text frames remain editable on the HTML layer", async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 800 })
   await page.goto("/layout-parity")
 
@@ -294,7 +294,16 @@ test("static text remains editable on the HTML layer", async ({ page }) => {
   const boundBox = await boundText.boundingBox()
   expect(boundBox).not.toBeNull()
   await page.mouse.dblclick(boundBox!.x + boundBox!.width / 2, boundBox!.y + boundBox!.height / 2)
-  await expect(page.locator('[data-layout-inline-editor="true"]')).toHaveCount(0)
+  const boundEditor = page.locator(
+    '[data-layout-inline-editor="true"][data-layout-element-id="bound-memory"]'
+  )
+  await expect(boundEditor).toBeVisible()
+  await expect(boundEditor).toBeFocused()
+  await boundEditor.fill("A renamed memory")
+  await page.keyboard.press("Tab")
+
+  await expect(boundEditor).toHaveCount(0)
+  await expect(boundText.locator("strong")).toHaveText("A renamed memory")
 
   const staticText = editor.locator('[data-layout-element-id="static-heading"]')
   const box = await staticText.boundingBox()
