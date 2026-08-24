@@ -48,6 +48,15 @@ interface AnalyticsEvents {
     blocking: boolean
     focuses_element: boolean
   }
+  "export:blocking_override_changed": {
+    enabled: boolean
+    problem_count: number
+  }
+  "export:completed": {
+    blocking_override: boolean
+    problem_count: number
+    printer_marks: boolean
+  }
 }
 
 export function captureAnalyticsEvent<EventName extends keyof AnalyticsEvents>(

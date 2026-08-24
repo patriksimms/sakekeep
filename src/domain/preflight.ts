@@ -13,11 +13,13 @@ export function createPreflightReport(input: {
   assetResolutionMetadata: boolean
   assetResolutionCount: number
   marks: boolean
+  allowBlockingProblems?: boolean
   pageSpecification?: PageSpecification
   now?: string
 }): ExportReport {
   const specification = input.pageSpecification ?? pageSpecification()
   const problems = blockingProblems(input.book)
+  const blockingProblemsAccepted = input.allowBlockingProblems === true && problems.length > 0
   const emptyDecorativeImages = input.book.pages.flatMap((page) =>
     page.problems.filter((problem) => problem.code === "empty-decorative-image")
   )
@@ -34,11 +36,13 @@ export function createPreflightReport(input: {
     {
       id: "blocking-problems",
       label: "No blocking layout problems",
-      status: problems.length === 0 ? "pass" : "fail",
+      status: problems.length === 0 ? "pass" : blockingProblemsAccepted ? "warning" : "fail",
       detail:
         problems.length === 0
           ? "No unresolved blocking problems were found."
-          : `${problems.length} blocking problem(s) remain.`,
+          : blockingProblemsAccepted
+            ? `The organizer accepted ${problems.length} blocking problem(s) for this export.`
+            : `${problems.length} blocking problem(s) remain.`,
     },
     {
       id: "page-boxes",
@@ -74,7 +78,9 @@ export function createPreflightReport(input: {
       status: !input.assetResolutionMetadata
         ? "fail"
         : problems.some((problem) => problem.code === "image-blocking-resolution")
-          ? "fail"
+          ? blockingProblemsAccepted
+            ? "warning"
+            : "fail"
           : input.book.pages.some((page) =>
                 page.problems.some((problem) => problem.code === "image-low-resolution")
               )
@@ -118,6 +124,7 @@ export function createPreflightReport(input: {
     },
     checks,
     overrides,
+    ignoredProblems: blockingProblemsAccepted ? problems : [],
     pdfx: {
       target: "PDF/X-4",
       structurallyVerified:
@@ -156,6 +163,14 @@ export function reportAsText(report: ExportReport): string {
     "Resolution overrides",
     ...(report.overrides.length
       ? report.overrides.map((override) => `- ${override.assetId}: ${override.reason}`)
+      : ["- None"]),
+    "",
+    "Accepted blocking problems",
+    ...(report.ignoredProblems?.length
+      ? report.ignoredProblems.map(
+          (problem) =>
+            `- ${problem.pageId}${problem.elementId ? ` / ${problem.elementId}` : ""}: ${problem.message}`
+        )
       : ["- None"]),
     "",
     "PDF/X-4",

@@ -9,10 +9,21 @@ import {
   PrinterIcon,
   XCircleIcon,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert.tsx"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "#/components/ui/alert-dialog.tsx"
 import { Badge } from "#/components/ui/badge.tsx"
 import { Button, buttonVariants } from "#/components/ui/button.tsx"
 import {
@@ -23,15 +34,17 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card.tsx"
-import { Field, FieldDescription, FieldLabel } from "#/components/ui/field.tsx"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field.tsx"
 import { Switch } from "#/components/ui/switch.tsx"
 import { type ExportArtifact, type Project } from "#/domain/types.ts"
 import { pageSpecification } from "#/domain/page-format.ts"
+import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
 
 export function ExportPanel({ project }: { project: Project }) {
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const [marks, setMarks] = useState(false)
+  const [allowBlockingProblems, setAllowBlockingProblems] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [artifact, setArtifact] = useState<ExportArtifact | null>(null)
   const blocking =
@@ -40,15 +53,28 @@ export function ExportPanel({ project }: { project: Project }) {
   const ready =
     project.bookStatus === "current" &&
     Boolean(project.book) &&
-    blocking === 0 &&
+    (blocking === 0 || allowBlockingProblems) &&
     !project.archivedAt
+
+  useEffect(() => {
+    setAllowBlockingProblems(false)
+  }, [project.id, project.book?.sourceFingerprint])
 
   const exportBook = async () => {
     setExporting(true)
     setArtifact(null)
     try {
-      const result = await projectApi.export(project.id, marks)
+      const result = await projectApi.export(project.id, {
+        marks,
+        allowBlockingProblems,
+        reviewedBookFingerprint: project.book?.sourceFingerprint ?? null,
+      })
       setArtifact(result)
+      captureAnalyticsEvent("export:completed", {
+        blocking_override: allowBlockingProblems && blocking > 0,
+        problem_count: blocking,
+        printer_marks: marks,
+      })
       toast.success("PDF and preflight report exported")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Export failed")
@@ -110,6 +136,16 @@ export function ExportPanel({ project }: { project: Project }) {
             Return to Book review and regenerate the complete book.
           </AlertDescription>
         </Alert>
+      ) : blocking > 0 && allowBlockingProblems ? (
+        <Alert>
+          <AlertTriangleIcon />
+          <AlertTitle>
+            {blocking} blocking page problem{blocking === 1 ? "" : "s"} accepted
+          </AlertTitle>
+          <AlertDescription>
+            Export is enabled. The preflight report will list every accepted problem.
+          </AlertDescription>
+        </Alert>
       ) : blocking > 0 ? (
         <Alert variant="destructive">
           <XCircleIcon />
@@ -118,7 +154,7 @@ export function ExportPanel({ project }: { project: Project }) {
             {blocking === 1 ? "" : "s"}
           </AlertTitle>
           <AlertDescription>
-            Resolve or explicitly override every blocking problem, then regenerate.
+            Enable export despite blocking problems below to accept them for this export.
           </AlertDescription>
         </Alert>
       ) : (
@@ -139,29 +175,83 @@ export function ExportPanel({ project }: { project: Project }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Field orientation="horizontal">
-            <Switch
-              id="printer-marks"
-              checked={marks}
-              onCheckedChange={(checked) => setMarks(checked === true)}
-            />
-            <div>
-              <FieldLabel htmlFor="printer-marks">Crop and printer marks</FieldLabel>
-              <FieldDescription>
-                Off by default. Pages are never imposed as spreads.
-              </FieldDescription>
-            </div>
-          </Field>
+          <FieldGroup>
+            <Field orientation="horizontal">
+              <Switch
+                id="printer-marks"
+                checked={marks}
+                onCheckedChange={(checked) => setMarks(checked === true)}
+              />
+              <div>
+                <FieldLabel htmlFor="printer-marks">Crop and printer marks</FieldLabel>
+                <FieldDescription>
+                  Off by default. Pages are never imposed as spreads.
+                </FieldDescription>
+              </div>
+            </Field>
+            {blocking > 0 && project.bookStatus === "current" && (
+              <Field orientation="horizontal">
+                <Switch
+                  id="allow-blocking-problems"
+                  checked={allowBlockingProblems}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true
+                    setAllowBlockingProblems(enabled)
+                    captureAnalyticsEvent("export:blocking_override_changed", {
+                      enabled,
+                      problem_count: blocking,
+                    })
+                  }}
+                />
+                <div>
+                  <FieldLabel htmlFor="allow-blocking-problems">
+                    Export despite blocking problems
+                  </FieldLabel>
+                  <FieldDescription>
+                    Accept {blocking} blocking page problem{blocking === 1 ? "" : "s"} for this
+                    export. The preflight report will list each one.
+                  </FieldDescription>
+                </div>
+              </Field>
+            )}
+          </FieldGroup>
         </CardContent>
         <CardFooter className="justify-end">
-          <Button size="lg" disabled={!ready || exporting} onClick={exportBook}>
-            {exporting ? (
-              <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <FileCheck2Icon data-icon="inline-start" />
-            )}
-            {exporting ? "Rendering and preflighting…" : "Export PDF + report"}
-          </Button>
+          {blocking > 0 && allowBlockingProblems ? (
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button size="lg" disabled={!ready || exporting} />}>
+                {exporting ? (
+                  <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
+                ) : (
+                  <FileCheck2Icon data-icon="inline-start" />
+                )}
+                {exporting ? "Rendering and preflighting…" : "Export PDF + report"}
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Export with blocking problems?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The PDF may contain content outside the print area, clipped text, or other
+                    visible problems. The preflight report will record all {blocking} accepted
+                    problem{blocking === 1 ? "" : "s"}.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={exportBook}>Export anyway</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            <Button size="lg" disabled={!ready || exporting} onClick={exportBook}>
+              {exporting ? (
+                <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
+              ) : (
+                <FileCheck2Icon data-icon="inline-start" />
+              )}
+              {exporting ? "Rendering and preflighting…" : "Export PDF + report"}
+            </Button>
+          )}
         </CardFooter>
       </Card>
 
