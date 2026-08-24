@@ -273,7 +273,7 @@ describe("photo distribution in the preview", () => {
     expect(markup.indexOf("/preview/first.jpg")).toBeLessThan(markup.indexOf("/preview/second.jpg"))
   })
 
-  it("leaves a frame empty once the uploaded photos run out", () => {
+  it("fills a frame with placeholder art once the uploaded photos run out", () => {
     let schema = addElement(emptyLayoutSchema(), "image-frame", "photos")
     schema = addElement(schema, "image-frame", "photos")
     schema = addElement(schema, "image-frame", "photos")
@@ -286,6 +286,32 @@ describe("photo distribution in the preview", () => {
     )
 
     expect(markup.match(/<img/g)).toHaveLength(2)
+    expect(markup.match(/data-filler-motif/g)).toHaveLength(1)
+    expect(markup).not.toContain("border-dashed")
+  })
+
+  it("gives each empty slot of a gallery its own motif", () => {
+    const schema = addElement(emptyLayoutSchema(), "gallery-frame", "photos")
+    const gallery = schema.elements[0]!
+    if (gallery.type !== "gallery-frame") throw new Error("Expected a gallery frame")
+    gallery.arrangement = "four-square"
+    gallery.geometry = { x: 10, y: 10, width: 80, height: 80, rotation: 0 }
+
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements schema={schema} content={{ submission }} />
+    )
+
+    const motifs = [...markup.matchAll(/data-filler-motif="([a-z-]+)"/g)].map((match) => match[1])
+    expect(motifs).toHaveLength(2)
+    expect(new Set(motifs).size).toBe(2)
+  })
+
+  it("keeps empty frames plainly empty while a layout is still being authored", () => {
+    const schema = addElement(emptyLayoutSchema(), "image-frame", "photos")
+
+    const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+
     expect(markup).toContain("border-dashed")
+    expect(markup).not.toContain("data-filler-motif")
   })
 })
