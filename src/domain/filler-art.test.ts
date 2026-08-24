@@ -10,6 +10,20 @@ import {
 } from "./filler-art.ts"
 import { backgroundPresets } from "./layout-backgrounds.ts"
 import { emptyLayoutSchema } from "./layout.ts"
+import { type LayoutSchema, type ShapeElement } from "./types.ts"
+
+function schemaWithShapes(background: string, fills: string[]): LayoutSchema {
+  const elements: ShapeElement[] = fills.map((fill, index) => ({
+    id: `shape-${index}`,
+    type: "rectangle",
+    geometry: { x: 0, y: index * 10, width: 40, height: 10, rotation: 0 },
+    opacity: 1,
+    fill,
+    stroke: "transparent",
+    strokeWidth: 0,
+  }))
+  return { ...emptyLayoutSchema(), background, elements }
+}
 
 function colourDistance(left: string, right: string): number {
   const channels = (colour: string) =>
@@ -49,6 +63,22 @@ describe("filler art palette", () => {
         ).toBe(true)
       }
     }
+  })
+
+  it("chooses alternate companion colours around user-painted layout colours", () => {
+    const paintedColours = ["#586aa0", "#d184a6", "#6b4c6f"]
+    const palette = fillerPalette(schemaWithShapes("#fffdf7", paintedColours))
+
+    expect([palette.primary, palette.secondary, palette.ink]).toEqual([
+      "#2d7f9c",
+      "#cf4f8c",
+      "#a47ac2",
+    ])
+    expect(
+      [palette.primary, palette.secondary, palette.ink].every((colour) =>
+        paintedColours.every((paintedColour) => colourDistance(colour, paintedColour) >= 45)
+      )
+    ).toBe(true)
   })
 })
 

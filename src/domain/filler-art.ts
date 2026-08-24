@@ -1,4 +1,4 @@
-import { type LayoutSchema } from "./types.ts"
+import { type LayoutElement, type LayoutSchema } from "./types.ts"
 
 /**
  * Placeholder art for photo slots a contributor left unfilled. A layout with five frames and
@@ -255,14 +255,80 @@ export const FILLER_MOTIFS: FillerMotif[] = [
  * do not repeat any color painted by them. Reusing layout colors made motif parts disappear when
  * a transparent photo slot crossed a matching background shape.
  */
-const FILLER_PALETTE: FillerPalette = {
-  primary: "#586aa0",
-  secondary: "#d184a6",
-  ink: "#6b4c6f",
+const FILLER_ACCENTS = ["#586aa0", "#d184a6", "#6b4c6f", "#2d7f9c", "#cf4f8c", "#a47ac2", "#7f4bc0"]
+const MINIMUM_ACCENT_DISTANCE = 45
+
+interface Channels {
+  r: number
+  g: number
+  b: number
 }
 
-export function fillerPalette(_schema: LayoutSchema): FillerPalette {
-  return FILLER_PALETTE
+function parseHex(value: string): Channels | null {
+  const hex = /^#([0-9a-f]{6})$/i.exec(value.trim())?.[1]
+  if (!hex) return null
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  }
+}
+
+function colourDistance(left: Channels, right: Channels): number {
+  return Math.hypot(left.r - right.r, left.g - right.g, left.b - right.b)
+}
+
+function isShape(element: LayoutElement): element is Extract<LayoutElement, { fill: string }> {
+  return element.type === "rectangle" || element.type === "circle" || element.type === "line"
+}
+
+function paintedColour(element: Extract<LayoutElement, { fill: string }>): string | undefined {
+  if (element.opacity === 0) return undefined
+  if (element.type !== "line") return element.fill
+  return element.strokeWidth > 0 ? element.stroke : undefined
+}
+
+export function fillerPalette(schema: LayoutSchema): FillerPalette {
+  const painted = [
+    schema.background,
+    ...schema.elements.filter(isShape).map(paintedColour),
+  ].flatMap((colour) => {
+    const channels = colour ? parseHex(colour) : null
+    return channels ? [channels] : []
+  })
+  const selected: string[] = []
+
+  for (const accent of FILLER_ACCENTS) {
+    const channels = parseHex(accent)!
+    const clearOfPainted = painted.every(
+      (paintedColour) => colourDistance(channels, paintedColour) >= MINIMUM_ACCENT_DISTANCE
+    )
+    const clearOfSelected = selected.every(
+      (selectedColour) =>
+        colourDistance(channels, parseHex(selectedColour)!) >= MINIMUM_ACCENT_DISTANCE
+    )
+    if (clearOfPainted && clearOfSelected) selected.push(accent)
+    if (selected.length === 3) break
+  }
+
+  // A heavily customised layout can sit close to the entire curated set. Keep the three accents
+  // defined in that edge case and prefer the remaining colours furthest from what the page paints.
+  const remaining = FILLER_ACCENTS.filter((accent) => !selected.includes(accent)).sort(
+    (left, right) => {
+      const minimumDistance = (accent: string) => {
+        const channels = parseHex(accent)!
+        return Math.min(...painted.map((paintedColour) => colourDistance(channels, paintedColour)))
+      }
+      return minimumDistance(right) - minimumDistance(left)
+    }
+  )
+  while (selected.length < 3) selected.push(remaining.shift()!)
+
+  return {
+    primary: selected[0]!,
+    secondary: selected[1]!,
+    ink: selected[2]!,
+  }
 }
 
 function hash(value: string): number {
