@@ -7,7 +7,10 @@ import { putObject } from "./object-store"
 import { inspectPdf, renderBookPdf } from "./pdf-renderer"
 import { getProject, recordExport } from "./repository"
 
-export async function exportProject(projectId: string, marks: boolean): Promise<ExportArtifact> {
+export async function exportProject(
+  projectId: string,
+  options: { marks: boolean; allowBlockingProblems: boolean }
+): Promise<ExportArtifact> {
   const project = await getProject(projectId, true)
   if (project.archivedAt) {
     throw new HttpError(409, "This project is archived. Unarchive it before making changes.")
@@ -22,7 +25,7 @@ export async function exportProject(projectId: string, marks: boolean): Promise<
     )
   }
   const problems = blockingProblems(project.book)
-  if (problems.length > 0) {
+  if (problems.length > 0 && !options.allowBlockingProblems) {
     throw new HttpError(
       409,
       `Resolve ${problems.length} blocking page problem(s) before exporting.`,
@@ -36,7 +39,7 @@ export async function exportProject(projectId: string, marks: boolean): Promise<
     layouts: project.layouts,
     submissions: project.submissions ?? [],
     form: project.formSchema,
-    marks,
+    marks: options.marks,
     pageFormat: project.pageFormat,
     pageOrientation: project.pageOrientation,
   })
@@ -51,7 +54,8 @@ export async function exportProject(projectId: string, marks: boolean): Promise<
     pageBoxesValid: inspection.pageBoxesValid,
     assetResolutionMetadata: inspection.assetResolutionMetadata,
     assetResolutionCount: inspection.assetResolutionCount,
-    marks,
+    marks: options.marks,
+    allowBlockingProblems: options.allowBlockingProblems,
     pageSpecification: specification,
   })
   if (hasFailedPreflight(report)) {

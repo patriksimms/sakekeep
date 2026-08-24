@@ -317,6 +317,7 @@ export interface ExportReport {
   }
   checks: PreflightCheck[]
   overrides: Array<{ assetId: string; reason: string }>
+  ignoredProblems?: PageProblem[]
   pdfx: {
     target: "PDF/X-4"
     structurallyVerified: boolean

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createPreflightReport, hasFailedPreflight } from "./preflight.ts"
+import { createPreflightReport, hasFailedPreflight, reportAsText } from "./preflight.ts"
 import { generateBook } from "./generation.ts"
 import { pageSpecification } from "./page-format.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
@@ -132,5 +132,44 @@ describe("preflight", () => {
       expect.objectContaining({ id: "blocking-problems", status: "pass" })
     )
     expect(hasFailedPreflight(report)).toBe(false)
+  })
+
+  it("records explicitly accepted blocking problems without bypassing stale generation", () => {
+    const generated = book()
+    const acceptedProblem = {
+      id: "accepted-outside-print-area",
+      code: "outside-print-area" as const,
+      pageId: generated.pages[0]!.id,
+      elementId: "text-element",
+      message: "Text is outside the 6 mm safe area.",
+      blocking: true,
+    }
+    generated.pages[0]!.problems.push(acceptedProblem)
+    const input = {
+      projectId: generated.projectId,
+      book: generated,
+      bookStatus: "current" as const,
+      pageCount: generated.pages.length,
+      fontsEmbedded: true,
+      outputIntentEmbedded: true,
+      pageBoxesValid: true,
+      assetResolutionMetadata: true,
+      assetResolutionCount: 0,
+      marks: false,
+      allowBlockingProblems: true,
+    }
+
+    const report = createPreflightReport(input)
+
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({ id: "blocking-problems", status: "warning" })
+    )
+    expect(report.ignoredProblems).toEqual([acceptedProblem])
+    expect(reportAsText(report)).toContain(
+      `${acceptedProblem.pageId} / text-element: ${acceptedProblem.message}`
+    )
+    expect(hasFailedPreflight(report)).toBe(false)
+
+    expect(hasFailedPreflight(createPreflightReport({ ...input, bookStatus: "stale" }))).toBe(true)
   })
 })
