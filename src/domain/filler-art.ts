@@ -3,7 +3,8 @@ import { type LayoutElement, type LayoutSchema } from "./types.ts"
 /**
  * Placeholder art for photo slots a contributor left unfilled. A layout with five frames and
  * three uploaded photos would otherwise print two blank rectangles, so the remaining slots get a
- * flat vector motif instead.
+ * flat vector motif instead. The motif is drawn straight onto the page with no panel behind it,
+ * so an unfilled slot reads as part of the page rather than as an empty card on top of it.
  *
  * Everything here is authored as SVG path data in one square coordinate system, which both the
  * HTML preview and the `pdf-lib` exporter draw directly. Staying vector keeps filler art out of
@@ -30,8 +31,6 @@ export interface FillerMotif {
 }
 
 export interface FillerPalette {
-  /** Fills the whole slot, so the motif never sits directly on the page background. */
-  base: string
   primary: string
   secondary: string
   ink: string
@@ -281,14 +280,6 @@ function distance(left: Channels, right: Channels): number {
   return Math.hypot(left.r - right.r, left.g - right.g, left.b - right.b)
 }
 
-function mix(from: Channels, to: Channels, ratio: number): Channels {
-  return {
-    r: from.r + (to.r - from.r) * ratio,
-    g: from.g + (to.g - from.g) * ratio,
-    b: from.b + (to.b - from.b) * ratio,
-  }
-}
-
 function luminance({ r, g, b }: Channels): number {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
 }
@@ -355,9 +346,6 @@ export function fillerPalette(schema: LayoutSchema): FillerPalette {
   const [primary, secondary] = accents.filter((accent) => accent !== ink)
 
   return {
-    // Tinted towards the ink rather than the primary, so the two accent tones keep their full
-    // distance from the panel they are drawn on.
-    base: toHex(mix(background, ink, 0.12)),
     primary: toHex(primary!),
     secondary: toHex(secondary!),
     ink: toHex(ink),

@@ -157,7 +157,6 @@ function FillerArt({
       className="size-full"
       viewBox={`0 0 ${MOTIF_VIEWBOX} ${MOTIF_VIEWBOX}`}
       preserveAspectRatio="xMidYMid meet"
-      style={{ background: palette.base }}
       data-filler-motif={motif.id}
       aria-hidden="true"
     >

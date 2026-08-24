@@ -150,8 +150,8 @@ describe("PDF renderer", () => {
 
     const operators = await pageOperators(bytes, 0)
     const palette = fillerPalette(layout.schema)
-    expect(operators).toMatch(colorOperator(palette.base))
-    expect(operators).toMatch(colorOperator(palette.primary))
+    const tones = [palette.primary, palette.secondary, palette.ink]
+    expect(tones.some((tone) => colorOperator(tone).test(operators))).toBe(true)
     // Path construction rather than an embedded raster placeholder, which is what keeps filler
     // art out of the effective-PPI checks that apply to real photos.
     expect(operators).toMatch(/ m\n/)

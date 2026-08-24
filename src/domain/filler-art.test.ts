@@ -56,13 +56,15 @@ describe("filler art palette", () => {
     expect(dark.ink).toBe("#f0c66f")
   })
 
-  it("tints the slot panel away from the page so the art never floats on bare paper", () => {
+  it("keeps every tone clear of the page it will be drawn on", () => {
     const preset = backgroundPresets("a5", "landscape").find(
       (candidate) => candidate.id === "geometric-collage"
     )!
     const palette = fillerPalette(preset.schema)
 
-    expect(palette.base).not.toBe(preset.schema.background)
+    expect([palette.primary, palette.secondary, palette.ink]).not.toContain(
+      preset.schema.background
+    )
   })
 })
 

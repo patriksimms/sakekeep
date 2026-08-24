@@ -145,8 +145,9 @@ function drawCroppedImage(
 }
 
 /**
- * Draws the placeholder motif for a photo slot the contributor left unfilled. The art is vector,
- * so unlike an embedded photo it carries no resolution and never reaches the preflight PPI rules.
+ * Draws the placeholder motif for a photo slot the contributor left unfilled. Nothing is painted
+ * behind it, so the slot keeps whatever the page already puts there. The art is vector, so unlike
+ * an embedded photo it carries no resolution and never reaches the preflight PPI rules.
  *
  * `drawSvgPath` translates to the given point and then flips the Y axis, so the anchor is the top
  * edge of the motif square in page space.
@@ -164,14 +165,6 @@ function drawFillerArt(input: {
   const y = pdfY(input.geometry.y, input.geometry.height, input.specification)
   const width = pt(input.geometry.width)
   const height = pt(input.geometry.height)
-  input.page.drawRectangle({
-    x,
-    y,
-    width,
-    height,
-    color: color(input.palette.base),
-    opacity: input.opacity,
-  })
   const placement = motifPlacement(width, height)
   const left = x + placement.offsetX
   const top = y + height - placement.offsetY
