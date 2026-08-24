@@ -17,6 +17,8 @@ import {
   pushGraphicsState,
   rectangle,
   rgb,
+  rotateDegrees,
+  translate,
   type PDFFont,
   type PDFImage,
   type PDFPage,
@@ -115,6 +117,37 @@ async function embedImage(pdf: PDFDocument, assetId: string): Promise<PDFImage> 
   const asset = await getAsset(assetId)
   const source = await getObject(asset.objectKey)
   return asset.mimeType === "image/png" ? pdf.embedPng(source.body) : pdf.embedJpg(source.body)
+}
+
+/**
+ * Rotates everything `draw` paints around the top-left corner of `geometry`, which is the corner
+ * the preview turns an element around (`transform-origin: top left`). Page space counts Y upwards
+ * where CSS counts it downwards, so the same visual turn is the negated angle here.
+ *
+ * A transformation matrix rather than pdf-lib's per-call `rotate` option: a clip path, the photo
+ * inside it, and every slot of a gallery have to turn as one, while `rotate` would turn each
+ * drawing around its own anchor and pull the frame apart.
+ */
+function withTopLeftRotation(
+  page: PDFPage,
+  geometry: LayoutElement["geometry"],
+  specification: PageSpecification,
+  draw: () => void
+) {
+  if (!geometry.rotation) {
+    draw()
+    return
+  }
+  const pivotX = pt(specification.bleedMm + geometry.x)
+  const pivotY = pdfY(geometry.y, 0, specification)
+  page.pushOperators(
+    pushGraphicsState(),
+    translate(pivotX, pivotY),
+    rotateDegrees(-geometry.rotation),
+    translate(-pivotX, -pivotY)
+  )
+  draw()
+  page.pushOperators(popGraphicsState())
 }
 
 function drawCroppedImage(
@@ -337,7 +370,9 @@ async function drawElement(input: {
       placedHeightMm: geometry.height,
       effectivePpi: effectivePpi(image.width, image.height, geometry.width, geometry.height),
     })
-    drawCroppedImage(page, image, geometry, input.specification, element.focalPoint)
+    withTopLeftRotation(page, geometry, input.specification, () =>
+      drawCroppedImage(page, image, geometry, input.specification, element.focalPoint)
+    )
     return
   }
   if (element.type !== "image-frame" && element.type !== "gallery-frame") {
@@ -349,15 +384,17 @@ async function drawElement(input: {
   if (element.type === "image-frame") {
     const image = images[0]
     if (!image) {
-      drawFillerArt({
-        page,
-        geometry,
-        specification: input.specification,
-        palette: input.fillerPalette,
-        seed,
-        slotIndex: 0,
-        opacity: element.opacity,
-      })
+      withTopLeftRotation(page, geometry, input.specification, () =>
+        drawFillerArt({
+          page,
+          geometry,
+          specification: input.specification,
+          palette: input.fillerPalette,
+          seed,
+          slotIndex: 0,
+          opacity: element.opacity,
+        })
+      )
       return
     }
     const embeddedImage = await embedImage(input.pdf, image.assetId)
@@ -376,26 +413,36 @@ async function drawElement(input: {
         geometry.height
       ),
     })
-    drawCroppedImage(
-      page,
-      embeddedImage,
-      geometry,
-      input.specification,
-      effectiveFocalPoint(element, image)
+    withTopLeftRotation(page, geometry, input.specification, () =>
+      drawCroppedImage(
+        page,
+        embeddedImage,
+        geometry,
+        input.specification,
+        effectiveFocalPoint(element, image)
+      )
     )
     return
   }
   const slots = gallerySlots(element.arrangement, geometry.width, geometry.height, element.gap)
-  await Promise.all(
-    slots.map(async (slot, index) => {
+  // Every photo is embedded before anything is painted, so the frame's rotation can wrap one
+  // uninterrupted run of drawing operators and turn the whole gallery as a unit.
+  const slotPhotos = await Promise.all(
+    slots.map(async (_slot, index) => {
       const image = images[index]
+      return image ? { image, embedded: await embedImage(input.pdf, image.assetId) } : undefined
+    })
+  )
+  withTopLeftRotation(page, geometry, input.specification, () => {
+    slots.forEach((slot, index) => {
+      const photo = slotPhotos[index]
       const slotGeometry = {
         x: geometry.x + slot.x,
         y: geometry.y + slot.y,
         width: slot.width,
         height: slot.height,
       }
-      if (!image) {
+      if (!photo) {
         drawFillerArt({
           page,
           geometry: slotGeometry,
@@ -407,31 +454,30 @@ async function drawElement(input: {
         })
         return
       }
-      const embeddedImage = await embedImage(input.pdf, image.assetId)
       input.assetResolutions.push({
-        assetId: image.assetId,
+        assetId: photo.image.assetId,
         pageId: input.pageId,
         elementId: element.id,
-        pixelWidth: embeddedImage.width,
-        pixelHeight: embeddedImage.height,
+        pixelWidth: photo.embedded.width,
+        pixelHeight: photo.embedded.height,
         placedWidthMm: slot.width,
         placedHeightMm: slot.height,
         effectivePpi: effectivePpi(
-          embeddedImage.width,
-          embeddedImage.height,
+          photo.embedded.width,
+          photo.embedded.height,
           slot.width,
           slot.height
         ),
       })
       drawCroppedImage(
         page,
-        embeddedImage,
+        photo.embedded,
         slotGeometry,
         input.specification,
-        effectiveFocalPoint(element, image)
+        effectiveFocalPoint(element, photo.image)
       )
     })
-  )
+  })
 }
 
 function applyPageBoxes(page: PDFPage, specification: PageSpecification) {
