@@ -5,7 +5,9 @@ import {
   CopyIcon,
   ImageIcon,
   InboxIcon,
+  LoaderCircleIcon,
   LockIcon,
+  PencilIcon,
   RefreshCwIcon,
 } from "lucide-react"
 import { useState } from "react"
@@ -16,7 +18,9 @@ import {
   type ImageAnswer,
   type Project,
   type SubmissionAnswer,
+  type SubmissionSummary,
 } from "#/domain/types.ts"
+import { validateEditedTextAnswers, type ValidationIssue } from "#/domain/form.ts"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,7 +50,10 @@ import {
   AccordionTrigger,
 } from "#/components/ui/accordion.tsx"
 import { projectApi } from "#/lib/api.ts"
+import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { submissionLabel } from "#/domain/submission-label.ts"
+import { Input } from "#/components/ui/input.tsx"
+import { Textarea } from "#/components/ui/textarea.tsx"
 
 function questionAnswerLabel(question: FormQuestion, answer: SubmissionAnswer | undefined) {
   if (answer === undefined) return "No answer"
@@ -101,7 +108,52 @@ export function SubmissionsPanel({
   onRefresh: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null)
+  const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({})
+  const [issues, setIssues] = useState<ValidationIssue[]>([])
+  const [confirmingSubmission, setConfirmingSubmission] = useState<SubmissionSummary | null>(null)
+  const [saving, setSaving] = useState(false)
   const submissions = project.submissions ?? []
+  const textQuestions = project.formSchema.questions.filter(
+    (question) => question.type === "single-line" || question.type === "multiline"
+  )
+
+  const startEditing = (submission: SubmissionSummary) => {
+    setEditingSubmissionId(submission.id)
+    setDraftAnswers(
+      Object.fromEntries(
+        textQuestions.map((question) => {
+          const answer = submission.answers[question.id]
+          return [question.id, typeof answer === "string" ? answer : ""]
+        })
+      )
+    )
+    setIssues([])
+  }
+
+  const changedAnswers = (submission: SubmissionSummary) =>
+    Object.fromEntries(
+      textQuestions
+        .filter((question) => {
+          const answer = submission.answers[question.id]
+          return draftAnswers[question.id] !== (typeof answer === "string" ? answer : "")
+        })
+        .map((question) => [question.id, draftAnswers[question.id] ?? ""])
+    )
+
+  const reviewChanges = (submission: SubmissionSummary) => {
+    const nextIssues = validateEditedTextAnswers(project.formSchema, {
+      ...submission.answers,
+      ...draftAnswers,
+    })
+    setIssues(nextIssues)
+    if (nextIssues.length > 0) return
+    if (Object.keys(changedAnswers(submission)).length === 0) {
+      toast.info("Change at least one text answer")
+      return
+    }
+    setConfirmingSubmission(submission)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,7 +161,8 @@ export function SubmissionsPanel({
         <div>
           <h2 className="font-heading text-2xl">Responses</h2>
           <p className="text-sm text-muted-foreground">
-            Anonymous submissions are read-only and remain in arrival order.
+            Responses remain in arrival order. Text answers can be corrected after collection
+            closes.
           </p>
         </div>
         <Button variant="outline" onClick={onRefresh}>
@@ -234,6 +287,7 @@ export function SubmissionsPanel({
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {new Date(submission.submittedAt).toLocaleString()}
+                    {submission.edits.length > 0 && " · Edited"}
                   </span>
                 </span>
               </AccordionTrigger>
@@ -241,11 +295,75 @@ export function SubmissionsPanel({
                 <dl className="grid gap-5 pb-3">
                   {project.formSchema.questions.map((question) => {
                     const answer = submission.answers[question.id]
+                    const editing = editingSubmissionId === submission.id
+                    const editable =
+                      question.type === "single-line" || question.type === "multiline"
+                    const questionIssues = issues.filter(
+                      (issue) => issue.path === `answers.${question.id}`
+                    )
+                    const errorId = `${submission.id}-${question.id}-error`
                     return (
                       <div key={question.id}>
-                        <dt className="text-sm font-medium">{question.prompt}</dt>
+                        <dt className="text-sm font-medium">
+                          {editing && editable ? (
+                            <label htmlFor={`${submission.id}-${question.id}`}>
+                              {question.prompt}
+                            </label>
+                          ) : (
+                            question.prompt
+                          )}
+                        </dt>
                         <dd className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                          {question.type === "images" ? (
+                          {editing && editable ? (
+                            <div className="max-w-2xl">
+                              {question.type === "multiline" ? (
+                                <Textarea
+                                  id={`${submission.id}-${question.id}`}
+                                  value={draftAnswers[question.id] ?? ""}
+                                  maxLength={question.characterLimit}
+                                  aria-invalid={questionIssues.length > 0}
+                                  aria-describedby={questionIssues.length > 0 ? errorId : undefined}
+                                  onChange={(event) => {
+                                    setDraftAnswers((current) => ({
+                                      ...current,
+                                      [question.id]: event.target.value,
+                                    }))
+                                    setIssues((current) =>
+                                      current.filter(
+                                        (issue) => issue.path !== `answers.${question.id}`
+                                      )
+                                    )
+                                  }}
+                                />
+                              ) : (
+                                <Input
+                                  id={`${submission.id}-${question.id}`}
+                                  value={draftAnswers[question.id] ?? ""}
+                                  maxLength={question.characterLimit}
+                                  aria-invalid={questionIssues.length > 0}
+                                  aria-describedby={questionIssues.length > 0 ? errorId : undefined}
+                                  onChange={(event) => {
+                                    setDraftAnswers((current) => ({
+                                      ...current,
+                                      [question.id]: event.target.value,
+                                    }))
+                                    setIssues((current) =>
+                                      current.filter(
+                                        (issue) => issue.path !== `answers.${question.id}`
+                                      )
+                                    )
+                                  }}
+                                />
+                              )}
+                              {questionIssues.length > 0 && (
+                                <div id={errorId} className="mt-1 text-destructive">
+                                  {questionIssues.map((issue) => (
+                                    <p key={issue.message}>{issue.message}</p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : question.type === "images" ? (
                             <>
                               <span className="flex items-center gap-1">
                                 <ImageIcon aria-hidden="true" />
@@ -261,11 +379,135 @@ export function SubmissionsPanel({
                     )
                   })}
                 </dl>
+                {submission.edits.length > 0 && (
+                  <div className="border-t py-4">
+                    <h4 className="text-sm font-medium">Edit history</h4>
+                    <ol className="mt-3 grid gap-4">
+                      {[...submission.edits].reverse().map((edit) => (
+                        <li key={edit.id} className="border-l-2 pl-3 text-sm">
+                          <p>
+                            {edit.editorName} · {new Date(edit.editedAt).toLocaleString()}
+                          </p>
+                          <dl className="mt-2 grid gap-2 text-muted-foreground">
+                            {edit.changes.map((change) => {
+                              const question = project.formSchema.questions.find(
+                                (candidate) => candidate.id === change.questionId
+                              )
+                              return (
+                                <div key={change.questionId}>
+                                  <dt className="font-medium text-foreground">
+                                    {question?.prompt ?? "Removed question"}
+                                  </dt>
+                                  <dd className="whitespace-pre-wrap">
+                                    <span className="line-through">{change.previousValue}</span>
+                                    <span className="mx-1" aria-hidden="true">
+                                      →
+                                    </span>
+                                    <span>{change.newValue}</span>
+                                  </dd>
+                                </div>
+                              )
+                            })}
+                          </dl>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+                {project.state === "closed" && !project.archivedAt && textQuestions.length > 0 && (
+                  <div className="flex justify-end gap-2 border-t pt-3">
+                    {editingSubmissionId === submission.id ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingSubmissionId(null)
+                            setIssues([])
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button onClick={() => reviewChanges(submission)}>Review changes</Button>
+                      </>
+                    ) : (
+                      <Button variant="outline" onClick={() => startEditing(submission)}>
+                        <PencilIcon data-icon="inline-start" />
+                        Edit response
+                      </Button>
+                    )}
+                  </div>
+                )}
               </AccordionContent>
             </AccordionItem>
           ))}
         </Accordion>
       )}
+
+      <AlertDialog
+        open={Boolean(confirmingSubmission)}
+        onOpenChange={(open) => {
+          if (!open && !saving) setConfirmingSubmission(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change this submitted response?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You are changing content submitted by a contributor. Your changes and the original
+              answers will remain visible in the edit history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {confirmingSubmission && (
+            <ul className="list-disc pl-5 text-sm">
+              {Object.keys(changedAnswers(confirmingSubmission)).map((questionId) => (
+                <li key={questionId}>
+                  {project.formSchema.questions.find((question) => question.id === questionId)
+                    ?.prompt ?? "Removed question"}
+                </li>
+              ))}
+            </ul>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={saving}
+              onClick={async () => {
+                if (!confirmingSubmission) return
+                const answers = changedAnswers(confirmingSubmission)
+                setSaving(true)
+                try {
+                  const updated = await projectApi.updateSubmission(
+                    project.id,
+                    confirmingSubmission.id,
+                    {
+                      expectedRevision: confirmingSubmission.revision,
+                      answers,
+                    }
+                  )
+                  onProjectChange(updated)
+                  captureAnalyticsEvent("responses:edit_saved", {
+                    changed_answer_count: Object.keys(answers).length,
+                    previous_edit_count: confirmingSubmission.edits.length,
+                  })
+                  setEditingSubmissionId(null)
+                  setConfirmingSubmission(null)
+                  setIssues([])
+                  toast.success("Response updated")
+                } catch (error) {
+                  setConfirmingSubmission(null)
+                  toast.error(error instanceof Error ? error.message : "Response update failed")
+                } finally {
+                  setSaving(false)
+                }
+              }}
+            >
+              {saving && <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />}
+              Save changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {project.state === "collecting" && !project.archivedAt && (
         <div className="flex flex-col items-end gap-1.5">
@@ -279,8 +521,8 @@ export function SubmissionsPanel({
                 <AlertDialogTitle>Lock collection permanently?</AlertDialogTitle>
                 <AlertDialogDescription>
                   New submissions will be rejected immediately, including any contributor currently
-                  filling the form. Existing responses remain read-only. This transition cannot be
-                  reversed.
+                  filling the form. Organizers can correct text answers after closing. This
+                  transition cannot be reversed.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

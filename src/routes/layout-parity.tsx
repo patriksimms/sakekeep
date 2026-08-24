@@ -130,6 +130,7 @@ const schema: LayoutSchema = {
 const submission: SubmissionSummary = {
   id: "parity-submission",
   sequence: 1,
+  revision: 0,
   submittedAt: "2026-07-23T00:00:00.000Z",
   answers: {
     memory: "The rainy train ride that became the best afternoon of the trip.",
@@ -156,6 +157,7 @@ const submission: SubmissionSummary = {
       },
     ],
   },
+  edits: [],
 }
 
 const page: SubmissionBookPage = {

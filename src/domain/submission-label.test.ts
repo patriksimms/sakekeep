@@ -7,8 +7,10 @@ function submission(answers: Record<string, string | string[]> = {}) {
   return {
     id: "submission-id",
     sequence: 3,
+    revision: 0,
     submittedAt: "2026-08-23T12:00:00.000Z",
     answers,
+    edits: [],
   }
 }
 

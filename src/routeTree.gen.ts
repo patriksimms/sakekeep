@@ -35,6 +35,7 @@ import { Route as ApiProjectsProjectIdLayoutsRouteImport } from './routes/api.pr
 import { Route as ApiProjectsProjectIdPublishRouteImport } from './routes/api.projects.$projectId.publish'
 import { Route as ApiProjectsProjectIdUnarchiveRouteImport } from './routes/api.projects.$projectId.unarchive'
 import { Route as ApiProjectsProjectIdLayoutsLayoutIdRouteImport } from './routes/api.projects.$projectId.layouts.$layoutId'
+import { Route as ApiProjectsProjectIdSubmissionsSubmissionIdRouteImport } from './routes/api.projects.$projectId.submissions.$submissionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -176,6 +177,12 @@ const ApiProjectsProjectIdLayoutsLayoutIdRoute =
     path: '/$layoutId',
     getParentRoute: () => ApiProjectsProjectIdLayoutsRoute,
   } as any)
+const ApiProjectsProjectIdSubmissionsSubmissionIdRoute =
+  ApiProjectsProjectIdSubmissionsSubmissionIdRouteImport.update({
+    id: '/submissions/$submissionId',
+    path: '/submissions/$submissionId',
+    getParentRoute: () => ApiProjectsProjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -204,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
+  '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -232,6 +240,7 @@ export interface FileRoutesByTo {
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
+  '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -261,6 +270,7 @@ export interface FileRoutesById {
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
+  '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -291,6 +301,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/publish'
     | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/layouts/$layoutId'
+    | '/api/projects/$projectId/submissions/$submissionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -319,6 +330,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/publish'
     | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/layouts/$layoutId'
+    | '/api/projects/$projectId/submissions/$submissionId'
   id:
     | '__root__'
     | '/'
@@ -347,6 +359,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/publish'
     | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/layouts/$layoutId'
+    | '/api/projects/$projectId/submissions/$submissionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -551,6 +564,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsProjectIdLayoutsLayoutIdRouteImport
       parentRoute: typeof ApiProjectsProjectIdLayoutsRoute
     }
+    '/api/projects/$projectId/submissions/$submissionId': {
+      id: '/api/projects/$projectId/submissions/$submissionId'
+      path: '/submissions/$submissionId'
+      fullPath: '/api/projects/$projectId/submissions/$submissionId'
+      preLoaderRoute: typeof ApiProjectsProjectIdSubmissionsSubmissionIdRouteImport
+      parentRoute: typeof ApiProjectsProjectIdRoute
+    }
   }
 }
 
@@ -579,6 +599,7 @@ interface ApiProjectsProjectIdRouteChildren {
   ApiProjectsProjectIdLayoutsRoute: typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   ApiProjectsProjectIdPublishRoute: typeof ApiProjectsProjectIdPublishRoute
   ApiProjectsProjectIdUnarchiveRoute: typeof ApiProjectsProjectIdUnarchiveRoute
+  ApiProjectsProjectIdSubmissionsSubmissionIdRoute: typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 
 const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
@@ -592,6 +613,8 @@ const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
     ApiProjectsProjectIdLayoutsRouteWithChildren,
   ApiProjectsProjectIdPublishRoute: ApiProjectsProjectIdPublishRoute,
   ApiProjectsProjectIdUnarchiveRoute: ApiProjectsProjectIdUnarchiveRoute,
+  ApiProjectsProjectIdSubmissionsSubmissionIdRoute:
+    ApiProjectsProjectIdSubmissionsSubmissionIdRoute,
 }
 
 const ApiProjectsProjectIdRouteWithChildren =

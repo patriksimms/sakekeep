@@ -20,6 +20,10 @@ let desiredUserId: string | undefined
 let userKnown = false
 
 interface AnalyticsEvents {
+  "responses:edit_saved": {
+    changed_answer_count: number
+    previous_edit_count: number
+  }
   "layout_editor:page_format_changed": {
     page_format: PageFormat
     page_orientation: PageOrientation

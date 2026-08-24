@@ -22,6 +22,13 @@
       "when": 1787498017116,
       "tag": "20260823151337_productive_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787600253179,
+      "tag": "20260824193733_mysterious_guardian",
+      "breakpoints": true
     }
   ]
 }

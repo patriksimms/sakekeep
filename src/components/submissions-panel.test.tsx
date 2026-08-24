@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { type Project } from "#/domain/types.ts"
 import { completeForm, submissionFixture } from "#/test/fixtures.ts"
+import { projectApi } from "#/lib/api.ts"
 
 import { SubmissionsPanel } from "./submissions-panel.tsx"
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 function project(): Project {
   return {
@@ -62,5 +66,115 @@ describe("SubmissionsPanel", () => {
     )
 
     expect(screen.getByText("Response 1")).toBeTruthy()
+  })
+
+  it("reviews and confirms a text correction before saving it", async () => {
+    const currentProject = project()
+    const updatedProject = project()
+    updatedProject.submissions![0]!.answers.name = "Person one"
+    updatedProject.submissions![0]!.revision = 1
+    const updateSubmission = vi
+      .spyOn(projectApi, "updateSubmission")
+      .mockResolvedValue(updatedProject)
+    const onProjectChange = vi.fn()
+    render(
+      <SubmissionsPanel
+        project={currentProject}
+        onProjectChange={onProjectChange}
+        onRefresh={() => undefined}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Person 1/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Edit response" }))
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Person one" } })
+    fireEvent.click(screen.getByRole("button", { name: "Review changes" }))
+
+    expect(screen.getByRole("alertdialog").textContent).toContain(
+      "You are changing content submitted by a contributor."
+    )
+    expect(screen.getByRole("alertdialog").textContent).toContain("Your name")
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
+
+    await waitFor(() =>
+      expect(updateSubmission).toHaveBeenCalledWith("project-id", "submission-id", {
+        expectedRevision: 0,
+        answers: { name: "Person one" },
+      })
+    )
+    expect(onProjectChange).toHaveBeenCalledWith(updatedProject)
+  })
+
+  it("validates edited text before opening the confirmation", () => {
+    render(
+      <SubmissionsPanel
+        project={project()}
+        onProjectChange={() => undefined}
+        onRefresh={() => undefined}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Person 1/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Edit response" }))
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "" } })
+    fireEvent.click(screen.getByRole("button", { name: "Review changes" }))
+
+    expect(screen.getByText("This question is required.")).toBeTruthy()
+    expect(screen.queryByRole("alertdialog")).toBeNull()
+  })
+
+  it("shows who changed an answer and keeps the original value visible", () => {
+    const editedProject = project()
+    editedProject.submissions![0]!.edits = [
+      {
+        id: "edit-id",
+        editorName: "Patrik Simms",
+        editedAt: "2026-08-24T18:00:00.000Z",
+        changes: [{ questionId: "name", previousValue: "Persno 1", newValue: "Person 1" }],
+      },
+    ]
+    render(
+      <SubmissionsPanel
+        project={editedProject}
+        onProjectChange={() => undefined}
+        onRefresh={() => undefined}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Person 1/ }))
+    expect(screen.getByRole("button", { name: /Person 1.*Edited/ })).toBeTruthy()
+    expect(screen.getByText("Edit history")).toBeTruthy()
+    expect(screen.getByText(/Patrik Simms/)).toBeTruthy()
+    expect(screen.getByText("Persno 1")).toBeTruthy()
+    expect(
+      screen
+        .getAllByText("Person 1")
+        .filter((element) => element.tagName === "SPAN" && !element.hasAttribute("class"))
+    ).toHaveLength(1)
+  })
+
+  it("does not offer edits before collection closes or while archived", () => {
+    const collecting = project()
+    collecting.state = "collecting"
+    const { rerender } = render(
+      <SubmissionsPanel
+        project={collecting}
+        onProjectChange={() => undefined}
+        onRefresh={() => undefined}
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: /Person 1/ }))
+    expect(screen.queryByRole("button", { name: "Edit response" })).toBeNull()
+
+    const archived = project()
+    archived.archivedAt = "2026-08-24T18:00:00.000Z"
+    rerender(
+      <SubmissionsPanel
+        project={archived}
+        onProjectChange={() => undefined}
+        onRefresh={() => undefined}
+      />
+    )
+    expect(screen.queryByRole("button", { name: "Edit response" })).toBeNull()
   })
 })

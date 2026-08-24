@@ -18,6 +18,7 @@ import {
   type PageFormat,
   type PageOrientation,
   type SubmissionAnswers,
+  type SubmissionTextChange,
 } from "../../domain/types"
 
 export const projects = pgTable(
@@ -72,6 +73,7 @@ export const submissions = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     idempotencyKey: text("idempotency_key").notNull(),
     sequence: integer("sequence").notNull(),
+    revision: integer("revision").notNull().default(0),
     answers: jsonb("answers").$type<SubmissionAnswers>().notNull(),
     submittedAt: timestamp("submitted_at", {
       withTimezone: true,
@@ -85,6 +87,26 @@ export const submissions = pgTable(
     uniqueIndex("submissions_project_sequence_unique").on(table.projectId, table.sequence),
     index("submissions_project_index").on(table.projectId),
   ]
+)
+
+export const submissionEdits = pgTable(
+  "submission_edits",
+  {
+    id: uuid("id").primaryKey(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submissions.id, { onDelete: "cascade" }),
+    editorUserId: text("editor_user_id").notNull(),
+    editorName: text("editor_name").notNull(),
+    changes: jsonb("changes").$type<SubmissionTextChange[]>().notNull(),
+    editedAt: timestamp("edited_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("submission_edits_submission_index").on(table.submissionId)]
 )
 
 export const assets = pgTable(

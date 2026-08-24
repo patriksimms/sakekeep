@@ -59,11 +59,26 @@ export interface ImageAnswer {
 export type SubmissionAnswer = string | string[] | ImageAnswer[]
 export type SubmissionAnswers = Record<string, SubmissionAnswer>
 
+export interface SubmissionTextChange {
+  questionId: string
+  previousValue: string
+  newValue: string
+}
+
+export interface SubmissionEdit {
+  id: string
+  editorName: string
+  editedAt: string
+  changes: SubmissionTextChange[]
+}
+
 export interface SubmissionSummary {
   id: string
   sequence: number
+  revision: number
   submittedAt: string
   answers: SubmissionAnswers
+  edits: SubmissionEdit[]
 }
 
 export type OverflowPolicy = "shrink" | "truncate" | "flag"

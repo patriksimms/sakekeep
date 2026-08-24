@@ -82,6 +82,7 @@ export function submissionFixture(id: string, sequence: number): SubmissionSumma
   return {
     id,
     sequence,
+    revision: 0,
     answers: {
       name: `Person ${sequence}`,
       memory: "A sufficiently short memory.",
@@ -90,6 +91,7 @@ export function submissionFixture(id: string, sequence: number): SubmissionSumma
       photos: [],
     },
     submittedAt: "2026-07-18T00:00:00.000Z",
+    edits: [],
   }
 }
 
