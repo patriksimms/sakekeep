@@ -183,7 +183,7 @@ export const FILLER_MOTIFS: FillerMotif[] = [
     id: "leaf-pair",
     family: "botanical",
     shapes: [
-      { d: rectangle(48.5, 18, 3, 68), tone: "ink" },
+      { d: rectangle(48.5, 46, 3, 40), tone: "ink" },
       { d: leaf(50, 64, 22, 42, 16), tone: "primary" },
       { d: leaf(50, 46, 78, 26, 16), tone: "secondary" },
     ],
