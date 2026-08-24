@@ -226,6 +226,22 @@ export function layoutText(
   }
 }
 
+/**
+ * Splits a vertical alignment offset into the page-space components that walk down the box's own
+ * rotated axis. The HTML preview gets this for free because its padding lives inside the rotated
+ * element; a renderer that positions in page space has to rotate the offset itself.
+ */
+export function alignmentOffsetMm(
+  offsetYMm: number,
+  rotationDegrees: number
+): { xMm: number; yMm: number } {
+  const radians = (rotationDegrees * Math.PI) / 180
+  return {
+    xMm: -offsetYMm * Math.sin(radians),
+    yMm: offsetYMm * Math.cos(radians),
+  }
+}
+
 export function minimumTextBoxHeight(
   element: {
     type: "bound-text" | "static-text"

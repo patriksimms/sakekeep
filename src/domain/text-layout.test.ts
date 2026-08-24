@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { DEFAULT_TEXT_SETTINGS } from "./layout.ts"
 import {
+  alignmentOffsetMm,
   enforceMinimumTextBoxHeight,
   layoutText,
   minimumTextBoxHeight,
@@ -187,6 +188,30 @@ describe("canonical text layout", () => {
         text: { ...staticText.text, verticalAlignment: "bottom" },
       })
     ).toBeCloseTo(minimumTextBoxHeight(staticText), 10)
+  })
+
+  it("walks the alignment offset down the box's own axis when it is rotated", () => {
+    const upright = alignmentOffsetMm(10, 0)
+    expect(upright.xMm).toBeCloseTo(0, 10)
+    expect(upright.yMm).toBeCloseTo(10, 10)
+
+    const quarterTurn = alignmentOffsetMm(10, 90)
+    expect(quarterTurn.xMm).toBeCloseTo(-10, 10)
+    expect(quarterTurn.yMm).toBeCloseTo(0, 10)
+
+    const tilted = alignmentOffsetMm(52.944, 20)
+    expect(tilted.xMm).toBeCloseTo(-52.944 * Math.sin((20 * Math.PI) / 180), 10)
+    expect(tilted.yMm).toBeCloseTo(52.944 * Math.cos((20 * Math.PI) / 180), 10)
+    // The offset only ever moves along the box, never along it lengthwise.
+    expect(Math.hypot(tilted.xMm, tilted.yMm)).toBeCloseTo(52.944, 10)
+  })
+
+  it("leaves top-aligned text untouched at every rotation, so stored layouts do not move", () => {
+    for (const rotation of [0, 7, -13, 90, 180]) {
+      const offset = alignmentOffsetMm(0, rotation)
+      expect(offset.xMm, `x at ${rotation} degrees`).toBeCloseTo(0, 10)
+      expect(offset.yMm, `y at ${rotation} degrees`).toBeCloseTo(0, 10)
+    }
   })
 
   it("enforces one useful static line and separate label and answer lines", () => {

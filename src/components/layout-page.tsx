@@ -108,14 +108,23 @@ function textElementRuns(
  */
 export function textElementVerticalOffsetMm(
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
-  content: LayoutPageContent
+  content: LayoutPageContent,
+  editedText?: string
 ): number {
+  // While the inline editor is open the schema still holds the committed text, so measuring the
+  // element as-is would leave middle- and bottom-aligned text parked at a stale height until blur.
+  const target =
+    editedText === undefined
+      ? element
+      : element.type === "static-text"
+        ? { ...element, content: editedText }
+        : { ...element, showLabel: editedText.trim().length > 0, label: editedText }
   const question =
-    element.type === "bound-text"
-      ? content.questions?.find((candidate) => candidate.id === element.questionId)
+    target.type === "bound-text"
+      ? content.questions?.find((candidate) => candidate.id === target.questionId)
       : undefined
-  const runs = textElementRuns(element, content, question)
-  return layoutText(runs, element.geometry.width, element.geometry.height, element.text).offsetYMm
+  const runs = textElementRuns(target, content, question)
+  return layoutText(runs, target.geometry.width, target.geometry.height, target.text).offsetYMm
 }
 
 function ElementContent({
@@ -124,6 +133,7 @@ function ElementContent({
   photoAssignment,
   showEditorPlaceholders,
   editingElementId,
+  editingText,
   selectedElementId,
   specification,
 }: {
@@ -132,6 +142,7 @@ function ElementContent({
   photoAssignment: PhotoAssignment
   showEditorPlaceholders: boolean
   editingElementId?: string
+  editingText?: string
   selectedElementId?: string
   specification: PageSpecification
 }) {
@@ -164,9 +175,11 @@ function ElementContent({
           overflow: "flag",
         }).renderedLines.length
       : 0
+    // `editingText` carries the uncommitted inline edit, so the reserved label space and the
+    // vertical offset track what is on screen rather than what was last saved.
     const editedLabel =
       element.type === "bound-text" && editingElementId === element.id
-        ? boundTextLabel({ ...element, showLabel: true }, question)
+        ? (editingText ?? boundTextLabel({ ...element, showLabel: true }, question))
         : ""
     // While a label is being edited the schema hides it, so the plain layout above measures only
     // the answer. Re-measure with the label back in, or the block would sit too low in its box.
@@ -372,6 +385,7 @@ export function LayoutPageElements({
   ariaHidden = false,
   showEditorPlaceholders = false,
   editingElementId,
+  editingText,
   selectedElementId,
 }: {
   schema: LayoutSchema
@@ -380,6 +394,7 @@ export function LayoutPageElements({
   ariaHidden?: boolean
   showEditorPlaceholders?: boolean
   editingElementId?: string
+  editingText?: string
   selectedElementId?: string
 }) {
   const specification = pageSpecificationForLayout(schema)
@@ -401,6 +416,7 @@ export function LayoutPageElements({
           photoAssignment={photoAssignment}
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
+          editingText={editingText}
           selectedElementId={selectedElementId}
           specification={specification}
         />

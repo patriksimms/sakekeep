@@ -6,7 +6,7 @@ import { pageSpecification } from "#/domain/page-format.ts"
 import { layoutText, textRunsForElement } from "#/domain/text-layout.ts"
 import { type ImageAnswer, type SubmissionSummary } from "#/domain/types.ts"
 
-import { LayoutPageElements } from "./layout-page.tsx"
+import { LayoutPageElements, textElementVerticalOffsetMm } from "./layout-page.tsx"
 
 describe("empty decorative image rendering", () => {
   it("shows the editor placeholder but omits the element from previews", () => {
@@ -110,6 +110,42 @@ describe("vertical text alignment", () => {
 
     expect(markup).toContain('data-text-overflow="true"')
     expect(markup).not.toContain("padding-top")
+  })
+})
+
+describe("vertical alignment while text is being edited", () => {
+  it("measures the uncommitted text so the offset does not lag behind the caret", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "Short"
+    element.geometry = { ...element.geometry, width: 40, height: 40 }
+    element.text = { ...element.text, verticalAlignment: "middle" }
+
+    const committed = textElementVerticalOffsetMm(element, {})
+    const whileTyping = textElementVerticalOffsetMm(
+      element,
+      {},
+      "Short, and then enough further words to wrap onto several more lines"
+    )
+
+    // More lines leaves less slack, so centred text has to climb as the caret runs on.
+    expect(whileTyping).toBeLessThan(committed)
+    expect(whileTyping).toBeGreaterThanOrEqual(0)
+    expect(textElementVerticalOffsetMm(element, {}, element.content)).toBeCloseTo(committed, 10)
+  })
+
+  it("reserves the space the edited label will need once it is committed", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.geometry = { ...element.geometry, width: 40, height: 40 }
+    element.text = { ...element.text, verticalAlignment: "bottom" }
+
+    const long = textElementVerticalOffsetMm(element, {}, "One two three four five six seven eight")
+    const short = textElementVerticalOffsetMm(element, {}, "One")
+
+    expect(long).toBeLessThan(short)
   })
 })
 

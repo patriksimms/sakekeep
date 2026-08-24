@@ -139,20 +139,25 @@ function elementName(element: LayoutElement) {
 function InlineTextEditor({
   element,
   content,
-  offsetYMm,
+  editedText,
+  pageContent,
+  onEdit,
   onCommit,
   onCancel,
   specification,
 }: {
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
   content: string
-  offsetYMm: number
+  editedText: string
+  pageContent: LayoutPageContent
+  onEdit: (content: string) => void
   onCommit: (content: string) => void
   onCancel: () => void
   specification: PageSpecification
 }) {
   const editor = useRef<HTMLDivElement>(null)
   const cancelled = useRef(false)
+  const offsetYMm = textElementVerticalOffsetMm(element, pageContent, editedText)
 
   useEffect(() => {
     const node = editor.current
@@ -173,6 +178,7 @@ function InlineTextEditor({
       data-layout-inline-editor="true"
       contentEditable
       suppressContentEditableWarning
+      onInput={(event) => onEdit(event.currentTarget.innerText)}
       onBlur={(event) => {
         if (!cancelled.current) onCommit(event.currentTarget.innerText)
       }}
@@ -291,6 +297,7 @@ export function LayoutCanvas({
   const editMethod = useRef<"double_click" | "keyboard">("keyboard")
   const [displaySchema, setDisplaySchema] = useState(schema)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState("")
   const [isDropTarget, setIsDropTarget] = useState(false)
   schemaRef.current = schema
   onSelectRef.current = onSelect
@@ -367,6 +374,14 @@ export function LayoutCanvas({
       canvas.setActiveObject(object)
       editMethod.current = inputMethod
       setEditingElementId(source.id)
+      setEditingText(
+        source.type === "static-text"
+          ? source.content
+          : boundTextLabel(
+              source,
+              questions.find((candidate) => candidate.id === source.questionId)
+            )
+      )
       if (source.type === "static-text") {
         setDisplaySchema({
           ...schemaRef.current,
@@ -576,6 +591,7 @@ export function LayoutCanvas({
         ariaHidden
         showEditorPlaceholders
         editingElementId={editingElementId ?? undefined}
+        editingText={editingElementId ? editingText : undefined}
       />
       <canvas
         ref={element}
@@ -584,14 +600,9 @@ export function LayoutCanvas({
       {editingElement && (
         <InlineTextEditor
           element={editingElement}
-          offsetYMm={textElementVerticalOffsetMm(
-            // The rendered element always measures the label back in while it is being edited,
-            // including when the element had none yet. Measure the same way or the two disagree.
-            editingElement.type === "bound-text"
-              ? { ...editingElement, showLabel: true }
-              : editingElement,
-            pageContent
-          )}
+          editedText={editingText}
+          pageContent={pageContent}
+          onEdit={setEditingText}
           content={
             editingElement.type === "static-text"
               ? editingElement.content
