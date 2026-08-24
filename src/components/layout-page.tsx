@@ -1,5 +1,12 @@
 import { useMemo } from "react"
 
+import {
+  fillerMotif,
+  fillerPalette,
+  fillerSeed,
+  MOTIF_VIEWBOX,
+  type FillerPalette,
+} from "#/domain/filler-art.ts"
 import { gallerySlots } from "#/domain/layout.ts"
 import {
   pageSpecification,
@@ -176,10 +183,51 @@ export function textElementVerticalOffsetMm(
   return layoutText(runs, target.geometry.width, target.geometry.height, target.text).offsetYMm
 }
 
+/**
+ * Stands in for a photo the contributor did not upload. Only rendered once a response is being
+ * previewed: while a layout is being authored every frame is empty, so art there would say
+ * nothing about the finished page.
+ *
+ * `xMidYMid meet` centres the square motif on the slot's shorter side without stretching it,
+ * which is the fit the PDF exporter reproduces with `motifPlacement`.
+ */
+function FillerArt({
+  seed,
+  slotIndex,
+  palette,
+}: {
+  seed: string
+  slotIndex: number
+  palette: FillerPalette
+}) {
+  const motif = fillerMotif(seed, slotIndex)
+  return (
+    <svg
+      className="size-full"
+      viewBox={`0 0 ${MOTIF_VIEWBOX} ${MOTIF_VIEWBOX}`}
+      preserveAspectRatio="xMidYMid meet"
+      data-filler-motif={motif.id}
+      aria-hidden="true"
+    >
+      {motif.shapes.map((shape, index) => (
+        <path
+          key={index}
+          d={shape.d}
+          fill={shape.strokeWidth ? "none" : palette[shape.tone]}
+          stroke={shape.strokeWidth ? palette[shape.tone] : undefined}
+          strokeWidth={shape.strokeWidth}
+          strokeLinecap={shape.strokeWidth ? "round" : undefined}
+        />
+      ))}
+    </svg>
+  )
+}
+
 function ElementContent({
   element,
   content,
   photoAssignment,
+  palette,
   showEditorPlaceholders,
   editingElementId,
   editingText,
@@ -189,6 +237,7 @@ function ElementContent({
   element: LayoutElement
   content: LayoutPageContent
   photoAssignment: PhotoAssignment
+  palette: FillerPalette
   showEditorPlaceholders: boolean
   editingElementId?: string
   editingText?: string
@@ -383,6 +432,12 @@ function ElementContent({
             content={content}
             borderRadius={millimetresToContainerWidth(element.cornerRadius, specification)}
           />
+        ) : content.submission ? (
+          <FillerArt
+            seed={fillerSeed(content.submission.id, element.id)}
+            slotIndex={0}
+            palette={palette}
+          />
         ) : (
           <div className="size-full border border-dashed border-foreground/25 bg-muted/20" />
         )}
@@ -415,6 +470,14 @@ function ElementContent({
         return image?.previewUrl ? (
           <div key={`${image.assetId}-${index}`} style={slotStyle}>
             <PrintedPhoto element={element} image={image} content={content} />
+          </div>
+        ) : content.submission ? (
+          <div key={index} style={slotStyle}>
+            <FillerArt
+              seed={fillerSeed(content.submission.id, element.id)}
+              slotIndex={index}
+              palette={palette}
+            />
           </div>
         ) : (
           <span
@@ -452,6 +515,7 @@ export function LayoutPageElements({
     () => assignPhotosToFrames(schema.elements, content.submission?.answers ?? {}),
     [schema.elements, content.submission]
   )
+  const palette = useMemo(() => fillerPalette(schema), [schema])
   return (
     <div
       className="pointer-events-none absolute inset-0"
@@ -464,6 +528,7 @@ export function LayoutPageElements({
           element={element}
           content={content}
           photoAssignment={photoAssignment}
+          palette={palette}
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
           editingText={editingText}

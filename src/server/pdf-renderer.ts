@@ -6,6 +6,7 @@ import {
   clip,
   degrees,
   endPath,
+  LineCapStyle,
   PDFArray,
   PDFDocument,
   PDFDict,
@@ -21,6 +22,13 @@ import {
   type PDFPage,
 } from "pdf-lib"
 
+import {
+  fillerMotif,
+  fillerPalette,
+  fillerSeed,
+  motifPlacement,
+  type FillerPalette,
+} from "../domain/filler-art.ts"
 import { effectivePpi } from "../domain/generation"
 import { FONT_CUT_FILES, fontCut, type FontCut } from "../domain/fonts.ts"
 import { gallerySlots, PAGE_SPEC } from "../domain/layout"
@@ -137,6 +145,48 @@ function drawCroppedImage(
   page.pushOperators(popGraphicsState())
 }
 
+/**
+ * Draws the placeholder motif for a photo slot the contributor left unfilled. Nothing is painted
+ * behind it, so the slot keeps whatever the page already puts there. The art is vector, so unlike
+ * an embedded photo it carries no resolution and never reaches the preflight PPI rules.
+ *
+ * `drawSvgPath` translates to the given point and then flips the Y axis, so the anchor is the top
+ * edge of the motif square in page space.
+ */
+function drawFillerArt(input: {
+  page: PDFPage
+  geometry: { x: number; y: number; width: number; height: number }
+  specification: PageSpecification
+  palette: FillerPalette
+  seed: string
+  slotIndex: number
+  opacity: number
+}) {
+  const x = pt(input.specification.bleedMm + input.geometry.x)
+  const y = pdfY(input.geometry.y, input.geometry.height, input.specification)
+  const width = pt(input.geometry.width)
+  const height = pt(input.geometry.height)
+  const placement = motifPlacement(width, height)
+  const left = x + placement.offsetX
+  const top = y + height - placement.offsetY
+  for (const shape of fillerMotif(input.seed, input.slotIndex).shapes) {
+    const tone = color(input.palette[shape.tone])
+    input.page.drawSvgPath(shape.d, {
+      x: left,
+      y: top,
+      scale: placement.scale,
+      ...(shape.strokeWidth
+        ? {
+            borderColor: tone,
+            borderWidth: shape.strokeWidth,
+            borderLineCap: LineCapStyle.Round,
+            borderOpacity: input.opacity,
+          }
+        : { color: tone, opacity: input.opacity }),
+    })
+  }
+}
+
 function wrapText(text: string, font: PDFFont, size: number, width: number) {
   const lines: string[] = []
   for (const explicitLine of text.replace(/\r\n/g, "\n").split("\n")) {
@@ -207,6 +257,7 @@ async function drawElement(input: {
   photoAssignment: PhotoAssignment
   form: FormSchema
   fonts: EmbeddedFonts
+  fillerPalette: FillerPalette
   assetResolutions: AssetResolutionMetadata[]
   specification: PageSpecification
 }) {
@@ -294,9 +345,21 @@ async function drawElement(input: {
   }
 
   const images = framePhotos(input.photoAssignment, element.id)
+  const seed = fillerSeed(input.submission.id, element.id)
   if (element.type === "image-frame") {
     const image = images[0]
-    if (!image) return
+    if (!image) {
+      drawFillerArt({
+        page,
+        geometry,
+        specification: input.specification,
+        palette: input.fillerPalette,
+        seed,
+        slotIndex: 0,
+        opacity: element.opacity,
+      })
+      return
+    }
     const embeddedImage = await embedImage(input.pdf, image.assetId)
     input.assetResolutions.push({
       assetId: image.assetId,
@@ -326,7 +389,24 @@ async function drawElement(input: {
   await Promise.all(
     slots.map(async (slot, index) => {
       const image = images[index]
-      if (!image) return
+      const slotGeometry = {
+        x: geometry.x + slot.x,
+        y: geometry.y + slot.y,
+        width: slot.width,
+        height: slot.height,
+      }
+      if (!image) {
+        drawFillerArt({
+          page,
+          geometry: slotGeometry,
+          specification: input.specification,
+          palette: input.fillerPalette,
+          seed,
+          slotIndex: index,
+          opacity: element.opacity,
+        })
+        return
+      }
       const embeddedImage = await embedImage(input.pdf, image.assetId)
       input.assetResolutions.push({
         assetId: image.assetId,
@@ -346,12 +426,7 @@ async function drawElement(input: {
       drawCroppedImage(
         page,
         embeddedImage,
-        {
-          x: geometry.x + slot.x,
-          y: geometry.y + slot.y,
-          width: slot.width,
-          height: slot.height,
-        },
+        slotGeometry,
         input.specification,
         effectiveFocalPoint(element, image)
       )
@@ -605,6 +680,7 @@ export async function renderBookPdf(input: {
         color: color(layout.schema.background),
       })
       const photoAssignment = assignPhotosToFrames(layout.schema.elements, submission.answers)
+      const palette = fillerPalette(layout.schema)
       for (const element of layout.schema.elements) {
         await drawElement({
           pdf,
@@ -615,6 +691,7 @@ export async function renderBookPdf(input: {
           photoAssignment,
           form: input.form,
           fonts,
+          fillerPalette: palette,
           assetResolutions,
           specification,
         })
