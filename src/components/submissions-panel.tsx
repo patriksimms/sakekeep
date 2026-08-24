@@ -49,7 +49,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "#/components/ui/accordion.tsx"
-import { projectApi } from "#/lib/api.ts"
+import { ApiError, projectApi } from "#/lib/api.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { submissionLabel } from "#/domain/submission-label.ts"
 import { Input } from "#/components/ui/input.tsx"
@@ -502,6 +502,7 @@ export function SubmissionsPanel({
                   toast.success("Response updated")
                 } catch (error) {
                   setConfirmingSubmission(null)
+                  if (error instanceof ApiError && error.status === 409) setEditStart(null)
                   toast.error(error instanceof Error ? error.message : "Response update failed")
                 } finally {
                   setSaving(false)

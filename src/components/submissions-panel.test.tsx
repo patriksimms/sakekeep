@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { type Project } from "#/domain/types.ts"
 import { completeForm, submissionFixture } from "#/test/fixtures.ts"
-import { projectApi } from "#/lib/api.ts"
+import { ApiError, projectApi } from "#/lib/api.ts"
 
 import { SubmissionsPanel } from "./submissions-panel.tsx"
 
@@ -113,7 +113,7 @@ describe("SubmissionsPanel", () => {
     const updateSubmission = vi
       .spyOn(projectApi, "updateSubmission")
       .mockRejectedValue(
-        new Error("This response changed while you were editing it. Refresh and try again.")
+        new ApiError(409, "This response changed while you were editing it. Refresh and try again.")
       )
     const onProjectChange = vi.fn()
     const { rerender } = render(
@@ -144,6 +144,7 @@ describe("SubmissionsPanel", () => {
       })
     )
     expect(onProjectChange).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit response" })).toBeTruthy())
   })
 
   it("validates edited text before opening the confirmation", () => {
