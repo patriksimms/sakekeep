@@ -540,10 +540,7 @@ function ElementInspector({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <div>
-          <p className="font-heading text-lg">{elementLabel(element, questions)}</p>
-          <p className="text-xs text-muted-foreground">{element.type}</p>
-        </div>
+        <p className="text-xs text-muted-foreground">{element.type}</p>
         <div className="-mx-1 flex flex-wrap items-center gap-0.5">{actions}</div>
       </div>
       <FieldGroup>
@@ -1252,40 +1249,6 @@ const Editor = forwardRef<
                 dragData={{ type: "decorative-image" }}
                 onAdd={() => add("decorative-image")}
               />
-              <Separator orientation="vertical" className="mx-1 h-6" />
-              <IconAction label="Undo" disabled={historyIndex.current <= 0}>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Undo"
-                  disabled={historyIndex.current <= 0}
-                  onClick={() => {
-                    if (historyIndex.current <= 0) return
-                    historyIndex.current -= 1
-                    markChanged(structuredClone(history.current[historyIndex.current]!), false)
-                  }}
-                >
-                  <Undo2Icon />
-                </Button>
-              </IconAction>
-              <IconAction
-                label="Redo"
-                disabled={historyIndex.current >= history.current.length - 1}
-              >
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Redo"
-                  disabled={historyIndex.current >= history.current.length - 1}
-                  onClick={() => {
-                    if (historyIndex.current >= history.current.length - 1) return
-                    historyIndex.current += 1
-                    markChanged(structuredClone(history.current[historyIndex.current]!), false)
-                  }}
-                >
-                  <Redo2Icon />
-                </Button>
-              </IconAction>
             </div>
           </CardContent>
         </Card>
@@ -1312,6 +1275,38 @@ const Editor = forwardRef<
         className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
       >
         <CardHeader>
+          <div className="-mx-1 flex items-center gap-0.5">
+            <IconAction label="Undo" disabled={historyIndex.current <= 0}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Undo"
+                disabled={historyIndex.current <= 0}
+                onClick={() => {
+                  if (historyIndex.current <= 0) return
+                  historyIndex.current -= 1
+                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                }}
+              >
+                <Undo2Icon />
+              </Button>
+            </IconAction>
+            <IconAction label="Redo" disabled={historyIndex.current >= history.current.length - 1}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Redo"
+                disabled={historyIndex.current >= history.current.length - 1}
+                onClick={() => {
+                  if (historyIndex.current >= history.current.length - 1) return
+                  historyIndex.current += 1
+                  markChanged(structuredClone(history.current[historyIndex.current]!), false)
+                }}
+              >
+                <Redo2Icon />
+              </Button>
+            </IconAction>
+          </div>
           <CardAction>
             <SaveIndicator state={saveState} />
           </CardAction>

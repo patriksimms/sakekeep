@@ -349,6 +349,8 @@ test.describe.serial("critical local prototype workflows", () => {
     const renderedCanvas = page.locator("canvas.upper-canvas")
     const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
     const deleteAction = inspectorCard.getByRole("button", { name: "Delete selected element" })
+    await expect(inspectorCard.getByRole("button", { name: "Undo" })).toBeVisible()
+    await expect(inspectorCard.getByRole("button", { name: "Redo" })).toBeVisible()
     const clearSelection = async () => {
       const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
