@@ -273,6 +273,75 @@ describe("photo distribution in the preview", () => {
     expect(markup.indexOf("/preview/first.jpg")).toBeLessThan(markup.indexOf("/preview/second.jpg"))
   })
 
+  it("crops an adjusted photo by its own focus and the rest by the layout's", () => {
+    let schema = addElement(emptyLayoutSchema(), "image-frame", "photos")
+    schema = addElement(schema, "image-frame", "photos")
+    schema.elements[0]!.geometry = { x: 10, y: 10, width: 40, height: 30, rotation: 0 }
+    schema.elements[1]!.geometry = { x: 10, y: 60, width: 40, height: 30, rotation: 0 }
+    schema.elements.forEach((element) => {
+      if (element.type === "image-frame") element.focalPoint = { x: 0.8, y: 0.8 }
+    })
+    const adjusted: SubmissionSummary = {
+      ...submission,
+      answers: {
+        photos: [{ ...photo("first"), focalPoint: { x: 0.5, y: 0.15 } }, photo("second")],
+      },
+    }
+
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements schema={schema} content={{ submission: adjusted }} />
+    )
+
+    expect(markup).toContain("object-position:50% 15%")
+    expect(markup).toContain("object-position:80% 80%")
+  })
+
+  it("only offers grab handles where the book review asked for them", () => {
+    const schema = addElement(emptyLayoutSchema(), "image-frame", "photos")
+
+    const plain = renderToStaticMarkup(
+      <LayoutPageElements schema={schema} content={{ submission }} />
+    )
+    const adjustable = renderToStaticMarkup(
+      <LayoutPageElements
+        schema={schema}
+        content={{
+          submission,
+          photoFocus: {
+            draft: {},
+            onChange: () => {},
+            onCommit: () => {},
+            onSelect: () => {},
+          },
+        }}
+      />
+    )
+
+    expect(plain).not.toContain("data-photo-focus-handle")
+    expect(adjustable).toContain('data-photo-focus-handle="first"')
+  })
+
+  it("follows the crop being dragged before anything is saved", () => {
+    const schema = addElement(emptyLayoutSchema(), "image-frame", "photos")
+
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements
+        schema={schema}
+        content={{
+          submission,
+          photoFocus: {
+            draft: { first: { x: 0.25, y: 0.1 } },
+            onChange: () => {},
+            onCommit: () => {},
+            onSelect: () => {},
+          },
+        }}
+      />
+    )
+
+    expect(markup).toContain("object-position:25% 10%")
+  })
+
   it("leaves a frame empty once the uploaded photos run out", () => {
     let schema = addElement(emptyLayoutSchema(), "image-frame", "photos")
     schema = addElement(schema, "image-frame", "photos")

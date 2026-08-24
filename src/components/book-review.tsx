@@ -14,6 +14,7 @@ import {
   ShuffleIcon,
   SquareIcon,
   Trash2Icon,
+  Undo2Icon,
   WandSparklesIcon,
 } from "lucide-react"
 import { useEffect, useState, type DragEvent } from "react"
@@ -72,6 +73,14 @@ import {
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group.tsx"
 import { LayoutPageElements } from "#/components/layout-page.tsx"
+import { type PhotoFocusControls } from "#/components/photo-focus-slot.tsx"
+import {
+  findPhoto,
+  photoFocalPoint,
+  sameFocalPoint,
+  withPhotoFocalPoint,
+  type FocalPoint,
+} from "#/domain/photo-focus.ts"
 import {
   type BookPage,
   type GeneratedBook,
@@ -96,6 +105,7 @@ export function PagePreview({
   decorativeAssetUrl,
   showProblems = true,
   selectedElementId,
+  photoFocus,
 }: {
   page: BookPage
   project: Project
@@ -103,6 +113,7 @@ export function PagePreview({
   decorativeAssetUrl?: (assetId: string) => string
   showProblems?: boolean
   selectedElementId?: string
+  photoFocus?: PhotoFocusControls
 }) {
   const layout =
     page.kind === "submission"
@@ -141,6 +152,7 @@ export function PagePreview({
             questions: project.formSchema.questions,
             submission,
             decorativeAssetUrl,
+            photoFocus,
           }}
           testId="preview-layout-elements"
           selectedElementId={selectedElementId}
@@ -395,6 +407,8 @@ export function BookReview({
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [focusDrafts, setFocusDrafts] = useState<Record<string, FocalPoint>>({})
+  const [focusAssetId, setFocusAssetId] = useState<string | null>(null)
 
   useEffect(() => {
     if (project.book) setSettings(project.book.settings)
@@ -468,6 +482,7 @@ export function BookReview({
       setSelectedId(updated.pages[0]?.id ?? null)
       setSelectedProblemId(null)
       setSelectedElementId(null)
+      setFocusAssetId(null)
       toast.success("Complete book generated")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Generation failed")
@@ -486,6 +501,42 @@ export function BookReview({
       toast.error(error instanceof Error ? error.message : "Book update failed")
     }
   }
+
+  const submissions = project.submissions ?? []
+
+  // The crop centre lives on the asset, so it is written on its own and deliberately leaves the
+  // book alone: no page problem depends on it, and the exporter reads submissions live.
+  const storeFocalPoint = async (assetId: string, focalPoint: FocalPoint | null) => {
+    const previous = photoFocalPoint(submissions, assetId)
+    onProjectChange({
+      ...project,
+      submissions: withPhotoFocalPoint(submissions, assetId, focalPoint ?? undefined),
+    })
+    try {
+      await projectApi.setPhotoFocalPoint(project.id, assetId, focalPoint)
+    } catch (error) {
+      onProjectChange({
+        ...project,
+        submissions: withPhotoFocalPoint(submissions, assetId, previous),
+      })
+      toast.error(error instanceof Error ? error.message : "Photo focus update failed")
+    }
+  }
+
+  const photoFocus: PhotoFocusControls = {
+    draft: focusDrafts,
+    selectedAssetId: focusAssetId ?? undefined,
+    onSelect: setFocusAssetId,
+    onChange: (assetId, focalPoint) =>
+      setFocusDrafts((drafts) => ({ ...drafts, [assetId]: focalPoint })),
+    onCommit: (assetId, focalPoint) => {
+      setFocusDrafts(({ [assetId]: _dropped, ...rest }) => rest)
+      if (sameFocalPoint(photoFocalPoint(submissions, assetId), focalPoint)) return
+      void storeFocalPoint(assetId, focalPoint)
+    },
+  }
+
+  const focusPhoto = focusAssetId ? findPhoto(submissions, focusAssetId) : undefined
 
   const reorder = (pageId: string, targetId: string) => {
     if (!book || pageId === targetId) return
@@ -669,6 +720,7 @@ export function BookReview({
                   setSelectedId(pageId)
                   setSelectedProblemId(null)
                   setSelectedElementId(null)
+                  setFocusAssetId(null)
                   changeView("detail", "page_tile")
                 }}
               />
@@ -702,6 +754,7 @@ export function BookReview({
                               setSelectedId(page.id)
                               setSelectedProblemId(null)
                               setSelectedElementId(null)
+                              setFocusAssetId(null)
                             }}
                             className="min-w-0 flex-1 rounded px-1.5 py-1 text-left text-sm focus-visible:ring-3 focus-visible:ring-ring/50"
                           >
@@ -749,7 +802,41 @@ export function BookReview({
                     project={project}
                     className="w-full"
                     selectedElementId={selectedElementId ?? undefined}
+                    photoFocus={selected.kind === "submission" ? photoFocus : undefined}
                   />
+                )}
+                {selected?.kind === "submission" && (
+                  <Card className="mt-4 bg-card/90">
+                    <CardHeader>
+                      <CardTitle>Photo focus</CardTitle>
+                      <CardDescription>
+                        Drag a photo on the page to choose which part of it the frame keeps. Arrow
+                        keys nudge it, and Shift moves further. This does not make the book stale.
+                      </CardDescription>
+                      {focusPhoto && (
+                        <CardAction>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!focusPhoto.focalPoint}
+                            onClick={() => void storeFocalPoint(focusPhoto.assetId, null)}
+                          >
+                            <Undo2Icon data-icon="inline-start" />
+                            Reset
+                          </Button>
+                        </CardAction>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        {focusPhoto
+                          ? focusPhoto.focalPoint
+                            ? `${focusPhoto.name} is adjusted. Reset returns it to the layout's own focus.`
+                            : `${focusPhoto.name} still follows the layout's own focus.`
+                          : "Select a photo on the page to adjust it."}
+                      </p>
+                    </CardContent>
+                  </Card>
                 )}
                 {selected?.kind === "submission" && (
                   <Card className="mt-4 bg-card/90">
@@ -786,6 +873,7 @@ export function BookReview({
                           replaceBook(updated, true)
                           setSelectedProblemId(null)
                           setSelectedElementId(null)
+                          setFocusAssetId(null)
                         }}
                       >
                         <SelectTrigger className="w-full" aria-label="Page layout">

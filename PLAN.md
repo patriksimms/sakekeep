@@ -94,6 +94,12 @@ standalone page, or changing generation settings marks the book stale. Existing
 generated output may remain visible as an explicitly stale preview, but it
 cannot be exported as final output.
 
+Adjusting the focus of a single photo is the one deliberate exception and leaves
+the book current. A focus decides only which part of a photo its frame keeps, so
+it can invalidate no page problem: preflight measures resolution, text fit, and
+placement, none of which move with it. The exporter reads submissions directly,
+so the adjusted crop reaches the PDF without a rebuild.
+
 A published or closed project can be duplicated into a new editable draft. The
 copy receives no submissions or share token. The original project, share link,
 and responses remain unchanged.
@@ -180,8 +186,11 @@ policy:
 - Truncate visibly
 - Flag the page for manual attention
 
-Image frames support focal-point cropping. Gallery frames define deterministic
-slots; excess images are reported as a page problem and missing images leave
+Image frames support focal-point cropping. A layout's focal point is the default
+for every photo placed in that frame; during book review the organizer can give
+an individual photo its own focus, which then overrides the layout for that photo
+alone. Photos nobody adjusted keep following their layout. Gallery frames define
+deterministic slots; excess images are reported as a page problem and missing images leave
 empty slots. A layout is compatible with a submission through the
 question-bound elements it contains; no separate compatibility declaration is
 needed. Missing optional text or images leave an accepted empty gap and do not
@@ -379,7 +388,8 @@ duplication and ordering, and tablet usability.
 ### 7. Book generation and review
 
 Generate submission pages with cycle, seeded-random, and manual assignments;
-support complete regeneration, preserved overrides, page reordering,
+support complete regeneration, preserved overrides, per-photo focus, page
+reordering,
 standalone pages, stale-state handling, and navigable problem reporting.
 
 ### 8. Print renderer and PDF export
