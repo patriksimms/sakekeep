@@ -147,6 +147,52 @@ describe("vertical alignment while text is being edited", () => {
 
     expect(long).toBeLessThan(short)
   })
+
+  it("sizes and offsets edited text from one measurement when shrink is in play", () => {
+    const schema = addElement(emptyLayoutSchema(), "bound-text")
+    const element = schema.elements[0]!
+    if (element.type !== "bound-text") throw new Error("Expected bound text")
+    element.showLabel = false
+    element.geometry = { ...element.geometry, width: 45, height: 30 }
+    element.text = {
+      ...element.text,
+      fontSize: 20,
+      minFontSize: 6,
+      overflow: "shrink",
+      verticalAlignment: "middle",
+    }
+    const questions = [
+      {
+        id: element.questionId,
+        prompt: "Prompt",
+        required: true,
+        type: "multiline" as const,
+      },
+    ]
+    const label = "A rather long label that has to wrap more than once on its own"
+
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements
+        schema={schema}
+        content={{ questions }}
+        editingElementId={element.id}
+        editingText={label}
+      />
+    )
+
+    // The size and the offset must come from the same layout, so the rendered font size is the one
+    // the combined label and answer actually shrank to.
+    const combined = layoutText(
+      [{ text: label, fontWeight: "bold" as const }, ...textRunsForElement(element, questions[0])],
+      element.geometry.width,
+      element.geometry.height,
+      element.text
+    )
+    expect(combined.effectiveFontSize).toBeLessThan(element.text.fontSize)
+    expect(markup).toContain(
+      `font-size:${(combined.effectiveFontSize * (25.4 / 72) * 100) / pageSpecification().mediaWidthMm}cqw`
+    )
+  })
 })
 
 describe("selected element rendering", () => {

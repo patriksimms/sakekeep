@@ -181,23 +181,30 @@ function ElementContent({
       element.type === "bound-text" && editingElementId === element.id
         ? (editingText ?? boundTextLabel({ ...element, showLabel: true }, question))
         : ""
-    // While a label is being edited the schema hides it, so the plain layout above measures only
-    // the answer. Re-measure with the label back in, or the block would sit too low in its box.
-    const offsetYMm = editedLabel
+    // While a label is being edited the schema hides it, so the layout above measures only the
+    // answer. Re-measure with the label back in and take both the size and the offset from that one
+    // result: under `overflow: "shrink"` the combined block can need a smaller font, and reading the
+    // two numbers from different measurements would position the text by lines it is not drawn at.
+    const editingLayout = editedLabel
       ? layoutText(
           [{ text: editedLabel, fontWeight: "bold" as const }, ...runs],
           element.geometry.width,
           element.geometry.height,
           element.text
-        ).offsetYMm
-      : layout.offsetYMm
+        )
+      : layout
     return (
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
         data-text-overflow={!layout.fits || undefined}
         style={{
-          ...textElementStyle(element, layout.effectiveFontSize, specification, offsetYMm),
+          ...textElementStyle(
+            element,
+            editingLayout.effectiveFontSize,
+            specification,
+            editingLayout.offsetYMm
+          ),
           outline: !layout.fits ? "1px solid var(--destructive)" : undefined,
           background: !layout.fits
             ? "color-mix(in srgb, var(--destructive) 8%, transparent)"
