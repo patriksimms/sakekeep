@@ -129,6 +129,9 @@ export const assets = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     width: integer("width").notNull(),
     height: integer("height").notNull(),
+    // Organizer-chosen crop centre, null until someone adjusts this photo. Kept here rather than
+    // in the submission answers so the contributor's submitted record stays byte-for-byte as sent.
+    focalPoint: jsonb("focal_point").$type<{ x: number; y: number }>(),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "date",

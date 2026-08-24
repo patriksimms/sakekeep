@@ -25,6 +25,7 @@ import { effectivePpi } from "../domain/generation"
 import { FONT_CUT_FILES, fontCut, type FontCut } from "../domain/fonts.ts"
 import { gallerySlots, PAGE_SPEC } from "../domain/layout"
 import { pageSpecification, type PageSpecification } from "../domain/page-format.ts"
+import { effectiveFocalPoint } from "../domain/photo-focus.ts"
 import {
   assignPhotosToFrames,
   framePhotos,
@@ -317,7 +318,7 @@ async function drawElement(input: {
       embeddedImage,
       geometry,
       input.specification,
-      element.focalPoint ?? image.focalPoint
+      effectiveFocalPoint(element, image)
     )
     return
   }
@@ -352,7 +353,7 @@ async function drawElement(input: {
           height: slot.height,
         },
         input.specification,
-        element.focalPoint ?? image.focalPoint
+        effectiveFocalPoint(element, image)
       )
     })
   )

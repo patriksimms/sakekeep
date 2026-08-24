@@ -82,6 +82,15 @@ export const projectApi = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  setPhotoFocalPoint: (
+    projectId: string,
+    assetId: string,
+    focalPoint: { x: number; y: number } | null
+  ) =>
+    api<void>(`/api/projects/${projectId}/assets/${assetId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ focalPoint }),
+    }),
   export: (projectId: string, marks: boolean) =>
     api<ExportArtifact>(`/api/projects/${projectId}/export`, {
       method: "POST",

@@ -1,6 +1,6 @@
 {
-  "id": "fd63aa4b-3c15-4902-b9cf-f61fab0b7f09",
-  "prevId": "89ee267d-f8cf-4a34-8166-73afccc06073",
+  "id": "c84c051e-3d45-4300-b117-2e389eccc0ef",
+  "prevId": "25e70319-17a6-4c64-9e25-1635a72c1cab",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -111,6 +111,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "focal_point": {
+          "name": "focal_point",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

@@ -15,11 +15,13 @@ import {
   getProject,
   listProjects,
   publishProject,
+  setAssetFocalPoint,
   setProjectPageFormat,
   unarchiveProject,
   updateProject,
   updateSubmissionTextAnswers,
 } from "./repository.ts"
+import { photoFocalPoint } from "../domain/photo-focus.ts"
 import { FORM_SCHEMA_VERSION, type FormSchema } from "../domain/types.ts"
 import { shareTokenForProject } from "./share-token.ts"
 import { completeForm } from "../test/fixtures.ts"
@@ -358,6 +360,84 @@ describe("repository state machine", () => {
         }),
       ],
     })
+  })
+})
+
+describe("photo crop centres", () => {
+  async function projectWithPhoto() {
+    const project = await createProject({ title: "Crop centres" })
+    createdProjectIds.add(project.id)
+    await updateProject({
+      projectId: project.id,
+      formSchema: completeForm,
+      expectedRevision: 0,
+    })
+    await publishProject(project.id)
+    const assetId = crypto.randomUUID()
+    await createSubmissionRecord({
+      projectId: project.id,
+      idempotencyKey: crypto.randomUUID(),
+      answers: { name: "Nora", memory: "A memory", role: ["friend"], traits: ["kind"] },
+      pendingAssets: [
+        {
+          id: assetId,
+          questionId: "photos",
+          objectKey: `projects/${project.id}/master.jpg`,
+          previewObjectKey: `projects/${project.id}/preview.jpg`,
+          masterMimeType: "image/jpeg",
+          sourceMimeType: "image/jpeg",
+          sourceName: "portrait.jpg",
+          sizeBytes: 2_048,
+          width: 1_200,
+          height: 1_600,
+        },
+      ],
+    })
+    return { projectId: project.id, assetId }
+  }
+
+  function storedFocalPoint(project: Awaited<ReturnType<typeof getProject>>, assetId: string) {
+    return photoFocalPoint(project.submissions ?? [], assetId)
+  }
+
+  it("adjusts one photo without making the generated book stale", async () => {
+    const { projectId, assetId } = await projectWithPhoto()
+    await closeProject(projectId)
+    await createLayout(projectId)
+    await generateProjectBook(projectId, {
+      mode: "cycle",
+      seed: "crop",
+      manualAssignments: {},
+      resolutionOverrides: [],
+    })
+
+    // An untouched photo reports no crop centre at all, so the layout's own focal point decides.
+    expect(storedFocalPoint(await getProject(projectId, true), assetId)).toBeUndefined()
+
+    await setAssetFocalPoint({ projectId, assetId, focalPoint: { x: 0.5, y: 0.15 } })
+
+    const adjusted = await getProject(projectId, true)
+    expect(storedFocalPoint(adjusted, assetId)).toEqual({ x: 0.5, y: 0.15 })
+    expect(adjusted.bookStatus).toBe("current")
+
+    await setAssetFocalPoint({ projectId, assetId, focalPoint: null })
+
+    const reset = await getProject(projectId, true)
+    expect(storedFocalPoint(reset, assetId)).toBeUndefined()
+    expect(reset.bookStatus).toBe("current")
+  })
+
+  it("refuses photos outside the project and edits to an archived project", async () => {
+    const { projectId, assetId } = await projectWithPhoto()
+
+    await expect(
+      setAssetFocalPoint({ projectId, assetId: crypto.randomUUID(), focalPoint: { x: 0, y: 0 } })
+    ).rejects.toMatchObject({ status: 404 })
+
+    await archiveProject(projectId)
+    await expect(
+      setAssetFocalPoint({ projectId, assetId, focalPoint: { x: 0, y: 0 } })
+    ).rejects.toMatchObject({ status: 409 })
   })
 })
 

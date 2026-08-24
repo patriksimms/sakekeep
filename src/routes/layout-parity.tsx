@@ -143,7 +143,6 @@ const submission: SubmissionSummary = {
         height: 300,
         sizeBytes: 1,
         previewUrl: "/layout-parity-landscape.svg",
-        focalPoint: { x: 0.5, y: 0.5 },
       },
       {
         assetId: "parity-portrait",
@@ -153,7 +152,6 @@ const submission: SubmissionSummary = {
         height: 600,
         sizeBytes: 1,
         previewUrl: "/layout-parity-portrait.svg",
-        focalPoint: { x: 0.5, y: 0.5 },
       },
     ],
   },

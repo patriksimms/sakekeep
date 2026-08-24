@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, max, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm"
 
 import {
   emptyFormSchema,
@@ -10,6 +10,7 @@ import { generateBook } from "../domain/generation"
 import { type BackgroundPresetId, backgroundSchema } from "../domain/layout-backgrounds"
 import { emptyLayoutSchema, layoutSchemaValidator, resizeLayoutSchema } from "../domain/layout"
 import { pageSpecification } from "../domain/page-format.ts"
+import { answerImages } from "../domain/photo-assignment.ts"
 import {
   type BookPage,
   type FormSchema,
@@ -73,6 +74,34 @@ function submissionSummary(
   }
 }
 
+/**
+ * Projects the organizer's stored crop centres onto the image answers a submission was created
+ * with. The value is always taken from the asset row, so an image the organizer never adjusted
+ * reports no focal point at all and the layout's own focal point keeps deciding its crop.
+ *
+ * Every rendering path — preview and PDF export alike — reads submissions through `getProject`,
+ * so overlaying here is enough to keep both in agreement.
+ */
+function withAssetFocalPoints(
+  submission: SubmissionSummary,
+  focalPoints: Map<string, { x: number; y: number }>
+): SubmissionSummary {
+  let changed = false
+  const answers: SubmissionAnswers = {}
+  for (const [questionId, answer] of Object.entries(submission.answers)) {
+    if (answerImages(answer).length === 0) {
+      answers[questionId] = answer
+      continue
+    }
+    changed = true
+    answers[questionId] = (answer as ImageAnswer[]).map((image) => {
+      const focalPoint = focalPoints.get(image.assetId)
+      return focalPoint ? { ...image, focalPoint } : { ...image, focalPoint: undefined }
+    })
+  }
+  return changed ? { ...submission, answers } : submission
+}
+
 function shareUrl(projectId: string, state: string): string | null {
   if (state === "draft") return null
   return `${env().APP_ORIGIN}/s/${shareTokenForProject(projectId)}`
@@ -119,30 +148,40 @@ export async function getProject(projectId: string, includeSubmissions = false):
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
   if (!project) throw new HttpError(404, "Project not found.")
 
-  const [layoutRows, bookRows, submissionRows, submissionEditRows, countRows] = await Promise.all([
-    db
-      .select()
-      .from(layouts)
-      .where(eq(layouts.projectId, projectId))
-      .orderBy(asc(layouts.position)),
-    db.select().from(books).where(eq(books.projectId, projectId)).limit(1),
-    includeSubmissions
-      ? db
-          .select()
-          .from(submissions)
-          .where(eq(submissions.projectId, projectId))
-          .orderBy(asc(submissions.sequence))
-      : Promise.resolve([]),
-    includeSubmissions
-      ? db
-          .select()
-          .from(submissionEdits)
-          .innerJoin(submissions, eq(submissionEdits.submissionId, submissions.id))
-          .where(eq(submissions.projectId, projectId))
-          .orderBy(asc(submissionEdits.editedAt))
-      : Promise.resolve([]),
-    db.select({ value: count() }).from(submissions).where(eq(submissions.projectId, projectId)),
-  ])
+  const [layoutRows, bookRows, submissionRows, submissionEditRows, focalPointRows, countRows] =
+    await Promise.all([
+      db
+        .select()
+        .from(layouts)
+        .where(eq(layouts.projectId, projectId))
+        .orderBy(asc(layouts.position)),
+      db.select().from(books).where(eq(books.projectId, projectId)).limit(1),
+      includeSubmissions
+        ? db
+            .select()
+            .from(submissions)
+            .where(eq(submissions.projectId, projectId))
+            .orderBy(asc(submissions.sequence))
+        : Promise.resolve([]),
+      includeSubmissions
+        ? db
+            .select()
+            .from(submissionEdits)
+            .innerJoin(submissions, eq(submissionEdits.submissionId, submissions.id))
+            .where(eq(submissions.projectId, projectId))
+            .orderBy(asc(submissionEdits.editedAt))
+        : Promise.resolve([]),
+      includeSubmissions
+        ? db
+            .select({ id: assets.id, focalPoint: assets.focalPoint })
+            .from(assets)
+            .where(and(eq(assets.projectId, projectId), isNotNull(assets.focalPoint)))
+        : Promise.resolve([]),
+      db.select({ value: count() }).from(submissions).where(eq(submissions.projectId, projectId)),
+    ])
+  const focalPoints = new Map(
+    focalPointRows.flatMap((row) => (row.focalPoint ? [[row.id, row.focalPoint] as const] : []))
+  )
 
   const editsBySubmission = new Map<string, SubmissionEdit[]>()
   for (const { submission_edits: edit } of submissionEditRows) {
@@ -172,7 +211,10 @@ export async function getProject(projectId: string, includeSubmissions = false):
     book: bookRows[0]?.generatedBook ?? null,
     submissions: includeSubmissions
       ? submissionRows.map((submission) =>
-          submissionSummary(submission, editsBySubmission.get(submission.id))
+          withAssetFocalPoints(
+            submissionSummary(submission, editsBySubmission.get(submission.id)),
+            focalPoints
+          )
         )
       : undefined,
     archivedAt: project.archivedAt ? iso(project.archivedAt) : null,
@@ -1027,7 +1069,6 @@ export async function createSubmissionRecord(input: {
               sizeBytes: asset.sizeBytes,
               previewUrl: `/api/assets/${asset.id}?variant=preview`,
               masterUrl: `/api/assets/${asset.id}?variant=master`,
-              focalPoint: { x: 0.5, y: 0.5 },
             }))
           return [question.id, values]
         })
@@ -1073,6 +1114,45 @@ export async function getAsset(assetId: string): Promise<typeof assets.$inferSel
   const [asset] = await db.select().from(assets).where(eq(assets.id, assetId)).limit(1)
   if (!asset) throw new HttpError(404, "Asset not found.")
   return asset
+}
+
+/**
+ * Moves the crop centre of one contributor photo, or clears it back to the layout's own focal
+ * point when `focalPoint` is null.
+ *
+ * Deliberately leaves `bookStatus` alone. A crop centre changes no page problem — preflight only
+ * measures resolution, text fit, and placement — and the PDF renderer reads submissions live, so
+ * the adjusted crop reaches the export without a rebuild. Marking the book stale here would force
+ * a full regeneration for a change that cannot invalidate a single generated page.
+ */
+export async function setAssetFocalPoint(input: {
+  projectId: string
+  assetId: string
+  focalPoint: { x: number; y: number } | null
+}): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Locking the project the way every other mutation does keeps a concurrent archive from
+    // committing between the check and the write.
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
+    const updated = await tx
+      .update(assets)
+      .set({ focalPoint: input.focalPoint })
+      .where(
+        and(
+          eq(assets.id, input.assetId),
+          eq(assets.projectId, input.projectId),
+          eq(assets.kind, "submission-image")
+        )
+      )
+      .returning({ id: assets.id })
+    if (updated.length === 0) throw new HttpError(404, "Asset not found.")
+  })
 }
 
 export async function createDecorativeAssetRecord(input: {

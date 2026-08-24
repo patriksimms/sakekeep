@@ -34,6 +34,7 @@ import { Route as ApiProjectsProjectIdExportRouteImport } from './routes/api.pro
 import { Route as ApiProjectsProjectIdLayoutsRouteImport } from './routes/api.projects.$projectId.layouts'
 import { Route as ApiProjectsProjectIdPublishRouteImport } from './routes/api.projects.$projectId.publish'
 import { Route as ApiProjectsProjectIdUnarchiveRouteImport } from './routes/api.projects.$projectId.unarchive'
+import { Route as ApiProjectsProjectIdAssetsAssetIdRouteImport } from './routes/api.projects.$projectId.assets.$assetId'
 import { Route as ApiProjectsProjectIdLayoutsLayoutIdRouteImport } from './routes/api.projects.$projectId.layouts.$layoutId'
 import { Route as ApiProjectsProjectIdSubmissionsSubmissionIdRouteImport } from './routes/api.projects.$projectId.submissions.$submissionId'
 
@@ -171,6 +172,12 @@ const ApiProjectsProjectIdUnarchiveRoute =
     path: '/unarchive',
     getParentRoute: () => ApiProjectsProjectIdRoute,
   } as any)
+const ApiProjectsProjectIdAssetsAssetIdRoute =
+  ApiProjectsProjectIdAssetsAssetIdRouteImport.update({
+    id: '/$assetId',
+    path: '/$assetId',
+    getParentRoute: () => ApiProjectsProjectIdAssetsRoute,
+  } as any)
 const ApiProjectsProjectIdLayoutsLayoutIdRoute =
   ApiProjectsProjectIdLayoutsLayoutIdRouteImport.update({
     id: '/$layoutId',
@@ -202,7 +209,7 @@ export interface FileRoutesByFullPath {
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
   '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
-  '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRoute
+  '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRouteWithChildren
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
   '/api/projects/$projectId/duplicate': typeof ApiProjectsProjectIdDuplicateRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
+  '/api/projects/$projectId/assets/$assetId': typeof ApiProjectsProjectIdAssetsAssetIdRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
   '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
@@ -231,7 +239,7 @@ export interface FileRoutesByTo {
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
   '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
-  '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRoute
+  '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRouteWithChildren
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
   '/api/projects/$projectId/duplicate': typeof ApiProjectsProjectIdDuplicateRoute
@@ -239,6 +247,7 @@ export interface FileRoutesByTo {
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
+  '/api/projects/$projectId/assets/$assetId': typeof ApiProjectsProjectIdAssetsAssetIdRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
   '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
@@ -261,7 +270,7 @@ export interface FileRoutesById {
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
   '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
-  '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRoute
+  '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRouteWithChildren
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
   '/api/projects/$projectId/duplicate': typeof ApiProjectsProjectIdDuplicateRoute
@@ -269,6 +278,7 @@ export interface FileRoutesById {
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   '/api/projects/$projectId/publish': typeof ApiProjectsProjectIdPublishRoute
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
+  '/api/projects/$projectId/assets/$assetId': typeof ApiProjectsProjectIdAssetsAssetIdRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
   '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/layouts'
     | '/api/projects/$projectId/publish'
     | '/api/projects/$projectId/unarchive'
+    | '/api/projects/$projectId/assets/$assetId'
     | '/api/projects/$projectId/layouts/$layoutId'
     | '/api/projects/$projectId/submissions/$submissionId'
   fileRoutesByTo: FileRoutesByTo
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/layouts'
     | '/api/projects/$projectId/publish'
     | '/api/projects/$projectId/unarchive'
+    | '/api/projects/$projectId/assets/$assetId'
     | '/api/projects/$projectId/layouts/$layoutId'
     | '/api/projects/$projectId/submissions/$submissionId'
   id:
@@ -358,6 +370,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/layouts'
     | '/api/projects/$projectId/publish'
     | '/api/projects/$projectId/unarchive'
+    | '/api/projects/$projectId/assets/$assetId'
     | '/api/projects/$projectId/layouts/$layoutId'
     | '/api/projects/$projectId/submissions/$submissionId'
   fileRoutesById: FileRoutesById
@@ -557,6 +570,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsProjectIdUnarchiveRouteImport
       parentRoute: typeof ApiProjectsProjectIdRoute
     }
+    '/api/projects/$projectId/assets/$assetId': {
+      id: '/api/projects/$projectId/assets/$assetId'
+      path: '/$assetId'
+      fullPath: '/api/projects/$projectId/assets/$assetId'
+      preLoaderRoute: typeof ApiProjectsProjectIdAssetsAssetIdRouteImport
+      parentRoute: typeof ApiProjectsProjectIdAssetsRoute
+    }
     '/api/projects/$projectId/layouts/$layoutId': {
       id: '/api/projects/$projectId/layouts/$layoutId'
       path: '/$layoutId'
@@ -573,6 +593,21 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface ApiProjectsProjectIdAssetsRouteChildren {
+  ApiProjectsProjectIdAssetsAssetIdRoute: typeof ApiProjectsProjectIdAssetsAssetIdRoute
+}
+
+const ApiProjectsProjectIdAssetsRouteChildren: ApiProjectsProjectIdAssetsRouteChildren =
+  {
+    ApiProjectsProjectIdAssetsAssetIdRoute:
+      ApiProjectsProjectIdAssetsAssetIdRoute,
+  }
+
+const ApiProjectsProjectIdAssetsRouteWithChildren =
+  ApiProjectsProjectIdAssetsRoute._addFileChildren(
+    ApiProjectsProjectIdAssetsRouteChildren,
+  )
 
 interface ApiProjectsProjectIdLayoutsRouteChildren {
   ApiProjectsProjectIdLayoutsLayoutIdRoute: typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
@@ -591,7 +626,7 @@ const ApiProjectsProjectIdLayoutsRouteWithChildren =
 
 interface ApiProjectsProjectIdRouteChildren {
   ApiProjectsProjectIdArchiveRoute: typeof ApiProjectsProjectIdArchiveRoute
-  ApiProjectsProjectIdAssetsRoute: typeof ApiProjectsProjectIdAssetsRoute
+  ApiProjectsProjectIdAssetsRoute: typeof ApiProjectsProjectIdAssetsRouteWithChildren
   ApiProjectsProjectIdBookRoute: typeof ApiProjectsProjectIdBookRoute
   ApiProjectsProjectIdCloseRoute: typeof ApiProjectsProjectIdCloseRoute
   ApiProjectsProjectIdDuplicateRoute: typeof ApiProjectsProjectIdDuplicateRoute
@@ -604,7 +639,7 @@ interface ApiProjectsProjectIdRouteChildren {
 
 const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
   ApiProjectsProjectIdArchiveRoute: ApiProjectsProjectIdArchiveRoute,
-  ApiProjectsProjectIdAssetsRoute: ApiProjectsProjectIdAssetsRoute,
+  ApiProjectsProjectIdAssetsRoute: ApiProjectsProjectIdAssetsRouteWithChildren,
   ApiProjectsProjectIdBookRoute: ApiProjectsProjectIdBookRoute,
   ApiProjectsProjectIdCloseRoute: ApiProjectsProjectIdCloseRoute,
   ApiProjectsProjectIdDuplicateRoute: ApiProjectsProjectIdDuplicateRoute,
