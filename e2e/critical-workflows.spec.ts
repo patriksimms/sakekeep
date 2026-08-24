@@ -347,6 +347,8 @@ test.describe.serial("critical local prototype workflows", () => {
     }
 
     const renderedCanvas = page.locator("canvas.upper-canvas")
+    const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
+    const deleteAction = inspectorCard.getByRole("button", { name: "Delete selected element" })
     const clearSelection = async () => {
       const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
@@ -376,13 +378,18 @@ test.describe.serial("critical local prototype workflows", () => {
       .click()
     await expect(page.getByText("Question binding")).toBeVisible()
     await expect(page.getByText("Font family")).toBeVisible()
+    await expect(deleteAction).toBeVisible()
+    await expect(
+      inspectorCard.getByRole("button", { name: "Align horizontal centre" })
+    ).toBeVisible()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
     await page.getByRole("button", { name: "Rectangle", exact: true }).click()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
     await clearSelection()
     await expect(
-      page.getByText("Select an element to use alignment and layer actions.")
+      page.getByText("Select an element on the canvas or in the layers list.")
     ).toBeVisible()
+    await expect(deleteAction).toBeHidden()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
     expect(
       await page.evaluate(
@@ -403,8 +410,9 @@ test.describe.serial("critical local prototype workflows", () => {
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
     await clearSelection()
     await expect(
-      page.getByText("Select an element to use alignment and layer actions.")
+      page.getByText("Select an element on the canvas or in the layers list.")
     ).toBeVisible()
+    await expect(deleteAction).toBeHidden()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
 
     const currentProject = (await (
@@ -417,7 +425,6 @@ test.describe.serial("critical local prototype workflows", () => {
     ).toEqual(originalGeometry)
 
     const layersCard = page.locator('[data-slot="card"][aria-label="Layers"]')
-    const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
     const layersBounds = await layersCard.boundingBox()
     const inspectorBounds = await inspectorCard.boundingBox()
     expect(layersBounds?.height).toBe(804)
