@@ -1,7 +1,12 @@
 import { Canvas, FabricObject, Rect } from "fabric"
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
-import { LayoutPageElements, textElementStyle } from "#/components/layout-page.tsx"
+import {
+  LayoutPageElements,
+  textElementStyle,
+  textElementVerticalOffsetMm,
+  type LayoutPageContent,
+} from "#/components/layout-page.tsx"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
@@ -134,18 +139,25 @@ function elementName(element: LayoutElement) {
 function InlineTextEditor({
   element,
   content,
+  editedText,
+  pageContent,
+  onEdit,
   onCommit,
   onCancel,
   specification,
 }: {
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
   content: string
+  editedText: string
+  pageContent: LayoutPageContent
+  onEdit: (content: string) => void
   onCommit: (content: string) => void
   onCancel: () => void
   specification: PageSpecification
 }) {
   const editor = useRef<HTMLDivElement>(null)
   const cancelled = useRef(false)
+  const offsetYMm = textElementVerticalOffsetMm(element, pageContent, editedText)
 
   useEffect(() => {
     const node = editor.current
@@ -166,6 +178,7 @@ function InlineTextEditor({
       data-layout-inline-editor="true"
       contentEditable
       suppressContentEditableWarning
+      onInput={(event) => onEdit(event.currentTarget.innerText)}
       onBlur={(event) => {
         if (!cancelled.current) onCommit(event.currentTarget.innerText)
       }}
@@ -177,7 +190,7 @@ function InlineTextEditor({
         onCancel()
       }}
       style={{
-        ...textElementStyle(element, element.text.fontSize, specification),
+        ...textElementStyle(element, element.text.fontSize, specification, offsetYMm),
         zIndex: 2,
         cursor: "text",
         fontWeight: element.type === "bound-text" ? "bold" : element.text.fontWeight,
@@ -284,6 +297,7 @@ export function LayoutCanvas({
   const editMethod = useRef<"double_click" | "keyboard">("keyboard")
   const [displaySchema, setDisplaySchema] = useState(schema)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState("")
   const [isDropTarget, setIsDropTarget] = useState(false)
   schemaRef.current = schema
   onSelectRef.current = onSelect
@@ -360,6 +374,14 @@ export function LayoutCanvas({
       canvas.setActiveObject(object)
       editMethod.current = inputMethod
       setEditingElementId(source.id)
+      setEditingText(
+        source.type === "static-text"
+          ? source.content
+          : boundTextLabel(
+              source,
+              questions.find((candidate) => candidate.id === source.questionId)
+            )
+      )
       if (source.type === "static-text") {
         setDisplaySchema({
           ...schemaRef.current,
@@ -460,6 +482,13 @@ export function LayoutCanvas({
     canvas.requestRenderAll()
   }, [questions, schema, selectedId, specification.mediaWidthMm, width])
 
+  const pageContent: LayoutPageContent = {
+    questions,
+    submission: previewSubmission,
+    decorativeAssetUrl,
+    decorativePlaceholderUrl: "/layout-decorative-placeholder.svg",
+  }
+
   const editingElement = editingElementId
     ? schema.elements.find(
         (candidate): candidate is Extract<LayoutElement, { type: "static-text" | "bound-text" }> =>
@@ -557,16 +586,12 @@ export function LayoutCanvas({
     >
       <LayoutPageElements
         schema={displaySchema}
-        content={{
-          questions,
-          submission: previewSubmission,
-          decorativeAssetUrl,
-          decorativePlaceholderUrl: "/layout-decorative-placeholder.svg",
-        }}
+        content={pageContent}
         testId="editor-layout-elements"
         ariaHidden
         showEditorPlaceholders
         editingElementId={editingElementId ?? undefined}
+        editingText={editingElementId ? editingText : undefined}
       />
       <canvas
         ref={element}
@@ -575,6 +600,9 @@ export function LayoutCanvas({
       {editingElement && (
         <InlineTextEditor
           element={editingElement}
+          editedText={editingText}
+          pageContent={pageContent}
+          onEdit={setEditingText}
           content={
             editingElement.type === "static-text"
               ? editingElement.content

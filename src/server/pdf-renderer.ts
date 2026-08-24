@@ -30,7 +30,12 @@ import {
   framePhotos,
   type PhotoAssignment,
 } from "../domain/photo-assignment.ts"
-import { layoutText, textRunsForElement, type TextLayoutRun } from "../domain/text-layout.ts"
+import {
+  alignmentOffsetMm,
+  layoutText,
+  textRunsForElement,
+  type TextLayoutRun,
+} from "../domain/text-layout.ts"
 import {
   type BookPage,
   type FormSchema,
@@ -164,7 +169,11 @@ function drawTextElement(input: {
   const size = layout.effectiveFontSize
   const width = pt(input.geometry.width)
   const lineHeight = pt(layout.lineHeightMm)
-  const top = pdfY(input.geometry.y, 0, input.specification)
+  // The vertical alignment offset walks down the box's own axis, which is what the rotated HTML
+  // preview does with its padding. Adding it straight to the page-space Y instead would slide
+  // rotated text sideways out of its own box.
+  const alignment = alignmentOffsetMm(layout.offsetYMm, input.geometry.rotation)
+  const top = pdfY(input.geometry.y + alignment.yMm, 0, input.specification)
   layout.renderedLines.forEach((line, index) => {
     const textWidth = pt(line.widthMm)
     const offset =
@@ -174,7 +183,7 @@ function drawTextElement(input: {
           ? width - textWidth
           : 0
     input.page.drawText(line.text, {
-      x: pt(input.specification.bleedMm + input.geometry.x) + offset,
+      x: pt(input.specification.bleedMm + input.geometry.x + alignment.xMm) + offset,
       y: top - lineHeight * (index + 1),
       size,
       font: embeddedFont(

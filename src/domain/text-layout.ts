@@ -24,6 +24,8 @@ export interface TextLayoutLine {
 export interface TextLayoutResult {
   renderedLines: TextLayoutLine[]
   effectiveFontSize: number
+  /** Distance from the top of the box to the first rendered line, per the vertical alignment. */
+  offsetYMm: number
   fits: boolean
   truncated: boolean
   requiredHeightMm: number
@@ -103,6 +105,22 @@ function wrapRuns(
   return lines
 }
 
+function verticalOffsetMm(
+  settings: TextSettings,
+  boxHeightMm: number,
+  renderedHeightMm: number
+): number {
+  // minimumTextBoxHeight measures against an unbounded box; there is no slack to distribute.
+  if (!Number.isFinite(boxHeightMm)) return 0
+  const slack = boxHeightMm - renderedHeightMm
+  // Text taller than its box stays top-anchored: pushing it up or down would only move an
+  // already-flagged overflow further off the page.
+  if (slack <= 0) return 0
+  if (settings.verticalAlignment === "middle") return slack / 2
+  if (settings.verticalAlignment === "bottom") return slack
+  return 0
+}
+
 function layoutAtSize(
   runs: TextLayoutRun[],
   settings: TextSettings,
@@ -172,6 +190,7 @@ export function layoutText(
     return {
       renderedLines: layout.lines,
       effectiveFontSize: size,
+      offsetYMm: verticalOffsetMm(settings, heightMm, layout.lines.length * layout.lineHeightMm),
       fits: true,
       truncated: false,
       requiredHeightMm: layout.requiredHeightMm,
@@ -182,9 +201,11 @@ export function layoutText(
 
   if (settings.overflow === "truncate") {
     const maxLines = Math.floor(heightMm / layout.lineHeightMm)
+    const truncated = truncateLines(layout.lines, settings, size, widthMm, maxLines)
     return {
-      renderedLines: truncateLines(layout.lines, settings, size, widthMm, maxLines),
+      renderedLines: truncated,
       effectiveFontSize: size,
+      offsetYMm: verticalOffsetMm(settings, heightMm, truncated.length * layout.lineHeightMm),
       fits: true,
       truncated: true,
       requiredHeightMm: layout.requiredHeightMm,
@@ -196,11 +217,28 @@ export function layoutText(
   return {
     renderedLines: layout.lines,
     effectiveFontSize: size,
+    offsetYMm: verticalOffsetMm(settings, heightMm, layout.lines.length * layout.lineHeightMm),
     fits: false,
     truncated: false,
     requiredHeightMm: layout.requiredHeightMm,
     lineHeightMm: layout.lineHeightMm,
     ...lineCounts,
+  }
+}
+
+/**
+ * Splits a vertical alignment offset into the page-space components that walk down the box's own
+ * rotated axis. The HTML preview gets this for free because its padding lives inside the rotated
+ * element; a renderer that positions in page space has to rotate the offset itself.
+ */
+export function alignmentOffsetMm(
+  offsetYMm: number,
+  rotationDegrees: number
+): { xMm: number; yMm: number } {
+  const radians = (rotationDegrees * Math.PI) / 180
+  return {
+    xMm: -offsetYMm * Math.sin(radians),
+    yMm: offsetYMm * Math.cos(radians),
   }
 }
 

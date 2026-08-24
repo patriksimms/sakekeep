@@ -56,10 +56,14 @@ function elementStyle(
 export function textElementStyle(
   element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
   effectiveFontSize = element.text.fontSize,
-  specification = pageSpecification()
+  specification = pageSpecification(),
+  offsetYMm = 0
 ): React.CSSProperties {
   return {
     ...elementStyle(element, specification),
+    // Padding rather than a transform: the box keeps its geometry, so selection outlines,
+    // overflow flagging, and the Fabric hit target stay put while only the text moves down.
+    paddingTop: offsetYMm > 0 ? millimetresToContainerWidth(offsetYMm, specification) : undefined,
     color: element.text.color,
     fontFamily: cssFontStack(element.text.fontFamily),
     fontKerning: "none",
@@ -82,12 +86,54 @@ function imagePosition(
   return `${focalPoint.x * 100}% ${focalPoint.y * 100}%`
 }
 
+function textElementRuns(
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
+  content: LayoutPageContent,
+  question: FormQuestion | undefined
+) {
+  const answer =
+    element.type === "bound-text" && content.submission
+      ? (content.submission.answers[element.questionId] ?? "")
+      : undefined
+  const placeholder =
+    element.type === "bound-text" && !content.submission
+      ? boundQuestionPlaceholder(content.questions ?? [], element.questionId)
+      : ""
+  return textRunsForElement(element, question, answer, placeholder)
+}
+
+/**
+ * Where the text block starts inside its box. The inline editor overlays the rendered text, so it
+ * has to read the same number the rendered element does or the caret drifts away from the glyphs.
+ */
+export function textElementVerticalOffsetMm(
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>,
+  content: LayoutPageContent,
+  editedText?: string
+): number {
+  // While the inline editor is open the schema still holds the committed text, so measuring the
+  // element as-is would leave middle- and bottom-aligned text parked at a stale height until blur.
+  const target =
+    editedText === undefined
+      ? element
+      : element.type === "static-text"
+        ? { ...element, content: editedText }
+        : { ...element, showLabel: editedText.trim().length > 0, label: editedText }
+  const question =
+    target.type === "bound-text"
+      ? content.questions?.find((candidate) => candidate.id === target.questionId)
+      : undefined
+  const runs = textElementRuns(target, content, question)
+  return layoutText(runs, target.geometry.width, target.geometry.height, target.text).offsetYMm
+}
+
 function ElementContent({
   element,
   content,
   photoAssignment,
   showEditorPlaceholders,
   editingElementId,
+  editingText,
   selectedElementId,
   specification,
 }: {
@@ -96,6 +142,7 @@ function ElementContent({
   photoAssignment: PhotoAssignment
   showEditorPlaceholders: boolean
   editingElementId?: string
+  editingText?: string
   selectedElementId?: string
   specification: PageSpecification
 }) {
@@ -117,15 +164,7 @@ function ElementContent({
       : undefined
 
   if (element.type === "static-text" || element.type === "bound-text") {
-    const answer =
-      element.type === "bound-text" && content.submission
-        ? (content.submission.answers[element.questionId] ?? "")
-        : undefined
-    const placeholder =
-      element.type === "bound-text" && !content.submission
-        ? boundQuestionPlaceholder(content.questions ?? [], element.questionId)
-        : ""
-    const runs = textRunsForElement(element, question, answer, placeholder)
+    const runs = textElementRuns(element, content, question)
     const layout = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
     const hasLabel = element.type === "bound-text" && element.showLabel
     const labelLineCount = hasLabel
@@ -136,19 +175,41 @@ function ElementContent({
           overflow: "flag",
         }).renderedLines.length
       : 0
-    const editedLabel =
+    // `editingText` carries the uncommitted inline edit, so the reserved label space and the
+    // vertical offset track what is on screen rather than what was last saved.
+    const liveLabel =
       element.type === "bound-text" && editingElementId === element.id
-        ? boundTextLabel({ ...element, showLabel: true }, question)
+        ? (editingText ?? boundTextLabel({ ...element, showLabel: true }, question))
         : ""
+    // Committing a blank label drops it entirely, so a label of nothing but spaces has to read as
+    // absent here too. Otherwise this reserves a line that the editor's own offset does not.
+    const editedLabel = liveLabel.trim().length > 0 ? liveLabel : ""
+    // While a label is being edited the schema hides it, so the layout above measures only the
+    // answer. Re-measure with the label back in and take both the size and the offset from that one
+    // result: under `overflow: "shrink"` the combined block can need a smaller font, and reading the
+    // two numbers from different measurements would position the text by lines it is not drawn at.
+    const editingLayout = editedLabel
+      ? layoutText(
+          [{ text: editedLabel, fontWeight: "bold" as const }, ...runs],
+          element.geometry.width,
+          element.geometry.height,
+          element.text
+        )
+      : layout
     return (
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
-        data-text-overflow={!layout.fits || undefined}
+        data-text-overflow={!editingLayout.fits || undefined}
         style={{
-          ...textElementStyle(element, layout.effectiveFontSize, specification),
-          outline: !layout.fits ? "1px solid var(--destructive)" : undefined,
-          background: !layout.fits
+          ...textElementStyle(
+            element,
+            editingLayout.effectiveFontSize,
+            specification,
+            editingLayout.offsetYMm
+          ),
+          outline: !editingLayout.fits ? "1px solid var(--destructive)" : undefined,
+          background: !editingLayout.fits
             ? "color-mix(in srgb, var(--destructive) 8%, transparent)"
             : undefined,
           ...selectedStyle,
@@ -334,6 +395,7 @@ export function LayoutPageElements({
   ariaHidden = false,
   showEditorPlaceholders = false,
   editingElementId,
+  editingText,
   selectedElementId,
 }: {
   schema: LayoutSchema
@@ -342,6 +404,7 @@ export function LayoutPageElements({
   ariaHidden?: boolean
   showEditorPlaceholders?: boolean
   editingElementId?: string
+  editingText?: string
   selectedElementId?: string
 }) {
   const specification = pageSpecificationForLayout(schema)
@@ -363,6 +426,7 @@ export function LayoutPageElements({
           photoAssignment={photoAssignment}
           showEditorPlaceholders={showEditorPlaceholders}
           editingElementId={editingElementId}
+          editingText={editingText}
           selectedElementId={selectedElementId}
           specification={specification}
         />

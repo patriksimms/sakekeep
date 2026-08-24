@@ -2,9 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import { addElement, emptyLayoutSchema } from "#/domain/layout.ts"
+import { pageSpecification } from "#/domain/page-format.ts"
+import { layoutText, textRunsForElement } from "#/domain/text-layout.ts"
 import { type ImageAnswer, type SubmissionSummary } from "#/domain/types.ts"
 
-import { LayoutPageElements } from "./layout-page.tsx"
+import { LayoutPageElements, textElementVerticalOffsetMm } from "./layout-page.tsx"
 
 describe("empty decorative image rendering", () => {
   it("shows the editor placeholder but omits the element from previews", () => {
@@ -54,6 +56,171 @@ describe("canonical text rendering", () => {
 
     expect(markup).not.toContain("data-text-overflow")
     expect(markup).toContain("…")
+  })
+})
+
+describe("vertical text alignment", () => {
+  const roomyStaticText = (verticalAlignment: "top" | "middle" | "bottom") => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "A short note"
+    element.geometry = { ...element.geometry, width: 80, height: 40 }
+    element.text = { ...element.text, verticalAlignment }
+    return { schema, element }
+  }
+
+  it("leaves top-aligned text without any offset", () => {
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements schema={roomyStaticText("top").schema} />
+    )
+
+    expect(markup).not.toContain("padding-top")
+  })
+
+  it("offsets the text block by the same slack the PDF renderer uses", () => {
+    for (const [verticalAlignment, share] of [
+      ["middle", 0.5],
+      ["bottom", 1],
+    ] as const) {
+      const { schema, element } = roomyStaticText(verticalAlignment)
+      const layout = layoutText(
+        textRunsForElement(element),
+        element.geometry.width,
+        element.geometry.height,
+        element.text
+      )
+      const slack = element.geometry.height - layout.renderedLines.length * layout.lineHeightMm
+      expect(layout.offsetYMm).toBeCloseTo(slack * share, 10)
+
+      const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+      const expected = (layout.offsetYMm / pageSpecification().mediaWidthMm) * 100
+
+      expect(markup).toContain(`padding-top:${expected}cqw`)
+    }
+  })
+
+  it("keeps overflowing text top-anchored so a flagged page is not pushed further off the page", () => {
+    const { schema, element } = roomyStaticText("bottom")
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "A memory with enough words to wrap onto several lines"
+    element.geometry = { ...element.geometry, width: 30, height: 8 }
+
+    const markup = renderToStaticMarkup(<LayoutPageElements schema={schema} />)
+
+    expect(markup).toContain('data-text-overflow="true"')
+    expect(markup).not.toContain("padding-top")
+  })
+})
+
+describe("vertical alignment while text is being edited", () => {
+  it("measures the uncommitted text so the offset does not lag behind the caret", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.content = "Short"
+    element.geometry = { ...element.geometry, width: 40, height: 40 }
+    element.text = { ...element.text, verticalAlignment: "middle" }
+
+    const committed = textElementVerticalOffsetMm(element, {})
+    const whileTyping = textElementVerticalOffsetMm(
+      element,
+      {},
+      "Short, and then enough further words to wrap onto several more lines"
+    )
+
+    // More lines leaves less slack, so centred text has to climb as the caret runs on.
+    expect(whileTyping).toBeLessThan(committed)
+    expect(whileTyping).toBeGreaterThanOrEqual(0)
+    expect(textElementVerticalOffsetMm(element, {}, element.content)).toBeCloseTo(committed, 10)
+  })
+
+  it("reserves the space the edited label will need once it is committed", () => {
+    const schema = addElement(emptyLayoutSchema(), "static-text")
+    const element = schema.elements[0]!
+    if (element.type !== "static-text") throw new Error("Expected static text")
+    element.geometry = { ...element.geometry, width: 40, height: 40 }
+    element.text = { ...element.text, verticalAlignment: "bottom" }
+
+    const long = textElementVerticalOffsetMm(element, {}, "One two three four five six seven eight")
+    const short = textElementVerticalOffsetMm(element, {}, "One")
+
+    expect(long).toBeLessThan(short)
+  })
+
+  it("treats a label of nothing but spaces as absent, the way committing it would", () => {
+    const schema = addElement(emptyLayoutSchema(), "bound-text")
+    const element = schema.elements[0]!
+    if (element.type !== "bound-text") throw new Error("Expected bound text")
+    element.showLabel = false
+    element.geometry = { ...element.geometry, width: 60, height: 40 }
+    element.text = { ...element.text, verticalAlignment: "middle" }
+    const questions = [
+      { id: element.questionId, prompt: "Prompt", required: true, type: "multiline" as const },
+    ]
+
+    const render = (editingText: string) =>
+      renderToStaticMarkup(
+        <LayoutPageElements
+          schema={schema}
+          content={{ questions }}
+          editingElementId={element.id}
+          editingText={editingText}
+        />
+      )
+
+    // The editor derives its own offset from the same rule, so blank and whitespace must agree.
+    expect(textElementVerticalOffsetMm(element, { questions }, "   ")).toBeCloseTo(
+      textElementVerticalOffsetMm(element, { questions }, ""),
+      10
+    )
+    expect(render("   ")).toEqual(render(""))
+  })
+
+  it("sizes and offsets edited text from one measurement when shrink is in play", () => {
+    const schema = addElement(emptyLayoutSchema(), "bound-text")
+    const element = schema.elements[0]!
+    if (element.type !== "bound-text") throw new Error("Expected bound text")
+    element.showLabel = false
+    element.geometry = { ...element.geometry, width: 45, height: 30 }
+    element.text = {
+      ...element.text,
+      fontSize: 20,
+      minFontSize: 6,
+      overflow: "shrink",
+      verticalAlignment: "middle",
+    }
+    const questions = [
+      {
+        id: element.questionId,
+        prompt: "Prompt",
+        required: true,
+        type: "multiline" as const,
+      },
+    ]
+    const label = "A rather long label that has to wrap more than once on its own"
+
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements
+        schema={schema}
+        content={{ questions }}
+        editingElementId={element.id}
+        editingText={label}
+      />
+    )
+
+    // The size and the offset must come from the same layout, so the rendered font size is the one
+    // the combined label and answer actually shrank to.
+    const combined = layoutText(
+      [{ text: label, fontWeight: "bold" as const }, ...textRunsForElement(element, questions[0])],
+      element.geometry.width,
+      element.geometry.height,
+      element.text
+    )
+    expect(combined.effectiveFontSize).toBeLessThan(element.text.fontSize)
+    expect(markup).toContain(
+      `font-size:${(combined.effectiveFontSize * (25.4 / 72) * 100) / pageSpecification().mediaWidthMm}cqw`
+    )
   })
 })
 
