@@ -98,6 +98,11 @@ function reviewProject(focalPoint?: { x: number; y: number }): Project {
   }
 }
 
+/** Lets every already-queued promise callback run, without letting a timer fire. */
+async function flushMicrotasks() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve()
+}
+
 function handle() {
   return screen.getByRole("button", { name: "Move the crop of portrait.jpg" })
 }
@@ -172,6 +177,71 @@ describe("adjusting where a photo is cropped", () => {
 
     await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(1))
     expect(setPhotoFocalPoint).toHaveBeenCalledWith(expect.any(String), "asset-portrait", null)
+  })
+
+  it("keeps a held Shift+Arrow run to a single save when Shift is released first", async () => {
+    render(<BookReview project={reviewProject()} onProjectChange={vi.fn()} view="detail" />)
+
+    fireEvent.keyDown(handle(), { key: "ArrowUp", shiftKey: true })
+    fireEvent.keyUp(handle(), { key: "Shift" })
+    fireEvent.keyDown(handle(), { key: "ArrowUp", shiftKey: false })
+    expect(setPhotoFocalPoint).not.toHaveBeenCalled()
+
+    fireEvent.keyUp(handle(), { key: "ArrowUp" })
+
+    await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(1))
+  })
+
+  it("saves a photo's crops in order, whatever order the requests finish in", async () => {
+    const settled: Array<() => void> = []
+    setPhotoFocalPoint.mockImplementation(
+      () => new Promise<void>((resolve) => settled.push(() => resolve()))
+    )
+    render(<BookReview project={reviewProject()} onProjectChange={vi.fn()} view="detail" />)
+
+    fireEvent.keyDown(handle(), { key: "ArrowUp" })
+    fireEvent.keyUp(handle(), { key: "ArrowUp" })
+    await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(1))
+
+    // A second adjustment while the first is still in flight must wait for it, so the server
+    // cannot end up holding the earlier crop.
+    fireEvent.keyDown(handle(), { key: "ArrowDown" })
+    fireEvent.keyUp(handle(), { key: "ArrowDown" })
+    await flushMicrotasks()
+    expect(setPhotoFocalPoint).toHaveBeenCalledTimes(1)
+
+    settled[0]!()
+    await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(2))
+    const [first, second] = setPhotoFocalPoint.mock.calls
+    expect((first![2] as { y: number }).y).toBeGreaterThan(0.5)
+    expect((second![2] as { y: number }).y).toBeLessThan((first![2] as { y: number }).y)
+  })
+
+  it("does not undo a newer crop when an older save fails", async () => {
+    const settled: Array<(failed: boolean) => void> = []
+    setPhotoFocalPoint.mockImplementation(
+      () =>
+        new Promise<void>((resolve, reject) =>
+          settled.push((failed) => (failed ? reject(new Error("Network down")) : resolve()))
+        )
+    )
+    const onProjectChange = vi.fn()
+    render(<BookReview project={reviewProject()} onProjectChange={onProjectChange} view="detail" />)
+
+    fireEvent.keyDown(handle(), { key: "ArrowUp" })
+    fireEvent.keyUp(handle(), { key: "ArrowUp" })
+    await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(1))
+    fireEvent.keyDown(handle(), { key: "ArrowDown" })
+    fireEvent.keyUp(handle(), { key: "ArrowDown" })
+
+    await flushMicrotasks()
+    const optimisticUpdates = onProjectChange.mock.calls.length
+    settled[0]!(true)
+    await waitFor(() => expect(setPhotoFocalPoint).toHaveBeenCalledTimes(2))
+
+    // The failed write is no longer the latest for this photo, so it reports the failure without
+    // dragging the crop back to where it was two adjustments ago.
+    expect(onProjectChange).toHaveBeenCalledTimes(optimisticUpdates)
   })
 
   it("puts the old crop back when saving fails", async () => {

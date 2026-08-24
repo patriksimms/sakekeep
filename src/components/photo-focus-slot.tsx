@@ -190,7 +190,10 @@ export function PhotoFocusSlot({
         onPointerCancel={endDrag}
         onFocus={() => controls.onSelect(image.assetId)}
         onBlur={commitNudge}
-        onKeyUp={commitNudge}
+        onKeyUp={(event) => {
+          // Only an arrow release ends a run. Letting go of Shift mid-nudge must not save.
+          if (event.key.startsWith("Arrow")) commitNudge()
+        }}
         onKeyDown={(event) => {
           const step = event.shiftKey ? FOCUS_NUDGE_SHIFT_PX : FOCUS_NUDGE_PX
           const moves: Record<string, [number, number]> = {

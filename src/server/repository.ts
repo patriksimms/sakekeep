@@ -1014,25 +1014,29 @@ export async function setAssetFocalPoint(input: {
   assetId: string
   focalPoint: { x: number; y: number } | null
 }): Promise<void> {
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.id, input.projectId))
-    .limit(1)
-  if (!project) throw new HttpError(404, "Project not found.")
-  assertNotArchived(project)
-  const updated = await db
-    .update(assets)
-    .set({ focalPoint: input.focalPoint })
-    .where(
-      and(
-        eq(assets.id, input.assetId),
-        eq(assets.projectId, input.projectId),
-        eq(assets.kind, "submission-image")
+  await db.transaction(async (tx) => {
+    // Locking the project the way every other mutation does keeps a concurrent archive from
+    // committing between the check and the write.
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+      .for("update")
+    if (!project) throw new HttpError(404, "Project not found.")
+    assertNotArchived(project)
+    const updated = await tx
+      .update(assets)
+      .set({ focalPoint: input.focalPoint })
+      .where(
+        and(
+          eq(assets.id, input.assetId),
+          eq(assets.projectId, input.projectId),
+          eq(assets.kind, "submission-image")
+        )
       )
-    )
-    .returning({ id: assets.id })
-  if (updated.length === 0) throw new HttpError(404, "Asset not found.")
+      .returning({ id: assets.id })
+    if (updated.length === 0) throw new HttpError(404, "Asset not found.")
+  })
 }
 
 export async function createDecorativeAssetRecord(input: {

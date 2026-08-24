@@ -17,7 +17,7 @@ import {
   Undo2Icon,
   WandSparklesIcon,
 } from "lucide-react"
-import { useEffect, useState, type DragEvent } from "react"
+import { useEffect, useRef, useState, type DragEvent } from "react"
 import { toast } from "sonner"
 
 import {
@@ -409,6 +409,13 @@ export function BookReview({
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [focusDrafts, setFocusDrafts] = useState<Record<string, FocalPoint>>({})
   const [focusAssetId, setFocusAssetId] = useState<string | null>(null)
+  const focalWriteQueue = useRef(new Map<string, Promise<unknown>>())
+  const latestFocalWrite = useRef(new Map<string, symbol>())
+  const projectRef = useRef(project)
+
+  useEffect(() => {
+    projectRef.current = project
+  }, [project])
 
   useEffect(() => {
     if (project.book) setSettings(project.book.settings)
@@ -506,21 +513,33 @@ export function BookReview({
 
   // The crop centre lives on the asset, so it is written on its own and deliberately leaves the
   // book alone: no page problem depends on it, and the exporter reads submissions live.
-  const storeFocalPoint = async (assetId: string, focalPoint: FocalPoint | null) => {
+  const storeFocalPoint = (assetId: string, focalPoint: FocalPoint | null) => {
     const previous = photoFocalPoint(submissions, assetId)
+    const write = Symbol("focal point write")
+    latestFocalWrite.current.set(assetId, write)
     onProjectChange({
       ...project,
       submissions: withPhotoFocalPoint(submissions, assetId, focalPoint ?? undefined),
     })
-    try {
-      await projectApi.setPhotoFocalPoint(project.id, assetId, focalPoint)
-    } catch (error) {
-      onProjectChange({
-        ...project,
-        submissions: withPhotoFocalPoint(submissions, assetId, previous),
+    // One photo's writes run in order. Overlapping requests can finish out of order, which would
+    // leave the printed crop on a value the organizer has already dragged away from.
+    const queued = (focalWriteQueue.current.get(assetId) ?? Promise.resolve())
+      .then(() => projectApi.setPhotoFocalPoint(project.id, assetId, focalPoint))
+      .catch((error: unknown) => {
+        // A later write for this photo has already replaced this one, so its rollback would undo
+        // an adjustment the organizer still expects to see. Roll back from the newest project
+        // rather than the snapshot this call closed over, which may have gone stale meanwhile.
+        if (latestFocalWrite.current.get(assetId) === write) {
+          const current = projectRef.current
+          onProjectChange({
+            ...current,
+            submissions: withPhotoFocalPoint(current.submissions ?? [], assetId, previous),
+          })
+        }
+        toast.error(error instanceof Error ? error.message : "Photo focus update failed")
       })
-      toast.error(error instanceof Error ? error.message : "Photo focus update failed")
-    }
+    focalWriteQueue.current.set(assetId, queued)
+    return queued
   }
 
   const photoFocus: PhotoFocusControls = {
