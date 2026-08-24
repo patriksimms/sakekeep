@@ -177,10 +177,13 @@ function ElementContent({
       : 0
     // `editingText` carries the uncommitted inline edit, so the reserved label space and the
     // vertical offset track what is on screen rather than what was last saved.
-    const editedLabel =
+    const liveLabel =
       element.type === "bound-text" && editingElementId === element.id
         ? (editingText ?? boundTextLabel({ ...element, showLabel: true }, question))
         : ""
+    // Committing a blank label drops it entirely, so a label of nothing but spaces has to read as
+    // absent here too. Otherwise this reserves a line that the editor's own offset does not.
+    const editedLabel = liveLabel.trim().length > 0 ? liveLabel : ""
     // While a label is being edited the schema hides it, so the layout above measures only the
     // answer. Re-measure with the label back in and take both the size and the offset from that one
     // result: under `overflow: "shrink"` the combined block can need a smaller font, and reading the
@@ -197,7 +200,7 @@ function ElementContent({
       <div
         data-layout-element-id={element.id}
         data-layout-element-type={element.type}
-        data-text-overflow={!layout.fits || undefined}
+        data-text-overflow={!editingLayout.fits || undefined}
         style={{
           ...textElementStyle(
             element,
@@ -205,8 +208,8 @@ function ElementContent({
             specification,
             editingLayout.offsetYMm
           ),
-          outline: !layout.fits ? "1px solid var(--destructive)" : undefined,
-          background: !layout.fits
+          outline: !editingLayout.fits ? "1px solid var(--destructive)" : undefined,
+          background: !editingLayout.fits
             ? "color-mix(in srgb, var(--destructive) 8%, transparent)"
             : undefined,
           ...selectedStyle,

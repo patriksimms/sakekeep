@@ -148,6 +148,35 @@ describe("vertical alignment while text is being edited", () => {
     expect(long).toBeLessThan(short)
   })
 
+  it("treats a label of nothing but spaces as absent, the way committing it would", () => {
+    const schema = addElement(emptyLayoutSchema(), "bound-text")
+    const element = schema.elements[0]!
+    if (element.type !== "bound-text") throw new Error("Expected bound text")
+    element.showLabel = false
+    element.geometry = { ...element.geometry, width: 60, height: 40 }
+    element.text = { ...element.text, verticalAlignment: "middle" }
+    const questions = [
+      { id: element.questionId, prompt: "Prompt", required: true, type: "multiline" as const },
+    ]
+
+    const render = (editingText: string) =>
+      renderToStaticMarkup(
+        <LayoutPageElements
+          schema={schema}
+          content={{ questions }}
+          editingElementId={element.id}
+          editingText={editingText}
+        />
+      )
+
+    // The editor derives its own offset from the same rule, so blank and whitespace must agree.
+    expect(textElementVerticalOffsetMm(element, { questions }, "   ")).toBeCloseTo(
+      textElementVerticalOffsetMm(element, { questions }, ""),
+      10
+    )
+    expect(render("   ")).toEqual(render(""))
+  })
+
   it("sizes and offsets edited text from one measurement when shrink is in play", () => {
     const schema = addElement(emptyLayoutSchema(), "bound-text")
     const element = schema.elements[0]!
