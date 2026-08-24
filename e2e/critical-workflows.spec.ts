@@ -588,13 +588,16 @@ test.describe.serial("critical local prototype workflows", () => {
       })
     }
     const answerTop = (elementId: string) =>
-      page.locator(`[data-layout-element-id="${elementId}"]`).evaluate((element) => {
-        const answer = element.lastChild
-        if (!answer) throw new Error("The answer text is missing.")
-        const range = document.createRange()
-        range.selectNodeContents(answer)
-        return range.getBoundingClientRect().top - element.getBoundingClientRect().top
-      })
+      page
+        .getByTestId("editor-layout-elements")
+        .locator(`[data-layout-element-id="${elementId}"]`)
+        .evaluate((element) => {
+          const answer = element.lastChild
+          if (!answer) throw new Error("The answer text is missing.")
+          const range = document.createRange()
+          range.selectNodeContents(answer)
+          return range.getBoundingClientRect().top - element.getBoundingClientRect().top
+        })
 
     try {
       await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")

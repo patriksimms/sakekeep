@@ -1,8 +1,7 @@
-import { Canvas, FabricObject, IText, Rect, Textbox } from "fabric"
+import { Canvas, FabricObject, Rect } from "fabric"
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
 import { LayoutPageElements, textElementStyle } from "#/components/layout-page.tsx"
-import { cssFontStack } from "#/domain/fonts.ts"
 import { boundTextLabel } from "#/domain/layout-label.ts"
 import { PAGE_SPEC } from "#/domain/layout.ts"
 import { canonicalToMediaGeometry, mediaToCanonicalGeometry } from "#/domain/layout-rendering.ts"
@@ -54,9 +53,6 @@ export function parseLayoutElementDragData(value: string): LayoutElementDragData
 
 type SakekeepObject = FabricObject & {
   sakekeepElementId?: string
-  sakekeepConfiguredHeight?: number
-  sakekeepEditMethod?: "double_click" | "keyboard"
-  sakekeepOriginalText?: string
 }
 
 export type InlineEditableCanvas = Canvas & {
@@ -135,16 +131,21 @@ function elementName(element: LayoutElement) {
   return names[element.type]
 }
 
-function InlineStaticTextEditor({
+function InlineTextEditor({
   element,
+  content,
   onCommit,
+  onCancel,
   specification,
 }: {
-  element: Extract<LayoutElement, { type: "static-text" }>
+  element: Extract<LayoutElement, { type: "static-text" | "bound-text" }>
+  content: string
   onCommit: (content: string) => void
+  onCancel: () => void
   specification: PageSpecification
 }) {
   const editor = useRef<HTMLDivElement>(null)
+  const cancelled = useRef(false)
 
   useEffect(() => {
     const node = editor.current
@@ -165,15 +166,25 @@ function InlineStaticTextEditor({
       data-layout-inline-editor="true"
       contentEditable
       suppressContentEditableWarning
-      onBlur={(event) => onCommit(event.currentTarget.innerText)}
+      onBlur={(event) => {
+        if (!cancelled.current) onCommit(event.currentTarget.innerText)
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return
+        event.preventDefault()
+        event.stopPropagation()
+        cancelled.current = true
+        onCancel()
+      }}
       style={{
         ...textElementStyle(element, element.text.fontSize, specification),
         zIndex: 2,
         cursor: "text",
+        fontWeight: element.type === "bound-text" ? "bold" : element.text.fontWeight,
         outline: "2px solid var(--primary)",
       }}
     >
-      {element.content}
+      {content}
     </div>
   )
 }
@@ -181,7 +192,6 @@ function InlineStaticTextEditor({
 export function objectForElement(
   element: LayoutElement,
   canvasWidth: number,
-  questions: FormQuestion[] = [],
   specification: PageSpecification = PAGE_SPEC
 ): SakekeepObject {
   const geometry = canonicalToCanvasGeometry(element.geometry, canvasWidth, specification)
@@ -196,7 +206,7 @@ export function objectForElement(
     fill: "transparent",
     stroke: "transparent",
     strokeWidth: 0,
-    opacity: element.type === "bound-text" ? 1 : 0,
+    opacity: 0,
     lockMovementX: element.locked,
     lockMovementY: element.locked,
     lockRotation: element.locked,
@@ -204,31 +214,8 @@ export function objectForElement(
     lockScalingY: element.locked,
     objectCaching: false,
   }
-  const object: SakekeepObject =
-    element.type === "bound-text"
-      ? new Textbox(
-          boundTextLabel(
-            element,
-            questions.find((question) => question.id === element.questionId)
-          ),
-          {
-            ...common,
-            editable: true,
-            fontFamily: cssFontStack(element.text.fontFamily),
-            fontSize: element.text.fontSize * 0.3528 * (canvasWidth / specification.mediaWidthMm),
-            fontStyle: element.text.fontStyle,
-            fontWeight: element.text.fontWeight,
-            textAlign: element.text.alignment,
-            lineHeight: element.text.lineHeight,
-            fill: "transparent",
-          }
-        )
-      : new Rect(common)
+  const object: SakekeepObject = new Rect(common)
   object.sakekeepElementId = element.id
-  if (element.type === "bound-text") {
-    object.set({ height: geometry.height })
-    object.sakekeepConfiguredHeight = geometry.height
-  }
   object.set({
     name: `${elementName(element)} · ${element.id.slice(0, 5)}`,
   })
@@ -294,7 +281,7 @@ export function LayoutCanvas({
   const onSelectRef = useRef(onSelect)
   const onChangeRef = useRef(onChange)
   const changing = useRef(false)
-  const cancelledEdit = useRef<string | null>(null)
+  const editMethod = useRef<"double_click" | "keyboard">("keyboard")
   const [displaySchema, setDisplaySchema] = useState(schema)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
   const [isDropTarget, setIsDropTarget] = useState(false)
@@ -353,7 +340,6 @@ export function LayoutCanvas({
       if (next) setDisplaySchema(next)
     }
     const modified = (event: { target?: FabricObject; transform?: { action?: string } }) => {
-      if (event.target instanceof IText && !event.transform?.action) return
       const next = schemaWithObjectGeometry(event, event.transform?.action?.startsWith("scale"))
       if (!next) return
       setDisplaySchema(next)
@@ -363,54 +349,7 @@ export function LayoutCanvas({
         changing.current = false
       })
     }
-    const textEdited = (event: { target: IText }) => {
-      const object = event.target as IText & SakekeepObject
-      if (!object.sakekeepElementId) return
-      const source = schemaRef.current.elements.find(
-        (candidate) => candidate.id === object.sakekeepElementId
-      )
-      if (source?.type !== "bound-text") return
-      object.set({
-        opacity: 1,
-        fill: "transparent",
-        height: object.sakekeepConfiguredHeight ?? object.height,
-      })
-      object.setCoords()
-      setEditingElementId(null)
-      if (cancelledEdit.current === object.sakekeepElementId) {
-        cancelledEdit.current = null
-        setDisplaySchema(schemaRef.current)
-        canvas.requestRenderAll()
-        return
-      }
-      const question = questions.find((candidate) => candidate.id === source.questionId)
-      const next = applyInlineBoundLabelEdit(
-        schemaRef.current,
-        object.sakekeepElementId,
-        object.text,
-        boundTextLabel(source, question)
-      )
-      if (!next) {
-        setDisplaySchema(schemaRef.current)
-        canvas.requestRenderAll()
-        return
-      }
-      captureAnalyticsEvent("layout_editor:answer_label_edit", {
-        cleared: object.text.trim().length === 0,
-        input_method: object.sakekeepEditMethod ?? "keyboard",
-      })
-      schemaRef.current = next
-      setDisplaySchema(next)
-      changing.current = true
-      onChangeRef.current(next)
-      requestAnimationFrame(() => {
-        changing.current = false
-      })
-    }
-    const startInlineEditing = (
-      inputMethod: "double_click" | "keyboard",
-      event?: Parameters<IText["enterEditing"]>[0]
-    ) => {
+    const startInlineEditing = (inputMethod: "double_click" | "keyboard") => {
       const object = canvas.getActiveObject() as SakekeepObject | undefined
       const source = schemaRef.current.elements.find(
         (candidate) => candidate.id === object?.sakekeepElementId
@@ -419,8 +358,9 @@ export function LayoutCanvas({
         return false
       }
       canvas.setActiveObject(object)
+      editMethod.current = inputMethod
+      setEditingElementId(source.id)
       if (source.type === "static-text") {
-        setEditingElementId(source.id)
         setDisplaySchema({
           ...schemaRef.current,
           elements: schemaRef.current.elements.map((candidate) =>
@@ -430,55 +370,17 @@ export function LayoutCanvas({
         canvas.requestRenderAll()
         return true
       }
-      if (!(object instanceof IText)) return false
-      const editableObject = object as IText & SakekeepObject
-      const alreadyEditing = editableObject.isEditing
-      const question = questions.find((candidate) => candidate.id === source.questionId)
-      const content = boundTextLabel(source, question)
-      editableObject.sakekeepOriginalText = content
-      editableObject.sakekeepEditMethod = inputMethod
-      setEditingElementId(source.id)
       setDisplaySchema({
         ...schemaRef.current,
         elements: schemaRef.current.elements.map((candidate) =>
           candidate.id === source.id ? { ...source, showLabel: false } : candidate
         ),
       })
-      editableObject.set({ text: content, opacity: source.opacity, fill: source.text.color })
-      if (!alreadyEditing) editableObject.enterEditing(event)
-      editableObject.selectAll()
       canvas.requestRenderAll()
       return true
     }
     const editableCanvas = canvas as InlineEditableCanvas
     editableCanvas.startInlineEditing = () => startInlineEditing("keyboard")
-    const keyDown = (event: KeyboardEvent) => {
-      const object = canvas.getActiveObject() as (IText & SakekeepObject) | undefined
-      if (!object?.isEditing || !object.sakekeepElementId || event.key !== "Escape") return
-      event.preventDefault()
-      event.stopPropagation()
-      cancelledEdit.current = object.sakekeepElementId
-      object.set({
-        text: object.sakekeepOriginalText ?? "",
-        height: object.sakekeepConfiguredHeight ?? object.height,
-      })
-      object.setCoords()
-      object.exitEditing()
-      canvas.requestRenderAll()
-    }
-    const pointerDown = (event: PointerEvent) => {
-      const object = canvas.getActiveObject() as (IText & SakekeepObject) | undefined
-      const target = event.target
-      if (
-        !object?.isEditing ||
-        !(target instanceof Element) ||
-        target.closest(".canvas-container")
-      ) {
-        return
-      }
-      object.exitEditing()
-      canvas.requestRenderAll()
-    }
     canvas.on("selection:created", select)
     canvas.on("selection:updated", select)
     canvas.on("selection:cleared", select)
@@ -516,16 +418,11 @@ export function LayoutCanvas({
       if (!object) return
       event.stopImmediatePropagation()
       canvas.setActiveObject(object)
-      startInlineEditing("double_click", event)
+      startInlineEditing("double_click")
     }
     canvas.upperCanvasEl.addEventListener("dblclick", doubleClick, true)
-    canvas.on("text:editing:exited", textEdited)
-    window.addEventListener("keydown", keyDown, true)
-    window.addEventListener("pointerdown", pointerDown, true)
 
     return () => {
-      window.removeEventListener("keydown", keyDown, true)
-      window.removeEventListener("pointerdown", pointerDown, true)
       canvas.upperCanvasEl.removeEventListener("dblclick", doubleClick, true)
       delete editableCanvas.startInlineEditing
       if (canvasRef) canvasRef.current = null
@@ -541,11 +438,7 @@ export function LayoutCanvas({
   useEffect(() => {
     const canvas = instance.current
     if (!canvas || changing.current) return
-    const activeObject = canvas.getActiveObject()
-    if (activeObject instanceof IText && activeObject.isEditing) return
-    const objects = schema.elements.map((item) =>
-      objectForElement(item, width, questions, specification)
-    )
+    const objects = schema.elements.map((item) => objectForElement(item, width, specification))
     canvas.clear()
     canvas.backgroundColor = "transparent"
     canvas.add(...objects)
@@ -569,18 +462,37 @@ export function LayoutCanvas({
 
   const editingElement = editingElementId
     ? schema.elements.find(
-        (candidate): candidate is Extract<LayoutElement, { type: "static-text" }> =>
-          candidate.id === editingElementId && candidate.type === "static-text"
+        (candidate): candidate is Extract<LayoutElement, { type: "static-text" | "bound-text" }> =>
+          candidate.id === editingElementId &&
+          (candidate.type === "static-text" || candidate.type === "bound-text")
       )
     : undefined
 
   const commitInlineEdit = (content: string) => {
     if (!editingElementId) return
     setEditingElementId(null)
-    const next = applyInlineStaticTextEdit(schemaRef.current, editingElementId, content)
+    const source = schemaRef.current.elements.find((candidate) => candidate.id === editingElementId)
+    const next =
+      source?.type === "bound-text"
+        ? applyInlineBoundLabelEdit(
+            schemaRef.current,
+            editingElementId,
+            content,
+            boundTextLabel(
+              source,
+              questions.find((candidate) => candidate.id === source.questionId)
+            )
+          )
+        : applyInlineStaticTextEdit(schemaRef.current, editingElementId, content)
     if (!next) {
       setDisplaySchema(schemaRef.current)
       return
+    }
+    if (source?.type === "bound-text") {
+      captureAnalyticsEvent("layout_editor:answer_label_edit", {
+        cleared: content.trim().length === 0,
+        input_method: editMethod.current,
+      })
     }
     schemaRef.current = next
     setDisplaySchema(next)
@@ -661,9 +573,21 @@ export function LayoutCanvas({
         aria-label={`Visual DIN ${specification.format.toUpperCase()} ${specification.orientation} layout canvas`}
       />
       {editingElement && (
-        <InlineStaticTextEditor
+        <InlineTextEditor
           element={editingElement}
+          content={
+            editingElement.type === "static-text"
+              ? editingElement.content
+              : boundTextLabel(
+                  editingElement,
+                  questions.find((candidate) => candidate.id === editingElement.questionId)
+                )
+          }
           onCommit={commitInlineEdit}
+          onCancel={() => {
+            setEditingElementId(null)
+            setDisplaySchema(schemaRef.current)
+          }}
           specification={specification}
         />
       )}

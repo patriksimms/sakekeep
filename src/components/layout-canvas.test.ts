@@ -88,6 +88,23 @@ describe("layout interaction geometry", () => {
     object.set({ angle: 23 })
     expectFabricToMatchHtml(object, canvasWidth)
   })
+
+  it("keeps a bound text bounding box height when only its width changes", () => {
+    const canvasWidth = PAGE_SPEC.mediaWidthMm * 3
+    const schema = addElement(emptyLayoutSchema(), "bound-text", "memory")
+    const element = schema.elements[0]!
+    const object = objectForElement(element, canvasWidth)
+    const initialGeometry = canonicalToMediaGeometry(element.geometry, canvasWidth)
+
+    expect(object).toBeInstanceOf(Rect)
+    expect(object.getScaledHeight()).toBeCloseTo(initialGeometry.height, 5)
+
+    object.set({ scaleX: 1.7 })
+
+    expect(object.getScaledWidth()).toBeCloseTo(initialGeometry.width * 1.7, 5)
+    expect(object.getScaledHeight()).toBeCloseTo(initialGeometry.height, 5)
+    expect(geometryFromObject(object, canvasWidth).height).toBeCloseTo(element.geometry.height, 5)
+  })
 })
 describe("inline layout text editing", () => {
   it("updates only static-text content", () => {
