@@ -26,10 +26,31 @@ describe("submissionLabel", () => {
     ).toBe("Jo")
   })
 
-  it("uses the answer when the normalized field label is name", () => {
+  it.each([" NAME: ", "Your name", "Full name", "What's your name?"])(
+    "uses the answer when the normalized field label contains the name word: %s",
+    (prompt) => {
+      expect(
+        submissionLabel(form("question-id", prompt), submission({ "question-id": "Sam" }))
+      ).toBe("Sam")
+    }
+  )
+
+  it("does not treat name inside another word as a name field", () => {
     expect(
-      submissionLabel(form("question-id", " NAME: "), submission({ "question-id": "Sam" }))
-    ).toBe("Sam")
+      submissionLabel(form("question-id", "Username"), submission({ "question-id": "sam" }))
+    ).toBe("Response 3")
+  })
+
+  it("uses a later matching field when an earlier name answer is blank", () => {
+    const schema: FormSchema = {
+      version: FORM_SCHEMA_VERSION,
+      questions: [
+        { id: "name", prompt: "Preferred name", type: "single-line", required: false },
+        { id: "full-name", prompt: "Full name", type: "single-line", required: false },
+      ],
+    }
+
+    expect(submissionLabel(schema, submission({ name: " ", "full-name": "Sam" }))).toBe("Sam")
   })
 
   it.each([
