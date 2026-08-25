@@ -24,3 +24,4 @@ todos.json
 /scripts/dump-production-db.sh
 /scripts/dump-production-media.sh
 /production.dump
+/tmp/*
