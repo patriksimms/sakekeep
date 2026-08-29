@@ -997,6 +997,8 @@ test.describe.serial("critical local prototype workflows", () => {
     await expectAccessible(page)
 
     await page.getByRole("tab", { name: "5. Export" }).click()
+    await page.getByRole("switch", { name: "One PDF per page (ZIP)" }).click()
+    await page.getByRole("switch", { name: "One JPEG per page (ZIP)" }).click()
     const exportResponse = page.waitForResponse(
       (response) =>
         response.url().includes(`/${closedProjectId}/export`) &&
@@ -1007,6 +1009,16 @@ test.describe.serial("critical local prototype workflows", () => {
     await expect(page.getByText("Export complete")).toBeVisible()
     await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Download report" })).toBeVisible()
+
+    for (const name of ["Download page PDFs", "Download page JPEGs"]) {
+      const link = page.getByRole("link", { name })
+      await expect(link).toBeVisible()
+      const bundle = await page.request.get((await link.getAttribute("href"))!)
+      expect(bundle.status()).toBe(200)
+      expect(bundle.headers()["content-type"]).toContain("application/zip")
+      // Every ZIP starts with the local file header signature of its first entry.
+      expect((await bundle.body()).subarray(0, 2).toString("latin1")).toBe("PK")
+    }
     await expectAccessible(page)
   })
 })

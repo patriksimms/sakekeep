@@ -1,7 +1,12 @@
 import { PDFArray, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
-import { fitSingleLineTextSize, inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
+import {
+  fitSingleLineTextSize,
+  inspectPdf,
+  renderBookPagePdfs,
+  renderBookPdf,
+} from "./pdf-renderer.ts"
 import { fillerPalette } from "../domain/filler-art.ts"
 import { pageSpecification } from "../domain/page-format.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
@@ -196,5 +201,53 @@ describe("PDF renderer", () => {
     expect(await inspectPdf(bytes, pageSpecification("a5", "landscape"))).toMatchObject({
       pageBoxesValid: false,
     })
+  })
+
+  it("renders one print-ready single-page PDF per book page", async () => {
+    const layout = layoutFixture()
+    const submission = submissionFixture("10000000-0000-4000-8000-000000000003", 1)
+    const input = {
+      book: {
+        projectId: layout.projectId,
+        settings: cycleSettings,
+        pages: [
+          {
+            id: "standalone:cover",
+            kind: "standalone" as const,
+            pageType: "cover" as const,
+            title: "Stories worth keeping",
+            body: "A representative standalone page.",
+            background: "#fffdf7",
+            problems: [],
+          },
+          {
+            id: `submission:${submission.id}`,
+            kind: "submission" as const,
+            submissionId: submission.id,
+            layoutId: layout.id,
+            problems: [],
+          },
+        ],
+        sourceFingerprint: "page-split-test",
+        generatedAt: "2026-08-29T00:00:00.000Z",
+        updatedAt: "2026-08-29T00:00:00.000Z",
+      },
+      layouts: [layout],
+      submissions: [submission],
+      form: completeForm,
+      marks: false,
+    }
+
+    const pages = await renderBookPagePdfs(input)
+
+    expect(pages).toHaveLength(input.book.pages.length)
+    for (const page of pages) {
+      const inspection = await inspectPdf(page)
+      expect(inspection.pageCount).toBe(1)
+      expect(inspection.pageBoxesValid).toBe(true)
+      expect(inspection.fontsEmbedded).toBe(true)
+      expect(inspection.outputIntentEmbedded).toBe(true)
+      expect(inspection.pdfxMetadata).toBe(true)
+    }
   })
 })

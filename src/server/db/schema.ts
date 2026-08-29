@@ -204,6 +204,9 @@ export const exportsTable = pgTable(
     sourceFingerprint: text("source_fingerprint").notNull(),
     pdfObjectKey: text("pdf_object_key").notNull(),
     reportObjectKey: text("report_object_key").notNull(),
+    // Null whenever the organizer did not ask for that bundle.
+    pagePdfZipObjectKey: text("page_pdf_zip_object_key"),
+    pageJpegZipObjectKey: text("page_jpeg_zip_object_key"),
     report: jsonb("report").$type<ExportReport>().notNull(),
     createdAt: timestamp("created_at", {
       withTimezone: true,

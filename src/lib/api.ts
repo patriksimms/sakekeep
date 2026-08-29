@@ -97,6 +97,8 @@ export const projectApi = {
       marks: boolean
       allowBlockingProblems: boolean
       reviewedBookFingerprint: string | null
+      pagePdfs: boolean
+      pageJpegs: boolean
     }
   ) =>
     api<ExportArtifact>(`/api/projects/${projectId}/export`, {

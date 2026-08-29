@@ -523,12 +523,21 @@ export async function deleteProject(projectId: string): Promise<void> {
       .select({
         pdfObjectKey: exportsTable.pdfObjectKey,
         reportObjectKey: exportsTable.reportObjectKey,
+        pagePdfZipObjectKey: exportsTable.pagePdfZipObjectKey,
+        pageJpegZipObjectKey: exportsTable.pageJpegZipObjectKey,
       })
       .from(exportsTable)
       .where(eq(exportsTable.projectId, projectId))
     const objectKeys = [
       ...assetRows.flatMap((row) => [row.objectKey, row.previewObjectKey]),
-      ...exportRows.flatMap((row) => [row.pdfObjectKey, row.reportObjectKey]),
+      ...exportRows.flatMap((row) =>
+        [
+          row.pdfObjectKey,
+          row.reportObjectKey,
+          row.pagePdfZipObjectKey,
+          row.pageJpegZipObjectKey,
+        ].filter((key): key is string => key !== null)
+      ),
     ]
     if (objectKeys.length > 0) {
       await tx
@@ -1199,6 +1208,8 @@ export async function recordExport(input: {
   sourceFingerprint: string
   pdfObjectKey: string
   reportObjectKey: string
+  pagePdfZipObjectKey: string | null
+  pageJpegZipObjectKey: string | null
   report: (typeof exportsTable.$inferInsert)["report"]
 }): Promise<string> {
   const id = crypto.randomUUID()

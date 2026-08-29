@@ -51,6 +51,8 @@ import {
   type GeneratedBook,
   type LayoutElement,
   type LayoutRecord,
+  type PageFormat,
+  type PageOrientation,
   type SubmissionSummary,
   type TextSettings,
 } from "../domain/types"
@@ -558,9 +560,9 @@ function standaloneText(page: BookPage): { title: string; body: string } {
 }
 
 /** Every static cut the book needs, including the bold cut used for labels. */
-function requiredCuts(book: GeneratedBook, layouts: Map<string, LayoutRecord>): Set<FontCut> {
+function requiredCuts(pages: BookPage[], layouts: Map<string, LayoutRecord>): Set<FontCut> {
   const cuts = new Set<FontCut>()
-  for (const bookPage of book.pages) {
+  for (const bookPage of pages) {
     if (bookPage.kind === "standalone") {
       if (bookPage.pageType === "blank") continue
       cuts.add(STANDALONE_TITLE_CUT)
@@ -588,24 +590,32 @@ async function embedFonts(pdf: PDFDocument, cuts: Set<FontCut>): Promise<Embedde
   return Object.fromEntries(embedded)
 }
 
-export async function renderBookPdf(input: {
+export interface BookRenderInput {
   book: GeneratedBook
   layouts: LayoutRecord[]
   submissions: SubmissionSummary[]
   form: FormSchema
   marks: boolean
-  pageFormat?: import("../domain/types.ts").PageFormat
-  pageOrientation?: import("../domain/types.ts").PageOrientation
-}): Promise<Uint8Array> {
-  let icc: Uint8Array
+  pageFormat?: PageFormat
+  pageOrientation?: PageOrientation
+}
+
+async function iccProfile(): Promise<Uint8Array> {
   try {
-    icc = await readFile(resolve(".local/icc/PSOcoated_v3.icc"))
+    return await readFile(resolve(".local/icc/PSOcoated_v3.icc"))
   } catch {
     throw new HttpError(
       503,
       "The verified PSO Coated v3 profile is missing. Run `bun run setup:icc` and try again."
     )
   }
+}
+
+// Rendering a subset of the book is what makes per-page files possible: every document
+// produced here carries the same page boxes, embedded fonts, and output intent, so a
+// single page is as print-ready as the complete book.
+async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uint8Array> {
+  const icc = await iccProfile()
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   pdf.setTitle("Sakekeep friend book")
@@ -613,14 +623,14 @@ export async function renderBookPdf(input: {
   pdf.setProducer("Sakekeep / pdf-lib")
   const layouts = new Map(input.layouts.map((layout) => [layout.id, layout]))
   const submissions = new Map(input.submissions.map((submission) => [submission.id, submission]))
-  const fonts = await embedFonts(pdf, requiredCuts(input.book, layouts))
+  const fonts = await embedFonts(pdf, requiredCuts(pages, layouts))
   const assetResolutions: AssetResolutionMetadata[] = []
   const specification = pageSpecification(
     input.pageFormat ?? "a5",
     input.pageOrientation ?? "landscape"
   )
 
-  for (const bookPage of input.book.pages) {
+  for (const bookPage of pages) {
     const page = pdf.addPage([pt(specification.mediaWidthMm), pt(specification.mediaHeightMm)])
     applyPageBoxes(page, specification)
     if (bookPage.kind === "standalone") {
@@ -701,6 +711,21 @@ export async function renderBookPdf(input: {
   }
   setPdfXMetadata(pdf, icc, assetResolutions)
   return pdf.save({ useObjectStreams: false, addDefaultPage: false })
+}
+
+export async function renderBookPdf(input: BookRenderInput): Promise<Uint8Array> {
+  return renderPdf(input, input.book.pages)
+}
+
+/** One single-page PDF per book page, in book order. */
+export async function renderBookPagePdfs(input: BookRenderInput): Promise<Uint8Array[]> {
+  const documents: Uint8Array[] = []
+  // Sequential on purpose: each page embeds its own fonts and images, and a large book
+  // rendered in parallel would hold every one of those documents in memory at once.
+  for (const bookPage of input.book.pages) {
+    documents.push(await renderPdf(input, [bookPage]))
+  }
+  return documents
 }
 
 export async function inspectPdf(

@@ -3,8 +3,10 @@ import {
   ArchiveIcon,
   CheckCircle2Icon,
   DownloadIcon,
+  FileArchiveIcon,
   FileCheck2Icon,
   FileTextIcon,
+  ImagesIcon,
   LoaderCircleIcon,
   PrinterIcon,
   XCircleIcon,
@@ -44,6 +46,8 @@ import { projectApi } from "#/lib/api.ts"
 export function ExportPanel({ project }: { project: Project }) {
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const [marks, setMarks] = useState(false)
+  const [pagePdfs, setPagePdfs] = useState(false)
+  const [pageJpegs, setPageJpegs] = useState(false)
   const [allowBlockingProblems, setAllowBlockingProblems] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [artifact, setArtifact] = useState<ExportArtifact | null>(null)
@@ -68,12 +72,16 @@ export function ExportPanel({ project }: { project: Project }) {
         marks,
         allowBlockingProblems,
         reviewedBookFingerprint: project.book?.sourceFingerprint ?? null,
+        pagePdfs,
+        pageJpegs,
       })
       setArtifact(result)
       captureAnalyticsEvent("export:completed", {
         blocking_override: allowBlockingProblems && blocking > 0,
         problem_count: blocking,
         printer_marks: marks,
+        page_pdfs: pagePdfs,
+        page_jpegs: pageJpegs,
       })
       toast.success("PDF and preflight report exported")
     } catch (error) {
@@ -186,6 +194,34 @@ export function ExportPanel({ project }: { project: Project }) {
                 <FieldLabel htmlFor="printer-marks">Crop and printer marks</FieldLabel>
                 <FieldDescription>
                   Off by default. Pages are never imposed as spreads.
+                </FieldDescription>
+              </div>
+            </Field>
+            <Field orientation="horizontal">
+              <Switch
+                id="page-pdfs"
+                checked={pagePdfs}
+                onCheckedChange={(checked) => setPagePdfs(checked === true)}
+              />
+              <div>
+                <FieldLabel htmlFor="page-pdfs">One PDF per page (ZIP)</FieldLabel>
+                <FieldDescription>
+                  Adds a ZIP with one print-ready single-page PDF per book page, next to the
+                  complete book.
+                </FieldDescription>
+              </div>
+            </Field>
+            <Field orientation="horizontal">
+              <Switch
+                id="page-jpegs"
+                checked={pageJpegs}
+                onCheckedChange={(checked) => setPageJpegs(checked === true)}
+              />
+              <div>
+                <FieldLabel htmlFor="page-jpegs">One JPEG per page (ZIP)</FieldLabel>
+                <FieldDescription>
+                  Adds a ZIP with a 300 PPI JPEG per page, bleed included. Useful for previews and
+                  photo prints, not for offset printing.
                 </FieldDescription>
               </div>
             </Field>
@@ -310,6 +346,26 @@ export function ExportPanel({ project }: { project: Project }) {
               <FileTextIcon data-icon="inline-start" />
               Download report
             </a>
+            {artifact.pagePdfZipUrl && (
+              <a
+                href={artifact.pagePdfZipUrl}
+                download
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <FileArchiveIcon data-icon="inline-start" />
+                Download page PDFs
+              </a>
+            )}
+            {artifact.pageJpegZipUrl && (
+              <a
+                href={artifact.pageJpegZipUrl}
+                download
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <ImagesIcon data-icon="inline-start" />
+                Download page JPEGs
+              </a>
+            )}
           </CardFooter>
         </Card>
       )}

@@ -329,5 +329,8 @@ export interface ExportArtifact {
   id: string
   pdfUrl: string
   reportUrl: string
+  /** Present only when the organizer requested that bundle for this export. */
+  pagePdfZipUrl: string | null
+  pageJpegZipUrl: string | null
   report: ExportReport
 }
