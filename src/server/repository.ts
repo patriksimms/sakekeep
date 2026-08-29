@@ -971,6 +971,9 @@ export async function generateProjectBook(
   projectId: string,
   settings: GenerationSettings
 ): Promise<GeneratedBook> {
+  // Regeneration reads the stored book directly, so a book that has never been loaded must be
+  // converted here too; otherwise its legacy pages would be dropped instead of carried over.
+  await convertLegacyStandalonePagesOf(projectId)
   return db.transaction(async (tx) => {
     const [project] = await tx
       .select()

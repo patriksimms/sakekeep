@@ -243,13 +243,8 @@ export function inspectStandalonePage(pageId: string, layout: LayoutRecord): Pag
     problems.push(...inspectElementPlacement(pageId, element, specification))
     if (element.type !== "static-text") continue
     const runs = textRunsForElement(element, undefined, undefined)
-    if (
-      !runs
-        .map((run) => run.text)
-        .join("\n")
-        .trim()
-    )
-      continue
+    const content = runs.map((run) => run.text).join("\n")
+    if (!content.trim()) continue
     const fit = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
     if (fit.fits && !fit.truncated) continue
     problems.push(
