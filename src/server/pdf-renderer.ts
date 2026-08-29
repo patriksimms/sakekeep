@@ -62,9 +62,6 @@ const POINTS_PER_MM = 72 / 25.4
 // picker does not grow every exported PDF.
 type EmbeddedFonts = Partial<Record<FontCut, PDFFont>>
 
-// Standalone cover and divider pages are rendered by the exporter itself rather
-// than by a layout, so their typography is fixed.
-
 interface AssetResolutionMetadata {
   assetId: string
   pageId: string
