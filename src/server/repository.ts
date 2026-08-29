@@ -6,11 +6,16 @@ import {
   validateFormForDraft,
   validateFormForPublish,
 } from "../domain/form"
-import { generateBook } from "../domain/generation"
+import { generateBook, pinCoverPages } from "../domain/generation"
 import { type BackgroundPresetId, backgroundSchema } from "../domain/layout-backgrounds"
 import { emptyLayoutSchema, layoutSchemaValidator, resizeLayoutSchema } from "../domain/layout"
+import { isCoverRole, layoutRoleLabel, orderedLayouts } from "../domain/layout-roles.ts"
 import { pageSpecification } from "../domain/page-format.ts"
 import { answerImages } from "../domain/photo-assignment.ts"
+import {
+  convertLegacyStandalonePages,
+  isLegacyStandalonePage,
+} from "../domain/standalone-page-migration.ts"
 import {
   type BookPage,
   type FormSchema,
@@ -18,6 +23,7 @@ import {
   type GenerationSettings,
   type ImageAnswer,
   type LayoutRecord,
+  type LayoutRole,
   type LayoutSchema,
   type PageFormat,
   type PageOrientation,
@@ -55,6 +61,7 @@ function layoutRecord(row: typeof layouts.$inferSelect): LayoutRecord {
     name: row.name,
     position: row.position,
     revision: row.revision,
+    role: row.role,
     schema: row.schema,
     updatedAt: iso(row.updatedAt),
   }
@@ -144,7 +151,61 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   }))
 }
 
+/**
+ * Rewrites standalone pages persisted before the visual editor into layout-backed pages, creating
+ * one layout per page. Idempotent: once converted a book holds no legacy page, so the next load
+ * skips the write. Runs on read because a stored book must render correctly before it is
+ * regenerated.
+ */
+async function convertLegacyStandalonePagesOf(projectId: string): Promise<boolean> {
+  // Cheap probe first: the conversion runs once per project, so the read path must not pay for a
+  // transaction on every load.
+  const [stored] = await db
+    .select({ generatedBook: books.generatedBook })
+    .from(books)
+    .where(eq(books.projectId, projectId))
+    .limit(1)
+  if (!stored?.generatedBook.pages.some(isLegacyStandalonePage)) return false
+  return db.transaction(async (tx) => {
+    const [project] = await tx
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .for("update")
+    if (!project) return false
+    const [book] = await tx.select().from(books).where(eq(books.projectId, projectId)).limit(1)
+    if (!book) return false
+    const existing = await tx.select().from(layouts).where(eq(layouts.projectId, projectId))
+    const conversion = convertLegacyStandalonePages({
+      pages: book.generatedBook.pages,
+      specification: pageSpecification(project.pageFormat, project.pageOrientation),
+      takenRoles: existing.map((layout) => layout.role),
+      newLayoutId: () => crypto.randomUUID(),
+    })
+    if (!conversion) return false
+    const firstPosition =
+      existing.reduce((highest, layout) => Math.max(highest, layout.position), -1) + 1
+    await tx.insert(layouts).values(
+      conversion.layouts.map((layout, index) => ({
+        id: layout.id,
+        projectId,
+        name: layout.name,
+        position: firstPosition + index,
+        role: layout.role,
+        schema: layout.schema,
+      }))
+    )
+    const updated: GeneratedBook = { ...book.generatedBook, pages: conversion.pages }
+    await tx
+      .update(books)
+      .set({ generatedBook: updated, updatedAt: new Date() })
+      .where(eq(books.projectId, projectId))
+    return true
+  })
+}
+
 export async function getProject(projectId: string, includeSubmissions = false): Promise<Project> {
+  await convertLegacyStandalonePagesOf(projectId)
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
   if (!project) throw new HttpError(404, "Project not found.")
 
@@ -565,10 +626,27 @@ function markBookStaleSet(status: "not-generated" | "current" | "stale") {
   return status === "not-generated" ? "not-generated" : ("stale" as const)
 }
 
+/** Guards the single front/back cover rule inside the transaction that is about to write. */
+async function assertCoverRoleFree(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  projectId: string,
+  role: LayoutRole
+): Promise<void> {
+  const [existing] = await tx
+    .select({ id: layouts.id })
+    .from(layouts)
+    .where(and(eq(layouts.projectId, projectId), eq(layouts.role, role)))
+    .limit(1)
+  if (existing) {
+    throw new HttpError(409, `This project already has a ${layoutRoleLabel(role).toLowerCase()}.`)
+  }
+}
+
 export async function createLayout(
   projectId: string,
   name = "Untitled layout",
-  backgroundPresetId: BackgroundPresetId = "blank"
+  backgroundPresetId: BackgroundPresetId = "blank",
+  role: LayoutRole = "submission"
 ): Promise<LayoutRecord> {
   const record = await db.transaction(async (tx) => {
     const [project] = await tx
@@ -581,6 +659,7 @@ export async function createLayout(
     if (project.state !== "closed") {
       throw new HttpError(409, "Close collection before authoring layouts.")
     }
+    if (isCoverRole(role)) await assertCoverRoleFree(tx, projectId, role)
     const [positionRow] = await tx
       .select({ value: max(layouts.position) })
       .from(layouts)
@@ -592,6 +671,7 @@ export async function createLayout(
         projectId,
         name: name.trim() || "Untitled layout",
         position: (positionRow?.value ?? -1) + 1,
+        role,
         schema: backgroundSchema(backgroundPresetId, project.pageFormat, project.pageOrientation),
       })
       .returning()
@@ -695,6 +775,8 @@ export async function duplicateLayout(projectId: string, layoutId: string): Prom
         projectId,
         name: `${source.name} — copy`,
         position: (positionRow?.value ?? -1) + 1,
+        // A project holds one cover per side, so a copy of a cover becomes a standalone page.
+        role: isCoverRole(source.role) ? "static" : source.role,
         schema: source.schema,
       })
       .returning()
@@ -727,20 +809,27 @@ export async function reorderLayouts(
       .from(layouts)
       .where(eq(layouts.projectId, projectId))
       .orderBy(asc(layouts.position))
+    const movable = current.filter((layout) => !isCoverRole(layout.role))
     if (
-      current.length !== layoutIds.length ||
+      movable.length !== layoutIds.length ||
       new Set(layoutIds).size !== layoutIds.length ||
-      current.some((layout) => !layoutIds.includes(layout.id))
+      movable.some((layout) => !layoutIds.includes(layout.id))
     ) {
-      throw new HttpError(422, "Layout order must contain every layout once.")
+      throw new HttpError(422, "Layout order must contain every reorderable layout once.")
     }
-    for (const [index, layoutId] of layoutIds.entries()) {
+    // Covers keep their pinned place; positions are rewritten in presentation order.
+    const orderedIds = [
+      ...current.filter((layout) => layout.role === "front-cover").map((layout) => layout.id),
+      ...layoutIds,
+      ...current.filter((layout) => layout.role === "back-cover").map((layout) => layout.id),
+    ]
+    for (const [index, layoutId] of orderedIds.entries()) {
       await tx
         .update(layouts)
         .set({ position: -(index + 1), updatedAt: new Date() })
         .where(and(eq(layouts.id, layoutId), eq(layouts.projectId, projectId)))
     }
-    for (const [index, layoutId] of layoutIds.entries()) {
+    for (const [index, layoutId] of orderedIds.entries()) {
       await tx
         .update(layouts)
         .set({ position: index, updatedAt: new Date() })
@@ -781,7 +870,16 @@ export async function deleteLayout(projectId: string, layoutId: string): Promise
       .from(layouts)
       .where(eq(layouts.projectId, projectId))
       .orderBy(asc(layouts.position))
-    for (const [position, layout] of remaining.entries()) {
+    // Two passes through negative positions: `layouts_project_position_unique` is not deferrable,
+    // so moving a cover back to first or last must not collide with the layout already there.
+    const repacked = orderedLayouts(remaining)
+    for (const [position, layout] of repacked.entries()) {
+      await tx
+        .update(layouts)
+        .set({ position: -(position + 1) })
+        .where(eq(layouts.id, layout.id))
+    }
+    for (const [position, layout] of repacked.entries()) {
       await tx.update(layouts).set({ position }).where(eq(layouts.id, layout.id))
     }
     await tx
@@ -949,9 +1047,13 @@ export async function updateProjectBook(input: {
       .where(eq(books.projectId, input.projectId))
       .for("update")
     if (!book) throw new HttpError(409, "Generate the book first.")
+    const layoutRows = input.pages
+      ? await tx.select().from(layouts).where(eq(layouts.projectId, input.projectId))
+      : []
     const updated: GeneratedBook = {
       ...book.generatedBook,
-      ...(input.pages ? { pages: input.pages } : {}),
+      // Covers stay pinned however the client ordered the pages it sent.
+      ...(input.pages ? { pages: pinCoverPages(input.pages, layoutRows.map(layoutRecord)) } : {}),
       ...(input.settings ? { settings: input.settings } : {}),
       updatedAt: new Date().toISOString(),
     }

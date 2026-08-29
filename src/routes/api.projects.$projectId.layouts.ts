@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { z } from "zod"
 
 import { BACKGROUND_PRESET_IDS } from "#/domain/layout-backgrounds.ts"
+import { LAYOUT_ROLES } from "#/domain/layout-roles.ts"
 import { PAGE_FORMATS, PAGE_ORIENTATIONS } from "#/domain/page-format.ts"
 import { jsonError, readJson } from "#/server/http.ts"
 import {
@@ -16,6 +17,7 @@ const actionSchema = z.discriminatedUnion("action", [
     action: z.literal("create"),
     name: z.string().max(200).optional(),
     backgroundPresetId: z.enum(BACKGROUND_PRESET_IDS).optional(),
+    role: z.enum(LAYOUT_ROLES).optional(),
   }),
   z.object({
     action: z.literal("set-page-format"),
@@ -41,7 +43,12 @@ export const Route = createFileRoute("/api/projects/$projectId/layouts")({
           const input = actionSchema.parse(await readJson(request))
           if (input.action === "create") {
             return Response.json(
-              await createLayout(params.projectId, input.name, input.backgroundPresetId),
+              await createLayout(
+                params.projectId,
+                input.name,
+                input.backgroundPresetId,
+                input.role
+              ),
               { status: 201 }
             )
           }

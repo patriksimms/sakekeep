@@ -9,18 +9,23 @@ import {
   createSubmissionRecord,
   deleteLayout,
   deleteProject,
+  duplicateLayout,
   duplicateProject,
   findPublicProject,
   generateProjectBook,
   getProject,
   listProjects,
   publishProject,
+  reorderLayouts,
   setAssetFocalPoint,
   setProjectPageFormat,
   unarchiveProject,
   updateProject,
   updateSubmissionTextAnswers,
 } from "./repository.ts"
+import { db } from "./db/index.ts"
+import { books } from "./db/schema.ts"
+import { eq } from "drizzle-orm"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
 import { FORM_SCHEMA_VERSION, type FormSchema } from "../domain/types.ts"
 import { shareTokenForProject } from "./share-token.ts"
@@ -617,5 +622,131 @@ describe("project archiving", () => {
     const duplicate = await duplicateProject(project.id)
     createdProjectIds.add(duplicate.id)
     expect(duplicate).toMatchObject({ state: "draft", archivedAt: null })
+  })
+})
+
+describe("cover and standalone layouts", () => {
+  async function closedProject(title: string) {
+    const project = await createProject({ title })
+    createdProjectIds.add(project.id)
+    await updateProject({ projectId: project.id, formSchema: completeForm, expectedRevision: 0 })
+    await publishProject(project.id)
+    await createSubmissionRecord({
+      projectId: project.id,
+      idempotencyKey: crypto.randomUUID(),
+      answers: { name: "Nora", memory: "A memory", role: ["friend"], traits: ["kind"] },
+      pendingAssets: [],
+    })
+    await closeProject(project.id)
+    return project
+  }
+
+  const settings = {
+    mode: "cycle" as const,
+    seed: "covers",
+    manualAssignments: {},
+    resolutionOverrides: [],
+  }
+
+  it("allows one cover per side and pins it first and last in the book", async () => {
+    const project = await closedProject("Covers")
+    const response = await createLayout(project.id, "Response", "blank", "submission")
+    const front = await createLayout(project.id, "Front", "blank", "front-cover")
+    const back = await createLayout(project.id, "Back", "blank", "back-cover")
+
+    await expect(
+      createLayout(project.id, "Another front", "blank", "front-cover")
+    ).rejects.toBeInstanceOf(HttpError)
+
+    const book = await generateProjectBook(project.id, settings)
+    expect(book.pages.map((page) => page.layoutId)).toEqual([front.id, response.id, back.id])
+    expect(book.pages.at(0)).toMatchObject({ kind: "standalone" })
+    expect(book.pages.at(-1)).toMatchObject({ kind: "standalone" })
+  })
+
+  it("keeps covers in place when the reorderable layouts are rearranged", async () => {
+    const project = await closedProject("Cover order")
+    const front = await createLayout(project.id, "Front", "blank", "front-cover")
+    const first = await createLayout(project.id, "First", "blank", "submission")
+    const second = await createLayout(project.id, "Second", "blank", "submission")
+
+    const reordered = await reorderLayouts(project.id, [second.id, first.id])
+
+    expect(reordered.map((layout) => layout.id)).toEqual([front.id, second.id, first.id])
+    await expect(
+      reorderLayouts(project.id, [front.id, second.id, first.id])
+    ).rejects.toBeInstanceOf(HttpError)
+  })
+
+  it("duplicates a cover into a standalone layout so the single-cover rule holds", async () => {
+    const project = await closedProject("Cover copy")
+    const front = await createLayout(project.id, "Front", "blank", "front-cover")
+
+    const copy = await duplicateLayout(project.id, front.id)
+
+    expect(copy.role).toBe("static")
+    expect((await getProject(project.id)).layouts.map((layout) => layout.role)).toEqual([
+      "front-cover",
+      "static",
+    ])
+  })
+
+  it("keeps the front cover first after another layout is deleted", async () => {
+    const project = await closedProject("Cover after delete")
+    const doomed = await createLayout(project.id, "Doomed", "blank", "submission")
+    const front = await createLayout(project.id, "Front", "blank", "front-cover")
+    const kept = await createLayout(project.id, "Kept", "blank", "submission")
+
+    await deleteLayout(project.id, doomed.id)
+
+    expect((await getProject(project.id)).layouts.map((layout) => layout.id)).toEqual([
+      front.id,
+      kept.id,
+    ])
+  })
+
+  it("converts a book saved with text-only standalone pages into layout-backed pages", async () => {
+    const project = await closedProject("Legacy pages")
+    const response = await createLayout(project.id, "Response", "blank", "submission")
+    const generated = await generateProjectBook(project.id, settings)
+    const submissionPage = generated.pages[0]!
+    await db
+      .update(books)
+      .set({
+        generatedBook: {
+          ...generated,
+          pages: [
+            {
+              id: "standalone:legacy-cover",
+              kind: "standalone",
+              pageType: "cover",
+              title: "A book of memories",
+              body: "For Lea",
+              background: "#f4ede1",
+              problems: [],
+            },
+            submissionPage,
+          ],
+        } as never,
+      })
+      .where(eq(books.projectId, project.id))
+
+    const converted = await getProject(project.id)
+    const coverLayout = converted.layouts.find((layout) => layout.role === "front-cover")
+
+    expect(coverLayout).toBeDefined()
+    expect(coverLayout!.schema.background).toBe("#f4ede1")
+    expect(converted.layouts.map((layout) => layout.id)).toContain(response.id)
+    expect(converted.book!.pages[0]).toEqual({
+      id: "standalone:legacy-cover",
+      kind: "standalone",
+      layoutId: coverLayout!.id,
+      problems: [],
+    })
+
+    // Idempotent: a second load neither re-converts nor adds another layout.
+    const reloaded = await getProject(project.id)
+    expect(reloaded.layouts).toHaveLength(converted.layouts.length)
+    expect(reloaded.book!.pages).toEqual(converted.book!.pages)
   })
 })
