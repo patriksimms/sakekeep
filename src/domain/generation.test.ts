@@ -7,6 +7,7 @@ import {
   generateBook,
   inspectStandalonePage,
   inspectSubmissionPage,
+  invalidBookPages,
   pinCoverPages,
 } from "./generation.ts"
 import {
@@ -252,6 +253,116 @@ describe("book generation", () => {
     expect(
       pinCoverPages(pages, [response, front, back, standalone]).map((page) => page.id)
     ).toEqual(["standalone:front", "standalone:middle", "standalone:back"])
+  })
+
+  describe("book page validation", () => {
+    const response = layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0)
+    const front = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
+    const standalone = standaloneLayoutFixture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "static", 2)
+    const layouts = [response, front, standalone]
+    const empty = new Set<string>()
+
+    it("accepts a response page and a standalone page on their own layouts", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "submission:1",
+              kind: "submission",
+              submissionId: submissionIds[0]!,
+              layoutId: response.id,
+              problems: [],
+            },
+            {
+              id: "standalone:1",
+              kind: "standalone",
+              layoutId: standalone.id,
+              problems: [],
+            },
+          ],
+          layouts,
+          empty
+        )
+      ).toEqual([])
+    })
+
+    it("rejects a standalone page placed on a response layout", () => {
+      expect(
+        invalidBookPages(
+          [{ id: "standalone:1", kind: "standalone", layoutId: response.id, problems: [] }],
+          layouts,
+          empty
+        )
+      ).toEqual([{ pageId: "standalone:1", reason: "is a standalone page on a response layout" }])
+    })
+
+    it("rejects a response page assigned to a layout generation would never pick", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "submission:1",
+              kind: "submission",
+              submissionId: submissionIds[0]!,
+              layoutId: front.id,
+              problems: [],
+            },
+          ],
+          layouts,
+          empty
+        )
+      ).toEqual([{ pageId: "submission:1", reason: "is a response page on a non-response layout" }])
+    })
+
+    it("rejects a duplicated cover page", () => {
+      const issues = invalidBookPages(
+        [
+          { id: "standalone:a", kind: "standalone", layoutId: front.id, problems: [] },
+          { id: "standalone:b", kind: "standalone", layoutId: front.id, problems: [] },
+        ],
+        layouts,
+        empty
+      )
+
+      expect(issues).toEqual([{ pageId: "standalone:b", reason: "duplicates a cover page" }])
+    })
+
+    it("rejects a new page on a layout the project does not own", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "standalone:new",
+              kind: "standalone",
+              layoutId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+              problems: [],
+            },
+          ],
+          layouts,
+          empty
+        )
+      ).toEqual([
+        { pageId: "standalone:new", reason: "references a layout this project does not own" },
+      ])
+    })
+
+    it("keeps a stored page whose layout was deleted, so a stale book stays editable", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "submission:1",
+              kind: "submission",
+              submissionId: submissionIds[0]!,
+              layoutId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+              problems: [],
+            },
+          ],
+          layouts,
+          new Set(["submission:1"])
+        )
+      ).toEqual([])
+    })
   })
 
   it("calculates effective resolution thresholds", () => {

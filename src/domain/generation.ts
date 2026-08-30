@@ -396,6 +396,53 @@ export function inspectSubmissionPage(
   return problems
 }
 
+export interface BookPageIssue {
+  pageId: string
+  reason: string
+}
+
+/**
+ * Rejects page sets a client must never be able to persist: a response page on a layout that
+ * generation would not assign, a standalone page on a response layout (generation drops it on the
+ * next run), a duplicated cover, or a page introduced with a layout the project does not own.
+ *
+ * A page that already exists in the stored book keeps its layout even when that layout is gone:
+ * deleting a layout deliberately leaves the stale book referencing it until it is regenerated.
+ */
+export function invalidBookPages(
+  pages: BookPage[],
+  layouts: LayoutRecord[],
+  storedPageIds: ReadonlySet<string>
+): BookPageIssue[] {
+  const layoutById = new Map(layouts.map((layout) => [layout.id, layout]))
+  const issues: BookPageIssue[] = []
+  const coverPageCounts = new Map<string, number>()
+  for (const page of pages) {
+    const layout = layoutById.get(page.layoutId)
+    if (!layout) {
+      if (!storedPageIds.has(page.id)) {
+        issues.push({ pageId: page.id, reason: "references a layout this project does not own" })
+      }
+      continue
+    }
+    if (page.kind === "submission" && layout.role !== "submission") {
+      issues.push({ pageId: page.id, reason: "is a response page on a non-response layout" })
+      continue
+    }
+    if (page.kind === "standalone" && layout.role === "submission") {
+      issues.push({ pageId: page.id, reason: "is a standalone page on a response layout" })
+      continue
+    }
+    if (!isCoverRole(layout.role)) continue
+    const seen = (coverPageCounts.get(layout.id) ?? 0) + 1
+    coverPageCounts.set(layout.id, seen)
+    if (seen > 1) {
+      issues.push({ pageId: page.id, reason: "duplicates a cover page" })
+    }
+  }
+  return issues
+}
+
 /**
  * Restores the pinned order after pages were rearranged: the front-cover page first, the
  * back-cover page last, every other page in the order it was given.

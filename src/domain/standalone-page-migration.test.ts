@@ -64,6 +64,10 @@ describe("legacy standalone page schema", () => {
     const [title, body] = schema.elements
     expect(title).toMatchObject({ type: "static-text", content: "A book of memories" })
     expect(body).toMatchObject({ type: "static-text", content: "For Lea, from everyone." })
+    // The old exporter shrank an over-wide title to one line and clipped the body to the lines
+    // that fit; keeping those policies stops a converted book from gaining a blocking problem.
+    expect(title).toMatchObject({ text: { overflow: "shrink" } })
+    expect(body).toMatchObject({ text: { overflow: "truncate" } })
     for (const element of schema.elements) {
       expect(element.geometry.x).toBeGreaterThanOrEqual(specification.safeMarginMm)
       expect(element.geometry.y).toBeGreaterThanOrEqual(specification.safeMarginMm)
@@ -75,6 +79,44 @@ describe("legacy standalone page schema", () => {
       )
     }
     expect(title!.geometry.y).toBeLessThan(body!.geometry.y)
+  })
+
+  it("puts the title and body baselines where the old exporter drew them", () => {
+    const schema = legacyStandaloneSchema(legacyPage(), specification)
+    const [title, body] = schema.elements
+    const mmPerPoint = 25.4 / 72
+    // The old renderer placed the title baseline at 68 % of the trim height from the bottom and
+    // the body baseline 14 mm below it; a text box starts one line height above its first
+    // baseline.
+    const titleBaseline = specification.trimHeightMm * 0.32
+    const titleLine = 30 * mmPerPoint * 1.25
+    const bodyLine = 12 * mmPerPoint * (16 / 12)
+
+    expect(title!.geometry.x).toBe(15)
+    expect(title!.geometry.width).toBe(specification.trimWidthMm - 30)
+    expect(title!.geometry.y + titleLine).toBeCloseTo(titleBaseline, 6)
+    expect(body!.geometry.y + bodyLine).toBeCloseTo(titleBaseline + 14, 6)
+    // The body stopped 12 mm above the trim edge.
+    expect(body!.geometry.y + body!.geometry.height).toBeCloseTo(specification.trimHeightMm - 12, 6)
+  })
+
+  it.each([
+    ["a5", "landscape"],
+    ["a6", "portrait"],
+    ["a4", "portrait"],
+  ] as const)("keeps converted text inside the safe area on %s %s", (format, orientation) => {
+    const page = legacyPage({ title: "A rather long cover title", body: "Body. ".repeat(30) })
+    const target = pageSpecification(format, orientation)
+    const schema = legacyStandaloneSchema(page, target)
+
+    expect(schema.elements.length).toBeGreaterThan(0)
+    for (const element of schema.elements) {
+      expect(element.geometry.height).toBeGreaterThan(0)
+      expect(element.geometry.y).toBeGreaterThanOrEqual(target.safeMarginMm)
+      expect(element.geometry.y + element.geometry.height).toBeLessThanOrEqual(
+        target.trimHeightMm - target.safeMarginMm
+      )
+    }
   })
 
   it("omits empty text and leaves a blank page without elements", () => {

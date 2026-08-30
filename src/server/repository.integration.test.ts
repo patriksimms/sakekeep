@@ -21,6 +21,7 @@ import {
   setProjectPageFormat,
   unarchiveProject,
   updateProject,
+  updateProjectBook,
   updateSubmissionTextAnswers,
 } from "./repository.ts"
 import { db } from "./db/index.ts"
@@ -703,6 +704,98 @@ describe("cover and standalone layouts", () => {
       front.id,
       kept.id,
     ])
+  })
+
+  it("carries layout roles into a duplicated project", async () => {
+    const project = await closedProject("Cover duplication")
+    await createLayout(project.id, "Response", "blank", "submission")
+    await createLayout(project.id, "Front", "blank", "front-cover")
+    await createLayout(project.id, "Back", "blank", "back-cover")
+    await createLayout(project.id, "Note", "blank", "static")
+
+    const copy = await duplicateProject(project.id)
+    createdProjectIds.add(copy.id)
+
+    expect(copy.layouts.map((layout) => layout.role)).toEqual([
+      "front-cover",
+      "submission",
+      "static",
+      "back-cover",
+    ])
+  })
+
+  it("refuses page edits that put a page on a layout of the wrong role", async () => {
+    const project = await closedProject("Page validation")
+    const response = await createLayout(project.id, "Response", "blank", "submission")
+    const front = await createLayout(project.id, "Front", "blank", "front-cover")
+    const book = await generateProjectBook(project.id, settings)
+    const responsePage = book.pages.find((page) => page.kind === "submission")!
+
+    // A standalone page may not sit on a response layout: generation would drop it silently.
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        pages: [
+          ...book.pages,
+          {
+            id: "standalone:invalid",
+            kind: "standalone" as const,
+            layoutId: response.id,
+            problems: [],
+          },
+        ],
+      })
+    ).rejects.toBeInstanceOf(HttpError)
+
+    // Nor may a response page be pinned to a cover layout.
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        pages: book.pages.map((page) =>
+          page.id === responsePage.id ? { ...page, layoutId: front.id } : page
+        ),
+      })
+    ).rejects.toBeInstanceOf(HttpError)
+
+    // A duplicated cover page is rejected too.
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        pages: [
+          ...book.pages,
+          {
+            id: "standalone:second",
+            kind: "standalone" as const,
+            layoutId: front.id,
+            problems: [],
+          },
+        ],
+      })
+    ).rejects.toBeInstanceOf(HttpError)
+
+    expect((await getProject(project.id)).book!.pages).toEqual(book.pages)
+  })
+
+  it("still accepts reordering a stale book whose layout was deleted", async () => {
+    const project = await closedProject("Stale reorder")
+    const response = await createLayout(project.id, "Response", "blank", "submission")
+    await createLayout(project.id, "Spare", "blank", "submission")
+    const note = await createLayout(project.id, "Note", "blank", "static")
+    const generated = await generateProjectBook(project.id, settings)
+    const withNote = [
+      ...generated.pages,
+      { id: "standalone:note", kind: "standalone" as const, layoutId: note.id, problems: [] },
+    ]
+    await updateProjectBook({ projectId: project.id, pages: withNote })
+    await deleteLayout(project.id, response.id)
+
+    const stored = (await getProject(project.id)).book!
+    const reordered = await updateProjectBook({
+      projectId: project.id,
+      pages: [...stored.pages].reverse(),
+    })
+
+    expect(reordered.pages).toHaveLength(stored.pages.length)
   })
 
   it("converts a book saved with text-only standalone pages into layout-backed pages", async () => {

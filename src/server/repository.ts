@@ -6,7 +6,7 @@ import {
   validateFormForDraft,
   validateFormForPublish,
 } from "../domain/form"
-import { generateBook, pinCoverPages } from "../domain/generation"
+import { generateBook, invalidBookPages, pinCoverPages } from "../domain/generation"
 import { type BackgroundPresetId, backgroundSchema } from "../domain/layout-backgrounds"
 import { emptyLayoutSchema, layoutSchemaValidator, resizeLayoutSchema } from "../domain/layout"
 import { isCoverRole, layoutRoleLabel, orderedLayouts } from "../domain/layout-roles.ts"
@@ -557,6 +557,7 @@ export async function duplicateProject(projectId: string): Promise<Project> {
           projectId: newId,
           name: layout.name,
           position: layout.position,
+          role: layout.role,
           schema: layout.schema,
         }))
       )
@@ -1053,6 +1054,17 @@ export async function updateProjectBook(input: {
     const layoutRows = input.pages
       ? await tx.select().from(layouts).where(eq(layouts.projectId, input.projectId))
       : []
+    const projectLayouts = layoutRows.map(layoutRecord)
+    if (input.pages) {
+      const issues = invalidBookPages(
+        input.pages,
+        projectLayouts,
+        new Set(book.generatedBook.pages.map((page) => page.id))
+      )
+      if (issues.length > 0) {
+        throw new HttpError(422, `A page ${issues[0]!.reason}.`, { issues })
+      }
+    }
     const updated: GeneratedBook = {
       ...book.generatedBook,
       // Covers stay pinned however the client ordered the pages it sent.

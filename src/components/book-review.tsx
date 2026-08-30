@@ -89,7 +89,7 @@ import {
   type LayoutRecord,
   type StandaloneBookPage,
 } from "#/domain/types.ts"
-import { isCoverRole, layoutRoleLabel } from "#/domain/layout-roles.ts"
+import { isCoverRole, layoutRoleLabel, responseLayouts } from "#/domain/layout-roles.ts"
 import { pinCoverPages } from "#/domain/generation.ts"
 import { submissionLabel } from "#/domain/submission-label.ts"
 import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
@@ -436,6 +436,8 @@ export function BookReview({
   const pages = book?.pages ?? []
   const selected = pages.find((page) => page.id === selectedId) ?? pages[0]
   const selectedLayout = project.layouts.find((layout) => layout.id === selected?.layoutId)
+  // Only response layouts may back a response page; generation would discard any other choice.
+  const assignableLayouts = responseLayouts(project.layouts)
   const problems = pages.flatMap((page) => page.problems)
 
   const changeView = (next: BookView, source: "toggle" | "page_tile" | "problem_shortcut") => {
@@ -856,7 +858,7 @@ export function BookReview({
                     </CardHeader>
                     <CardContent>
                       <Select
-                        items={project.layouts.map((layout) => ({
+                        items={assignableLayouts.map((layout) => ({
                           label: layout.name,
                           value: layout.id,
                         }))}
@@ -889,7 +891,7 @@ export function BookReview({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            {project.layouts.map((layout) => (
+                            {assignableLayouts.map((layout) => (
                               <SelectItem key={layout.id} value={layout.id}>
                                 {layout.name}
                               </SelectItem>

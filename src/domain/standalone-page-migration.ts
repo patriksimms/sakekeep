@@ -40,21 +40,44 @@ export function isLegacyStandalonePage(
   )
 }
 
-const TEXT_MARGIN_MM = 18
-const TITLE_TOP_MM = 24
-const TITLE_HEIGHT_MM = 16
-const BODY_GAP_MM = 6
+/*
+ * The old exporter drew these pages itself with fixed typography. The constants below mirror it so
+ * a converted page keeps its appearance: a 15 mm side margin, the title baseline at 68 % of the
+ * trim height measured from the bottom, the body baseline 14 mm under it on a 16 pt grid, and the
+ * body stopping 12 mm above the trim edge.
+ */
+const TEXT_MARGIN_MM = 15
+const TITLE_BASELINE_FRACTION = 0.32
+const BODY_BASELINE_OFFSET_MM = 14
+const BODY_BOTTOM_MARGIN_MM = 12
+const TITLE_SIZE_PT = 30
+const TITLE_LINE_HEIGHT = 1.25
+const BODY_SIZE_PT = 12
+/** 16 pt of leading on a 12 pt body, as the old exporter stepped its lines. */
+const BODY_LINE_HEIGHT = 16 / 12
+const MM_PER_POINT = 25.4 / 72
+
+function lineHeightMm(sizePt: number, lineHeight: number): number {
+  return sizePt * MM_PER_POINT * lineHeight
+}
 
 /**
- * A layout that renders the legacy title and body the way the old standalone renderer did: a
+ * A layout that renders the legacy title and body where the old standalone renderer put them: a
  * serif title over a sans body, both inset from the trim edge.
+ *
+ * Text boxes are top-anchored and the first baseline sits one line height below the box top, so
+ * each box starts one line height above the baseline it has to reproduce.
  */
 export function legacyStandaloneSchema(
   page: LegacyStandaloneBookPage,
   specification: PageSpecification
 ): LayoutSchema {
-  const width = specification.trimWidthMm - TEXT_MARGIN_MM * 2
-  const bodyTop = TITLE_TOP_MM + TITLE_HEIGHT_MM + BODY_GAP_MM
+  const width = Math.max(20, specification.trimWidthMm - TEXT_MARGIN_MM * 2)
+  const titleLine = lineHeightMm(TITLE_SIZE_PT, TITLE_LINE_HEIGHT)
+  const bodyLine = lineHeightMm(BODY_SIZE_PT, BODY_LINE_HEIGHT)
+  const titleBaseline = specification.trimHeightMm * TITLE_BASELINE_FRACTION
+  const bodyBaseline = titleBaseline + BODY_BASELINE_OFFSET_MM
+  const bodyTop = bodyBaseline - bodyLine
   const schema: LayoutSchema = {
     version: LAYOUT_SCHEMA_VERSION,
     trim: {
@@ -73,9 +96,9 @@ export function legacyStandaloneSchema(
       type: "static-text",
       geometry: {
         x: TEXT_MARGIN_MM,
-        y: TITLE_TOP_MM,
+        y: Math.max(0, titleBaseline - titleLine),
         width,
-        height: TITLE_HEIGHT_MM,
+        height: titleLine,
         rotation: 0,
       },
       opacity: 1,
@@ -84,9 +107,12 @@ export function legacyStandaloneSchema(
         ...DEFAULT_TEXT_SETTINGS,
         fontFamily: "Source Serif 4",
         fontWeight: "bold",
-        fontSize: 30,
-        minFontSize: 12,
+        fontSize: TITLE_SIZE_PT,
+        minFontSize: 6,
         color: "#292524",
+        lineHeight: TITLE_LINE_HEIGHT,
+        // The old exporter scaled an over-wide title down to one line.
+        overflow: "shrink",
       },
     })
   }
@@ -98,7 +124,7 @@ export function legacyStandaloneSchema(
         x: TEXT_MARGIN_MM,
         y: bodyTop,
         width,
-        height: specification.trimHeightMm - bodyTop - TEXT_MARGIN_MM,
+        height: Math.max(bodyLine, specification.trimHeightMm - BODY_BOTTOM_MARGIN_MM - bodyTop),
         rotation: 0,
       },
       opacity: 1,
@@ -106,10 +132,13 @@ export function legacyStandaloneSchema(
       text: {
         ...DEFAULT_TEXT_SETTINGS,
         fontFamily: "Inter",
-        fontSize: 12,
-        minFontSize: 8,
+        fontSize: BODY_SIZE_PT,
+        minFontSize: BODY_SIZE_PT,
         color: "#57534e",
-        lineHeight: 1.35,
+        lineHeight: BODY_LINE_HEIGHT,
+        // The old exporter clipped the body to the lines that fit; truncating keeps that and
+        // keeps an already-exported book from gaining a blocking overflow problem.
+        overflow: "truncate",
       },
     })
   }
