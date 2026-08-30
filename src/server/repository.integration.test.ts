@@ -28,7 +28,7 @@ import {
   updateSubmissionTextAnswers,
 } from "./repository.ts"
 import { db } from "./db/index.ts"
-import { assetTombstones, books } from "./db/schema.ts"
+import { assetTombstones, books, exportsTable } from "./db/schema.ts"
 import { eq, inArray, sql } from "drizzle-orm"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
 import { FORM_SCHEMA_VERSION, type ExportReport, type FormSchema } from "../domain/types.ts"
@@ -924,6 +924,85 @@ describe("export object reservations", () => {
 
     expect(await reservedKeys(keys)).toEqual([...keys].sort())
     await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
+  })
+
+  it("refuses to record an export whose reservation a sweep already claimed", async () => {
+    const project = await createProject({ title: "Swept export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    // The sweep won the keys and deleted the files, so the export row must not be written
+    // against downloads that no longer exist.
+    await expect(
+      recordExport({
+        projectId: project.id,
+        sourceFingerprint: "swept-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport(project.id),
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    const [recorded] = await db
+      .select({ id: exportsTable.id })
+      .from(exportsTable)
+      .where(eq(exportsTable.projectId, project.id))
+    expect(recorded).toBeUndefined()
+  })
+
+  it("lets exactly one of a sweep and an export win the same reservation", async () => {
+    const project = await createProject({ title: "Contested export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    // Both go for the same rows on their own connection; whichever commits first takes
+    // the keys and the other has to come away empty.
+    const [swept, recorded] = await Promise.allSettled([
+      cleanupOrphanedObjects(),
+      recordExport({
+        projectId: project.id,
+        sourceFingerprint: "contested-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport(project.id),
+      }),
+    ])
+
+    expect(swept.status).toBe("fulfilled")
+    const exportRows = await db
+      .select({ id: exportsTable.id })
+      .from(exportsTable)
+      .where(eq(exportsTable.projectId, project.id))
+    const sweptKeys = (swept as PromiseFulfilledResult<{ removed: number }>).value.removed
+    if (recorded.status === "fulfilled") {
+      // The export won, so the sweep must not have taken its files with it.
+      expect(exportRows).toHaveLength(1)
+      expect(sweptKeys).toBe(0)
+    } else {
+      expect(exportRows).toHaveLength(0)
+      expect(sweptKeys).toBe(keys.length)
+    }
+    // Either way the reservation is gone: nothing is left half-claimed.
+    expect(await reservedKeys(keys)).toEqual([])
   })
 
   it("sweeps a reservation only once it has had time to be claimed", async () => {

@@ -611,17 +611,23 @@ export async function deleteProject(projectId: string): Promise<void> {
     return objectKeys
   })
 
-  const failed = await deleteObjects(keys)
-  const succeeded = keys.filter((key) => !failed.includes(key))
-  if (succeeded.length > 0) {
-    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, succeeded))
+  // Same rule as the sweep: delete only the objects whose tombstone this call won, and
+  // give back whatever could not be deleted so a later sweep retries it.
+  const claimed = await claimTombstones(db, keys)
+  const failed = await deleteObjects(claimed)
+  if (failed.length > 0) {
+    await db
+      .insert(assetTombstones)
+      .values(failed.map((objectKey) => ({ objectKey })))
+      .onConflictDoNothing()
   }
 }
 
 /**
  * Claims object keys as removable before anything is written under them, so a write that
  * dies before its owning row exists still leaves the files discoverable for the sweep.
- * The claim is released by the insert that takes ownership of the keys.
+ * The claim lasts until whoever takes ownership of the keys wins them back with
+ * `claimTombstones`.
  */
 export async function reserveObjects(keys: string[]): Promise<void> {
   if (keys.length === 0) return
@@ -632,10 +638,28 @@ export async function reserveObjects(keys: string[]): Promise<void> {
 }
 
 /**
- * How long a tombstone has to sit before the sweep acts on it. Deletions that go through
- * `deleteProject` remove their objects right away and only fall back to the sweep on
- * failure, so the delay costs nothing there — but it keeps the sweep from deleting the
- * files of a reserved write that is still uploading.
+ * Takes exclusive ownership of the given tombstones and reports which ones were actually
+ * won. Removing the row *is* the claim: the row is the only thing two racing parties both
+ * hold, so whoever deletes it first commits and the loser sees its keys missing. Nothing
+ * may delete an object it did not win here.
+ */
+async function claimTombstones(
+  executor: Pick<typeof db, "delete">,
+  keys: string[]
+): Promise<string[]> {
+  if (keys.length === 0) return []
+  const claimed = await executor
+    .delete(assetTombstones)
+    .where(inArray(assetTombstones.objectKey, keys))
+    .returning({ objectKey: assetTombstones.objectKey })
+  return claimed.map((row) => row.objectKey)
+}
+
+/**
+ * How long a tombstone sits before the sweep will try to claim it. Deletions that go
+ * through `deleteProject` remove their objects right away and only fall back to the sweep
+ * on failure, so the delay costs nothing there; for an export still uploading it is the
+ * window in which the export is certain to win its own keys back.
  */
 const TOMBSTONE_GRACE_MS = 60 * 60 * 1000
 
@@ -643,17 +667,29 @@ export async function cleanupOrphanedObjects(): Promise<{
   removed: number
   remaining: number
 }> {
-  const rows = await db
+  const stale = await db
     .select()
     .from(assetTombstones)
     .where(lt(assetTombstones.createdAt, new Date(Date.now() - TOMBSTONE_GRACE_MS)))
-  const keys = rows.map((row) => row.objectKey)
-  const failed = await deleteObjects(keys)
-  const succeeded = keys.filter((key) => !failed.includes(key))
-  if (succeeded.length > 0) {
-    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, succeeded))
+  // Claim before deleting anything. A key whose owner committed in the meantime is no
+  // longer ours, so its object stays where the owning row expects it.
+  const claimed = new Set(
+    await claimTombstones(
+      db,
+      stale.map((row) => row.objectKey)
+    )
+  )
+  const failed = await deleteObjects([...claimed])
+  if (failed.length > 0) {
+    // Hand the ones we could not delete back to a later sweep, keeping the age they had
+    // so a failing object is retried rather than pushed behind the grace period again.
+    const ages = new Map(stale.map((row) => [row.objectKey, row.createdAt]))
+    await db
+      .insert(assetTombstones)
+      .values(failed.map((objectKey) => ({ objectKey, createdAt: ages.get(objectKey) })))
+      .onConflictDoNothing()
   }
-  return { removed: succeeded.length, remaining: failed.length }
+  return { removed: claimed.size - failed.length, remaining: failed.length }
 }
 
 function markBookStaleSet(status: "not-generated" | "current" | "stale") {
@@ -1361,10 +1397,17 @@ export async function recordExport(input: {
     input.pageJpegZipObjectKey,
   ].filter((key): key is string => key !== null)
   await db.transaction(async (tx) => {
+    // Take the reservation back before recording the row that will own it. Losing even one
+    // key means a sweep got there first and the files are already gone, so the export must
+    // fail loudly rather than be recorded with objects nobody can download.
+    const claimed = await claimTombstones(tx, objectKeys)
+    if (claimed.length !== objectKeys.length) {
+      throw new HttpError(
+        409,
+        "The exported files were cleaned up before the export was recorded. Export again."
+      )
+    }
     await tx.insert(exportsTable).values({ id, ...input })
-    // The row now owns these objects, so hand them over from the reservation in the same
-    // commit: either the export exists or the objects stay swept.
-    await tx.delete(assetTombstones).where(inArray(assetTombstones.objectKey, objectKeys))
   })
   return id
 }
