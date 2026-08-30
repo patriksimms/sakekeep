@@ -627,8 +627,8 @@ export async function deleteProject(projectId: string): Promise<void> {
   // Same rule as the sweep: delete only the objects whose tombstone this call won, and
   // leave the row behind until the store confirms, so a crash here still leaves the sweep
   // something to retry.
-  const claimed = await claimTombstones(db, keys)
-  await settleTombstones(claimed, await deleteObjects(claimed))
+  const claim = await claimTombstones(db, keys)
+  await settleTombstones(claim, await deleteObjects(claim.keys))
 }
 
 /**
@@ -648,9 +648,20 @@ export async function reserveObjects(keys: string[]): Promise<void> {
 /**
  * How long a claim is honoured before another deleter may take the object on. A deleter
  * that dies mid-call leaves its claim behind, so without an expiry the row would sit
- * claimed forever and the object would never be retried.
+ * claimed forever and the object would never be retried. It also paces retries: a delete
+ * the store refused is tried again by the next claim rather than in a tight loop.
  */
 const CLAIM_LEASE_MS = 15 * 60 * 1000
+
+/**
+ * The keys one call won, and the stamp that proves they are still its own. A row can only
+ * be re-claimed once the lease has run out, so a second claim on the same key is always at
+ * least a lease later than the first: the stamp is enough to tell two holders apart.
+ */
+interface TombstoneClaim {
+  keys: string[]
+  claimedAt: Date
+}
 
 /**
  * Takes the given tombstones on and reports which ones were actually won. Marking the row
@@ -664,39 +675,46 @@ const CLAIM_LEASE_MS = 15 * 60 * 1000
 async function claimTombstones(
   executor: Pick<typeof db, "update">,
   keys: string[]
-): Promise<string[]> {
-  if (keys.length === 0) return []
+): Promise<TombstoneClaim> {
+  const claimedAt = new Date()
+  if (keys.length === 0) return { keys: [], claimedAt }
   const claimed = await executor
     .update(assetTombstones)
-    .set({ claimedAt: new Date() })
+    .set({ claimedAt })
     .where(
       and(
         inArray(assetTombstones.objectKey, keys),
         or(
           isNull(assetTombstones.claimedAt),
-          lt(assetTombstones.claimedAt, new Date(Date.now() - CLAIM_LEASE_MS))
+          lt(assetTombstones.claimedAt, new Date(claimedAt.getTime() - CLAIM_LEASE_MS))
         )
       )
     )
     .returning({ objectKey: assetTombstones.objectKey })
-  return claimed.map((row) => row.objectKey)
+  return { keys: claimed.map((row) => row.objectKey), claimedAt }
 }
 
 /**
- * Closes out a claim: a deleted object no longer needs a row, and one the store refused
- * goes back on offer right away rather than waiting out the lease.
+ * Closes out a claim by dropping the rows whose objects are confirmed gone, and only those
+ * this claim still holds — a holder that overran its lease must not disturb the one that
+ * took over from it.
+ *
+ * A key the store refused keeps its stamp and is retried by whoever claims it next. Handing
+ * it straight back would mean clearing the stamp, and an unclaimed tombstone is one an
+ * export may take ownership of, which is not safe for an object a deleter has already been
+ * at. Once claimed, a tombstone is never unclaimed.
  */
-async function settleTombstones(claimed: string[], failed: string[]): Promise<void> {
-  const deleted = claimed.filter((key) => !failed.includes(key))
-  if (deleted.length > 0) {
-    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, deleted))
-  }
-  if (failed.length > 0) {
-    await db
-      .update(assetTombstones)
-      .set({ claimedAt: null })
-      .where(inArray(assetTombstones.objectKey, failed))
-  }
+async function settleTombstones(claim: TombstoneClaim, failed: string[]): Promise<void> {
+  const deleted = claim.keys.filter((key) => !failed.includes(key))
+  if (deleted.length === 0) return
+  await db
+    .delete(assetTombstones)
+    .where(
+      and(
+        inArray(assetTombstones.objectKey, deleted),
+        eq(assetTombstones.claimedAt, claim.claimedAt)
+      )
+    )
 }
 
 /**
@@ -717,13 +735,13 @@ export async function cleanupOrphanedObjects(): Promise<{
     .where(lt(assetTombstones.createdAt, new Date(Date.now() - TOMBSTONE_GRACE_MS)))
   // Claim before deleting anything. A key whose owner committed in the meantime is no
   // longer ours, so its object stays where the owning row expects it.
-  const claimed = await claimTombstones(
+  const claim = await claimTombstones(
     db,
     stale.map((row) => row.objectKey)
   )
-  const failed = await deleteObjects(claimed)
-  await settleTombstones(claimed, failed)
-  return { removed: claimed.length - failed.length, remaining: failed.length }
+  const failed = await deleteObjects(claim.keys)
+  await settleTombstones(claim, failed)
+  return { removed: claim.keys.length - failed.length, remaining: failed.length }
 }
 
 function markBookStaleSet(status: "not-generated" | "current" | "stale") {

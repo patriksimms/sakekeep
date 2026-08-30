@@ -29,7 +29,7 @@ import {
 } from "./repository.ts"
 import { db } from "./db/index.ts"
 import { assetTombstones, books, exportsTable } from "./db/schema.ts"
-import { eq, inArray, sql } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
 import { FORM_SCHEMA_VERSION, type ExportReport, type FormSchema } from "../domain/types.ts"
 import { shareTokenForProject } from "./share-token.ts"
@@ -873,6 +873,14 @@ function exportReport(projectId: string): ExportReport {
   }
 }
 
+async function claimStamp(key: string): Promise<Date | null | undefined> {
+  const [row] = await db
+    .select({ claimedAt: assetTombstones.claimedAt })
+    .from(assetTombstones)
+    .where(inArray(assetTombstones.objectKey, [key]))
+  return row?.claimedAt
+}
+
 async function reservedKeys(keys: string[]): Promise<string[]> {
   const rows = await db
     .select({ objectKey: assetTombstones.objectKey })
@@ -1016,9 +1024,12 @@ describe("export object reservations", () => {
       .set({ createdAt: sql`now() - interval '2 hours'`, claimedAt: sql`now()` })
       .where(inArray(assetTombstones.objectKey, keys))
 
+    const held = await claimStamp(keys[0]!)
     await cleanupOrphanedObjects()
-    // The row outlives the claim, so nothing about the pending deletion was lost.
+    // The row outlives the claim, so nothing about the pending deletion was lost, and the
+    // sweep leaves a live claim exactly as it found it.
     expect(await reservedKeys(keys)).toEqual(keys)
+    expect(await claimStamp(keys[0]!)).toEqual(held)
 
     await db
       .update(assetTombstones)
@@ -1028,6 +1039,38 @@ describe("export object reservations", () => {
 
     // Once the lease is up the object is offered again and this sweep finishes the job.
     expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("stamps a taken-over claim afresh so the previous holder cannot settle it", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    const abandoned = new Date(Date.now() - 60 * 60 * 1000)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'`, claimedAt: abandoned })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    // Take the object on the way a sweep would, then stop before deleting anything.
+    await db
+      .update(assetTombstones)
+      .set({ claimedAt: new Date() })
+      .where(inArray(assetTombstones.objectKey, keys))
+    const takenOver = await claimStamp(keys[0]!)
+    expect(takenOver).not.toEqual(abandoned)
+
+    // The stamp the abandoned holder would settle against no longer matches, so its row
+    // delete finds nothing and the new holder keeps the object.
+    await db
+      .delete(assetTombstones)
+      .where(
+        and(inArray(assetTombstones.objectKey, keys), eq(assetTombstones.claimedAt, abandoned))
+      )
+    expect(await reservedKeys(keys)).toEqual(keys)
+    expect(await claimStamp(keys[0]!)).toEqual(takenOver)
+
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
   })
 
   it("refuses to record an export while a deleter holds its keys", async () => {
