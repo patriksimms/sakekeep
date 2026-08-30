@@ -6,20 +6,31 @@ import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "#
 
 const getProject = vi.fn()
 const recordExport = vi.fn()
+const reserveObjects = vi.fn()
 const putObject = vi.fn()
+const putObjectStream = vi.fn()
+const calls: string[] = []
 
 vi.mock("./repository.ts", () => ({
   getProject: (...args: unknown[]) => getProject(...args),
   recordExport: (...args: unknown[]) => recordExport(...args),
+  reserveObjects: (...args: unknown[]) => reserveObjects(...args),
   getAsset: vi.fn(),
 }))
 
 vi.mock("./object-store.ts", () => ({
   putObject: (...args: unknown[]) => putObject(...args),
+  putObjectStream: (...args: unknown[]) => putObjectStream(...args),
   getObject: vi.fn(),
 }))
 
 const { exportProject } = await import("./export-service.ts")
+
+async function collect(body: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = []
+  for await (const chunk of body) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
 
 function cleanProject(): Project {
   const project = currentProject()
@@ -30,10 +41,8 @@ function cleanProject(): Project {
   }
 }
 
-function storedObject(key: string): Uint8Array | undefined {
-  const call = putObject.mock.calls.find(([input]) => (input as { key: string }).key.endsWith(key))
-  return call ? (call[0] as { body: Uint8Array }).body : undefined
-}
+/** The bytes a streamed upload actually wrote, reassembled the way the bucket sees them. */
+const streamedObjects = new Map<string, Uint8Array>()
 
 function currentProject(): Project {
   const layout = layoutFixture()
@@ -79,10 +88,30 @@ function currentProject(): Project {
 
 describe("export page bundles", () => {
   beforeEach(() => {
+    calls.length = 0
+    streamedObjects.clear()
     putObject.mockReset()
-    putObject.mockResolvedValue(undefined)
+    putObject.mockImplementation((input: { key: string; contentType: string }) => {
+      calls.push(`put:${input.contentType}`)
+      return Promise.resolve()
+    })
+    putObjectStream.mockReset()
+    putObjectStream.mockImplementation(
+      async (input: { key: string; body: AsyncIterable<Uint8Array>; contentType: string }) => {
+        calls.push(`stream:${input.contentType}`)
+        streamedObjects.set(input.key, await collect(input.body))
+      }
+    )
+    reserveObjects.mockReset()
+    reserveObjects.mockImplementation((keys: string[]) => {
+      calls.push(`reserve:${keys.length}`)
+      return Promise.resolve()
+    })
     recordExport.mockReset()
-    recordExport.mockResolvedValue("55555555-5555-4555-8555-555555555555")
+    recordExport.mockImplementation(() => {
+      calls.push("record")
+      return Promise.resolve("55555555-5555-4555-8555-555555555555")
+    })
     getProject.mockResolvedValue(cleanProject())
   })
 
@@ -93,13 +122,13 @@ describe("export page bundles", () => {
       reviewedBookFingerprint: null,
     })
 
-    expect(
-      putObject.mock.calls.map(([input]) => (input as { contentType: string }).contentType)
-    ).toEqual([
-      "application/pdf",
-      "text/plain; charset=utf-8",
-      "application/zip",
-      "application/zip",
+    expect(calls).toEqual([
+      "reserve:4",
+      "put:application/pdf",
+      "put:text/plain; charset=utf-8",
+      "stream:application/zip",
+      "stream:application/zip",
+      "record",
     ])
     expect(recordExport).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,6 +138,36 @@ describe("export page bundles", () => {
     )
     expect(artifact.pdfUrl).toBe(`/api/exports/${artifact.id}?file=pdf`)
     expect(artifact.reportUrl).toBe(`/api/exports/${artifact.id}?file=report`)
+  })
+
+  it("claims every object key before the first byte is written", async () => {
+    await exportProject("99999999-9999-4999-8999-999999999999", {
+      marks: false,
+      allowBlockingProblems: false,
+      reviewedBookFingerprint: null,
+    })
+
+    const [reserved] = reserveObjects.mock.calls[0] as [string[]]
+    const written = [
+      ...putObject.mock.calls.map(([input]) => (input as { key: string }).key),
+      ...streamedObjects.keys(),
+    ]
+    expect([...reserved].sort()).toEqual([...written].sort())
+    expect(calls.indexOf("reserve:4")).toBe(0)
+  })
+
+  it("leaves the uploaded objects claimed when the export row cannot be written", async () => {
+    recordExport.mockRejectedValue(new Error("insert failed"))
+
+    await expect(
+      exportProject("99999999-9999-4999-8999-999999999999", {
+        marks: false,
+        allowBlockingProblems: false,
+        reviewedBookFingerprint: null,
+      })
+    ).rejects.toThrow("insert failed")
+    // The reservation was never handed over, so the sweep still owns these objects.
+    expect(reserveObjects).toHaveBeenCalledTimes(1)
   })
 
   it("stores one entry per book page in each bundle", async () => {
@@ -122,8 +181,10 @@ describe("export page bundles", () => {
     expect(artifact.pagePdfZipUrl).toBe(`/api/exports/${artifact.id}?file=page-pdfs`)
     expect(artifact.pageJpegZipUrl).toBe(`/api/exports/${artifact.id}?file=page-jpegs`)
 
-    const pdfEntries = unzipSync(storedObject("sakekeep-pages-pdf.zip")!)
-    const jpegEntries = unzipSync(storedObject("sakekeep-pages-jpeg.zip")!)
+    const stored = (suffix: string) =>
+      [...streamedObjects].find(([key]) => key.endsWith(suffix))?.[1]
+    const pdfEntries = unzipSync(stored("sakekeep-pages-pdf.zip")!)
+    const jpegEntries = unzipSync(stored("sakekeep-pages-jpeg.zip")!)
     expect(Object.keys(pdfEntries)).toEqual(
       Array.from({ length: pageCount }, (_, index) => `page-0${index + 1}.pdf`)
     )

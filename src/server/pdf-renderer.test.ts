@@ -4,12 +4,7 @@ import { resolve } from "node:path"
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
-import {
-  fitSingleLineTextSize,
-  inspectPdf,
-  renderBookPdf,
-  splitBookPagePdfs,
-} from "./pdf-renderer.ts"
+import { bookPagePdfs, fitSingleLineTextSize, inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
 import { fillerPalette } from "../domain/filler-art.ts"
 import { pageSpecification } from "../domain/page-format.ts"
 import {
@@ -258,10 +253,13 @@ describe("PDF renderer", () => {
     }
 
     const book = await renderBookPdf(input)
-    const pages = await splitBookPagePdfs(
+    const pages: Uint8Array[] = []
+    for await (const page of bookPagePdfs(
       book,
       input.book.pages.map((page) => page.id)
-    )
+    )) {
+      pages.push(page)
+    }
 
     expect(pages).toHaveLength(input.book.pages.length)
     for (const page of pages) {

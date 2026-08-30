@@ -193,4 +193,6 @@ restricted Clerk sign-up in issue #23 are complete.
 `docker compose down` preserves service volumes. To remove all local database
 and object-store data, use `docker compose down -v` only when that destructive
 reset is intended. Normal project deletion writes object tombstones before
-best-effort cleanup; `bun run storage:cleanup` safely retries failures.
+best-effort cleanup, and an export claims its object keys the same way until the
+export row takes ownership; `bun run storage:cleanup` safely retries failures
+once a tombstone is an hour old, so it never removes a write still in flight.

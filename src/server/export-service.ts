@@ -3,11 +3,24 @@ import { blockingProblems } from "../domain/generation"
 import { pageSpecification } from "../domain/page-format.ts"
 import { type ExportArtifact } from "../domain/types"
 import { HttpError } from "./http"
-import { putObject } from "./object-store"
-import { renderPageJpegs } from "./page-raster"
-import { inspectPdf, renderBookPdf, splitBookPagePdfs } from "./pdf-renderer"
-import { getProject, recordExport } from "./repository"
-import { createZip, pageEntryName } from "./zip"
+import { putObject, putObjectStream } from "./object-store"
+import { pageJpegs } from "./page-raster"
+import { bookPagePdfs, inspectPdf, renderBookPdf } from "./pdf-renderer"
+import { getProject, recordExport, reserveObjects } from "./repository"
+import { pageEntryName, zipEntries, type ZipEntry } from "./zip"
+
+/** Names each produced page in book order without collecting the pages first. */
+async function* bundleEntries(
+  pages: AsyncIterable<Uint8Array>,
+  pageCount: number,
+  extension: string
+): AsyncGenerator<ZipEntry> {
+  let index = 0
+  for await (const data of pages) {
+    yield { name: pageEntryName(index, pageCount, extension), data }
+    index += 1
+  }
+}
 
 export async function exportProject(
   projectId: string,
@@ -78,34 +91,17 @@ export async function exportProject(
     throw new HttpError(409, "Automated preflight failed. No final export was stored.", { report })
   }
 
-  // Every export carries the same set of files, so the organizer picks a format when
-  // downloading instead of predicting it before the render. Bundles are built after
-  // preflight passed, so a rejected export never spends time on them.
-  const pageCount = project.book.pages.length
-  const pagePdfZip = createZip(
-    (
-      await splitBookPagePdfs(
-        pdf,
-        project.book.pages.map((page) => page.id)
-      )
-    ).map((page, index) => ({
-      name: pageEntryName(index, pageCount, "pdf"),
-      data: page,
-    }))
-  )
-  const pageJpegZip = createZip(
-    (await renderPageJpegs(pdf)).map((image, index) => ({
-      name: pageEntryName(index, pageCount, "jpg"),
-      data: image,
-    }))
-  )
-
   const id = crypto.randomUUID()
   const baseKey = `projects/${projectId}/exports/${id}`
   const pdfObjectKey = `${baseKey}/sakekeep-${project.pageFormat}-${project.pageOrientation}.pdf`
   const reportObjectKey = `${baseKey}/preflight-report.txt`
   const pagePdfZipObjectKey = `${baseKey}/sakekeep-pages-pdf.zip`
   const pageJpegZipObjectKey = `${baseKey}/sakekeep-pages-jpeg.zip`
+  // Nothing discovers a stored object except the export row, so claim the keys as
+  // removable first. Whatever fails between here and `recordExport` — an upload, the
+  // insert, the process itself — leaves the files for the orphan sweep instead of
+  // stranding them in the bucket forever.
+  await reserveObjects([pdfObjectKey, reportObjectKey, pagePdfZipObjectKey, pageJpegZipObjectKey])
   await putObject({
     key: pdfObjectKey,
     body: pdf,
@@ -116,16 +112,33 @@ export async function exportProject(
     body: Buffer.from(reportAsText(report), "utf8"),
     contentType: "text/plain; charset=utf-8",
   })
-  await putObject({
+
+  // Every export carries the same set of files, so the organizer picks a format when
+  // downloading instead of predicting it before the render. Bundles are built after
+  // preflight passed, so a rejected export never spends time on them. Each one is
+  // rendered, zipped, and uploaded in a single pass, one page at a time, so a long book
+  // never puts its pages and its archive on the heap together.
+  const pageCount = project.book.pages.length
+  await putObjectStream({
     key: pagePdfZipObjectKey,
-    body: pagePdfZip,
+    body: zipEntries(
+      bundleEntries(
+        bookPagePdfs(
+          pdf,
+          project.book.pages.map((page) => page.id)
+        ),
+        pageCount,
+        "pdf"
+      )
+    ),
     contentType: "application/zip",
   })
-  await putObject({
+  await putObjectStream({
     key: pageJpegZipObjectKey,
-    body: pageJpegZip,
+    body: zipEntries(bundleEntries(pageJpegs(pdf), pageCount, "jpg")),
     contentType: "application/zip",
   })
+
   const exportId = await recordExport({
     projectId,
     sourceFingerprint: project.book.sourceFingerprint,

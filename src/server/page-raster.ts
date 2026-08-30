@@ -10,14 +10,15 @@ const JPEG_QUALITY = 90
 
 /**
  * Rasterizes every page of an already rendered book PDF, in page order. The full media box
- * including bleed is rasterized, so a JPEG shows exactly what the PDF page carries.
+ * including bleed is rasterized, so a JPEG shows exactly what the PDF page carries. Pages
+ * are yielded as they finish: a 300 PPI page is megabytes, so holding a whole book of them
+ * would grow the heap with the page count.
  */
-export async function renderPageJpegs(pdf: Uint8Array, ppi = RASTER_PPI): Promise<Uint8Array[]> {
+export async function* pageJpegs(pdf: Uint8Array, ppi = RASTER_PPI): AsyncGenerator<Uint8Array> {
   const library = await PDFiumLibrary.init()
   try {
     const document = await library.loadDocument(Buffer.from(pdf))
     try {
-      const images: Uint8Array[] = []
       for (const page of document.pages()) {
         const rendered = await page.render({
           scale: ppi / POINTS_PER_INCH,
@@ -32,9 +33,8 @@ export async function renderPageJpegs(pdf: Uint8Array, ppi = RASTER_PPI): Promis
               .jpeg({ quality: JPEG_QUALITY, chromaSubsampling: "4:4:4" })
               .toBuffer(),
         })
-        images.push(rendered.data)
+        yield rendered.data
       }
-      return images
     } finally {
       document.destroy()
     }

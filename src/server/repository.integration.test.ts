@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { HttpError } from "./http.ts"
 import {
   archiveProject,
+  cleanupOrphanedObjects,
   closeProject,
   createLayout,
   createProject,
@@ -16,7 +17,9 @@ import {
   getProject,
   listProjects,
   publishProject,
+  recordExport,
   reorderLayouts,
+  reserveObjects,
   setAssetFocalPoint,
   setProjectPageFormat,
   unarchiveProject,
@@ -25,10 +28,10 @@ import {
   updateSubmissionTextAnswers,
 } from "./repository.ts"
 import { db } from "./db/index.ts"
-import { books } from "./db/schema.ts"
-import { eq } from "drizzle-orm"
+import { assetTombstones, books } from "./db/schema.ts"
+import { eq, inArray, sql } from "drizzle-orm"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
-import { FORM_SCHEMA_VERSION, type FormSchema } from "../domain/types.ts"
+import { FORM_SCHEMA_VERSION, type ExportReport, type FormSchema } from "../domain/types.ts"
 import { shareTokenForProject } from "./share-token.ts"
 import { completeForm } from "../test/fixtures.ts"
 
@@ -844,5 +847,100 @@ describe("cover and standalone layouts", () => {
     const reloaded = await getProject(project.id)
     expect(reloaded.layouts).toHaveLength(converted.layouts.length)
     expect(reloaded.book!.pages).toEqual(converted.book!.pages)
+  })
+})
+
+function exportReport(projectId: string): ExportReport {
+  return {
+    version: 1,
+    projectId,
+    sourceFingerprint: "reserved-export",
+    generatedAt: "2026-08-30T00:00:00.000Z",
+    specification: {
+      standard: "DIN/ISO A5",
+      trimMm: [210, 148],
+      bleedMm: 3,
+      mediaBoxMm: [216, 154],
+      safeMarginMm: 6,
+      targetPpi: 300,
+      blockingPpi: 150,
+      printCondition: "PSO Coated v3 / FOGRA51",
+      marks: false,
+    },
+    checks: [],
+    overrides: [],
+    pdfx: { target: "PDF/X-4", structurallyVerified: true, limitation: null },
+  }
+}
+
+async function reservedKeys(keys: string[]): Promise<string[]> {
+  const rows = await db
+    .select({ objectKey: assetTombstones.objectKey })
+    .from(assetTombstones)
+    .where(inArray(assetTombstones.objectKey, keys))
+  return rows.map((row) => row.objectKey).sort()
+}
+
+describe("export object reservations", () => {
+  it("hands reserved keys over to the export row that takes ownership", async () => {
+    const project = await createProject({ title: "Reserved export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`, `${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+
+    await recordExport({
+      projectId: project.id,
+      sourceFingerprint: "reserved-export",
+      pdfObjectKey: keys[0]!,
+      reportObjectKey: keys[1]!,
+      pagePdfZipObjectKey: keys[2]!,
+      pageJpegZipObjectKey: null,
+      report: exportReport(project.id),
+    })
+
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("keeps a reservation when the export row cannot be written", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    // An unknown project fails the foreign key, so the handover must not happen either.
+    await expect(
+      recordExport({
+        projectId: "99999999-9999-4999-8999-999999999999",
+        sourceFingerprint: "orphan-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport("99999999-9999-4999-8999-999999999999"),
+      })
+    ).rejects.toThrow()
+
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
+  })
+
+  it("sweeps a reservation only once it has had time to be claimed", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    await cleanupOrphanedObjects()
+    // A write that is still uploading must survive a sweep that runs beside it.
+    expect(await reservedKeys(keys)).toEqual(keys)
+
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    expect(await reservedKeys(keys)).toEqual([])
   })
 })

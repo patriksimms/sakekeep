@@ -729,14 +729,18 @@ function assetResolutionsOf(document: PDFDocument): AssetResolutionMetadata[] {
  * carries; only the catalog-level output intent and PDF/X metadata have to be re-applied,
  * because those do not travel with a copied page.
  */
-export async function splitBookPagePdfs(
+/**
+ * Yields one print-ready single-page PDF per book page, in book order. Pages are produced
+ * on demand: each one embeds the fonts and the output intent its page needs, so keeping a
+ * whole book of them would grow the heap with the page count.
+ */
+export async function* bookPagePdfs(
   bookPdf: Uint8Array,
   pageIds: string[]
-): Promise<Uint8Array[]> {
+): AsyncGenerator<Uint8Array> {
   const icc = await iccProfile()
   const source = await PDFDocument.load(bookPdf)
   const assetResolutions = assetResolutionsOf(source)
-  const documents: Uint8Array[] = []
   for (let index = 0; index < source.getPageCount(); index += 1) {
     const single = await PDFDocument.create()
     single.setTitle("Sakekeep friend book")
@@ -750,9 +754,8 @@ export async function splitBookPagePdfs(
       icc,
       assetResolutions.filter((entry) => entry.pageId === pageId)
     )
-    documents.push(await single.save({ useObjectStreams: false, addDefaultPage: false }))
+    yield await single.save({ useObjectStreams: false, addDefaultPage: false })
   }
-  return documents
 }
 
 export async function inspectPdf(

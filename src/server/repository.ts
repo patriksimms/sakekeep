@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, inArray, isNotNull, lt, max, sql } from "drizzle-orm"
 
 import {
   emptyFormSchema,
@@ -618,11 +618,35 @@ export async function deleteProject(projectId: string): Promise<void> {
   }
 }
 
+/**
+ * Claims object keys as removable before anything is written under them, so a write that
+ * dies before its owning row exists still leaves the files discoverable for the sweep.
+ * The claim is released by the insert that takes ownership of the keys.
+ */
+export async function reserveObjects(keys: string[]): Promise<void> {
+  if (keys.length === 0) return
+  await db
+    .insert(assetTombstones)
+    .values(keys.map((objectKey) => ({ objectKey })))
+    .onConflictDoNothing()
+}
+
+/**
+ * How long a tombstone has to sit before the sweep acts on it. Deletions that go through
+ * `deleteProject` remove their objects right away and only fall back to the sweep on
+ * failure, so the delay costs nothing there — but it keeps the sweep from deleting the
+ * files of a reserved write that is still uploading.
+ */
+const TOMBSTONE_GRACE_MS = 60 * 60 * 1000
+
 export async function cleanupOrphanedObjects(): Promise<{
   removed: number
   remaining: number
 }> {
-  const rows = await db.select().from(assetTombstones)
+  const rows = await db
+    .select()
+    .from(assetTombstones)
+    .where(lt(assetTombstones.createdAt, new Date(Date.now() - TOMBSTONE_GRACE_MS)))
   const keys = rows.map((row) => row.objectKey)
   const failed = await deleteObjects(keys)
   const succeeded = keys.filter((key) => !failed.includes(key))
@@ -1330,7 +1354,18 @@ export async function recordExport(input: {
   report: (typeof exportsTable.$inferInsert)["report"]
 }): Promise<string> {
   const id = crypto.randomUUID()
-  await db.insert(exportsTable).values({ id, ...input })
+  const objectKeys = [
+    input.pdfObjectKey,
+    input.reportObjectKey,
+    input.pagePdfZipObjectKey,
+    input.pageJpegZipObjectKey,
+  ].filter((key): key is string => key !== null)
+  await db.transaction(async (tx) => {
+    await tx.insert(exportsTable).values({ id, ...input })
+    // The row now owns these objects, so hand them over from the reservation in the same
+    // commit: either the export exists or the objects stay swept.
+    await tx.delete(assetTombstones).where(inArray(assetTombstones.objectKey, objectKeys))
+  })
   return id
 }
 

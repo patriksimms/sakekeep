@@ -2,7 +2,7 @@ import sharp from "sharp"
 import { describe, expect, it } from "vitest"
 
 import { PAGE_SPEC } from "../domain/layout.ts"
-import { RASTER_PPI, renderPageJpegs } from "./page-raster.ts"
+import { pageJpegs, RASTER_PPI } from "./page-raster.ts"
 import { renderBookPdf } from "./pdf-renderer.ts"
 import { completeForm, cycleSettings, standaloneLayoutFixture } from "../test/fixtures.ts"
 
@@ -39,7 +39,8 @@ describe("page rasterizer", () => {
       marks: false,
     })
 
-    const images = await renderPageJpegs(pdf)
+    const images: Uint8Array[] = []
+    for await (const image of pageJpegs(pdf)) images.push(image)
 
     expect(images).toHaveLength(2)
     const expectedWidth = (PAGE_SPEC.mediaWidthMm / 25.4) * RASTER_PPI
