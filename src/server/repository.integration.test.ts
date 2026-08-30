@@ -1005,6 +1005,61 @@ describe("export object reservations", () => {
     expect(await reservedKeys(keys)).toEqual([])
   })
 
+  it("holds a claimed tombstone until the deletion is confirmed and retries an abandoned one", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    // A deleter that took the key on and died before it could delete the object.
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'`, claimedAt: sql`now()` })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    await cleanupOrphanedObjects()
+    // The row outlives the claim, so nothing about the pending deletion was lost.
+    expect(await reservedKeys(keys)).toEqual(keys)
+
+    await db
+      .update(assetTombstones)
+      .set({ claimedAt: sql`now() - interval '1 hour'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    // Once the lease is up the object is offered again and this sweep finishes the job.
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("refuses to record an export while a deleter holds its keys", async () => {
+    const project = await createProject({ title: "Claimed export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ claimedAt: sql`now()` })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    // The object may already be gone, so a claim in progress is as good as a completed one.
+    await expect(
+      recordExport({
+        projectId: project.id,
+        sourceFingerprint: "claimed-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport(project.id),
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    // The failed attempt rolled back, so the deleter still holds what it claimed.
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
+  })
+
   it("sweeps a reservation only once it has had time to be claimed", async () => {
     const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
     const keys = [`${base}/pages.zip`]

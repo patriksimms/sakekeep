@@ -194,10 +194,13 @@ restricted Clerk sign-up in issue #23 are complete.
 and object-store data, use `docker compose down -v` only when that destructive
 reset is intended. A tombstone marks an object as unowned and doubles as a
 claim ticket: project deletion, an in-flight export, and `bun run
-storage:cleanup` all have to remove the row before they may touch the object,
-so exactly one of them wins and the others back off. Project
-deletion tombstones its objects and deletes them straight away; an export holds
-tombstones over its uploads and wins them back when it records the export row.
-`storage:cleanup` only goes after tombstones older than an hour, and an export
-that somehow runs past that fails with a conflict instead of being recorded
-against files the sweep already removed.
+storage:cleanup` all have to claim the row before they may touch the object, so
+exactly one of them wins and the others back off. The row outlives the claim
+and is only dropped once the object store confirms the delete, so a process
+that dies mid-cleanup leaves the work behind for a later run; an abandoned
+claim is offered again after fifteen minutes. Project deletion tombstones its
+objects and deletes them straight away; an export holds tombstones over its
+uploads and clears them when it records the export row. `storage:cleanup` only
+goes after tombstones older than an hour, and an export that somehow runs past
+that fails with a conflict instead of being recorded against files the sweep
+already removed.

@@ -50,6 +50,13 @@
       "when": 1788117440370,
       "tag": "20260830191720_absent_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788120191851,
+      "tag": "20260830200311_minor_golden_guardian",
+      "breakpoints": true
     }
   ]
 }
