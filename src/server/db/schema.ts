@@ -215,6 +215,9 @@ export const exportsTable = pgTable(
     sourceFingerprint: text("source_fingerprint").notNull(),
     pdfObjectKey: text("pdf_object_key").notNull(),
     reportObjectKey: text("report_object_key").notNull(),
+    // Null whenever the organizer did not ask for that bundle.
+    pagePdfZipObjectKey: text("page_pdf_zip_object_key"),
+    pageJpegZipObjectKey: text("page_jpeg_zip_object_key"),
     report: jsonb("report").$type<ExportReport>().notNull(),
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -234,4 +237,13 @@ export const assetTombstones = pgTable("asset_tombstones", {
   })
     .notNull()
     .defaultNow(),
+  /**
+   * When a deleter took this object on. Set while the object store call is in flight and
+   * cleared if it fails, so the row survives a crash and stays retryable. A claim older
+   * than the lease is treated as abandoned.
+   */
+  claimedAt: timestamp("claimed_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
 })

@@ -1002,11 +1002,23 @@ test.describe.serial("critical local prototype workflows", () => {
         response.url().includes(`/${closedProjectId}/export`) &&
         response.request().method() === "POST"
     )
-    await page.getByRole("button", { name: "Export PDF + report" }).click()
+    await page.getByRole("button", { name: "Export book" }).click()
     expect((await exportResponse).status()).toBe(201)
     await expect(page.getByText("Export complete")).toBeVisible()
-    await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible()
-    await expect(page.getByRole("link", { name: "Download report" })).toBeVisible()
+
+    // One export produces every format, so all four downloads have to resolve.
+    for (const [name, contentType] of [
+      ["Complete book (PDF)", "application/pdf"],
+      ["One PDF per page (ZIP)", "application/zip"],
+      ["One JPEG per page (ZIP)", "application/zip"],
+      ["Preflight report (TXT)", "text/plain"],
+    ]) {
+      const link = page.getByRole("link", { name })
+      await expect(link).toBeVisible()
+      const download = await page.request.get((await link.getAttribute("href"))!)
+      expect(download.status()).toBe(200)
+      expect(download.headers()["content-type"]).toContain(contentType!)
+    }
     await expectAccessible(page)
   })
 })

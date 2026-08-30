@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
+import { deflateSync } from "node:zlib"
 
 import fontkit from "@pdf-lib/fontkit"
 import {
@@ -48,10 +49,13 @@ import {
   type TextLayoutRun,
 } from "../domain/text-layout.ts"
 import {
+  type BookPage,
   type FormSchema,
   type GeneratedBook,
   type LayoutElement,
   type LayoutRecord,
+  type PageFormat,
+  type PageOrientation,
   type SubmissionSummary,
   type TextSettings,
 } from "../domain/types"
@@ -512,13 +516,14 @@ function drawMarks(page: PDFPage, specification: PageSpecification) {
 
 function setPdfXMetadata(
   pdf: PDFDocument,
-  icc: Uint8Array,
+  deflatedIcc: Uint8Array,
   assetResolutions: AssetResolutionMetadata[]
 ) {
   const context = pdf.context
-  const iccStream = context.flateStream(icc, {
+  const iccStream = context.stream(deflatedIcc, {
     N: PDFNumber.of(4),
     Alternate: PDFName.of("DeviceCMYK"),
+    Filter: "FlateDecode",
   })
   const iccReference = context.register(iccStream)
   const outputIntent = context.obj({
@@ -577,9 +582,9 @@ function setPdfXMetadata(
 }
 
 /** Every static cut the book needs, including the bold cut used for labels. */
-function requiredCuts(book: GeneratedBook, layouts: Map<string, LayoutRecord>): Set<FontCut> {
+function requiredCuts(pages: BookPage[], layouts: Map<string, LayoutRecord>): Set<FontCut> {
   const cuts = new Set<FontCut>()
-  for (const bookPage of book.pages) {
+  for (const bookPage of pages) {
     for (const element of layouts.get(bookPage.layoutId)?.schema.elements ?? []) {
       if (element.type !== "bound-text" && element.type !== "static-text") continue
       cuts.add(fontCut(element.text.fontFamily, element.text.fontStyle, "normal"))
@@ -601,24 +606,35 @@ async function embedFonts(pdf: PDFDocument, cuts: Set<FontCut>): Promise<Embedde
   return Object.fromEntries(embedded)
 }
 
-export async function renderBookPdf(input: {
+export interface BookRenderInput {
   book: GeneratedBook
   layouts: LayoutRecord[]
   submissions: SubmissionSummary[]
   form: FormSchema
   marks: boolean
-  pageFormat?: import("../domain/types.ts").PageFormat
-  pageOrientation?: import("../domain/types.ts").PageOrientation
-}): Promise<Uint8Array> {
-  let icc: Uint8Array
+  pageFormat?: PageFormat
+  pageOrientation?: PageOrientation
+}
+
+/**
+ * The output intent profile, deflated once. Splitting a book gives every page its own
+ * output intent, and re-compressing two megabytes of profile per page would dominate the
+ * export.
+ */
+async function iccProfile(): Promise<Uint8Array> {
   try {
-    icc = await readFile(resolve(".local/icc/PSOcoated_v3.icc"))
-  } catch {
+    return deflateSync(await readFile(resolve(".local/icc/PSOcoated_v3.icc")))
+  } catch (error) {
+    if (error instanceof HttpError) throw error
     throw new HttpError(
       503,
       "The verified PSO Coated v3 profile is missing. Run `bun run setup:icc` and try again."
     )
   }
+}
+
+async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uint8Array> {
+  const icc = await iccProfile()
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   pdf.setTitle("Sakekeep friend book")
@@ -626,14 +642,14 @@ export async function renderBookPdf(input: {
   pdf.setProducer("Sakekeep / pdf-lib")
   const layouts = new Map(input.layouts.map((layout) => [layout.id, layout]))
   const submissions = new Map(input.submissions.map((submission) => [submission.id, submission]))
-  const fonts = await embedFonts(pdf, requiredCuts(input.book, layouts))
+  const fonts = await embedFonts(pdf, requiredCuts(pages, layouts))
   const assetResolutions: AssetResolutionMetadata[] = []
   const specification = pageSpecification(
     input.pageFormat ?? "a5",
     input.pageOrientation ?? "landscape"
   )
 
-  for (const bookPage of input.book.pages) {
+  for (const bookPage of pages) {
     const page = pdf.addPage([pt(specification.mediaWidthMm), pt(specification.mediaHeightMm)])
     applyPageBoxes(page, specification)
     const layout = layouts.get(bookPage.layoutId)
@@ -670,6 +686,76 @@ export async function renderBookPdf(input: {
   }
   setPdfXMetadata(pdf, icc, assetResolutions)
   return pdf.save({ useObjectStreams: false, addDefaultPage: false })
+}
+
+export async function renderBookPdf(input: BookRenderInput): Promise<Uint8Array> {
+  return renderPdf(input, input.book.pages)
+}
+
+/** One single-page PDF per book page, in book order. */
+function assetResolutionsOf(document: PDFDocument): AssetResolutionMetadata[] {
+  const entries = document.catalog.lookup(PDFName.of("SakekeepAssetResolutions"))
+  if (!(entries instanceof PDFArray)) return []
+  const numberAt = (entry: PDFDict, key: string) => {
+    const value = entry.lookup(PDFName.of(key))
+    return value instanceof PDFNumber ? value.asNumber() : 0
+  }
+  const stringAt = (entry: PDFDict, key: string) => {
+    const value = entry.lookup(PDFName.of(key))
+    return value instanceof PDFString ? value.asString() : ""
+  }
+  return Array.from({ length: entries.size() }, (_, index) => entries.lookup(index)).flatMap(
+    (entry) =>
+      entry instanceof PDFDict
+        ? [
+            {
+              assetId: stringAt(entry, "AssetID"),
+              pageId: stringAt(entry, "PageID"),
+              elementId: stringAt(entry, "ElementID"),
+              pixelWidth: numberAt(entry, "PixelWidth"),
+              pixelHeight: numberAt(entry, "PixelHeight"),
+              placedWidthMm: numberAt(entry, "PlacedWidthMM"),
+              placedHeightMm: numberAt(entry, "PlacedHeightMM"),
+              effectivePpi: numberAt(entry, "EffectivePPI"),
+            },
+          ]
+        : []
+  )
+}
+
+/**
+ * Splits an exported book into one single-page PDF per page, in book order. The pages are
+ * copied rather than rendered again, so each file is the very page the preflighted book
+ * carries; only the catalog-level output intent and PDF/X metadata have to be re-applied,
+ * because those do not travel with a copied page.
+ */
+/**
+ * Yields one print-ready single-page PDF per book page, in book order. Pages are produced
+ * on demand: each one embeds the fonts and the output intent its page needs, so keeping a
+ * whole book of them would grow the heap with the page count.
+ */
+export async function* bookPagePdfs(
+  bookPdf: Uint8Array,
+  pageIds: string[]
+): AsyncGenerator<Uint8Array> {
+  const icc = await iccProfile()
+  const source = await PDFDocument.load(bookPdf)
+  const assetResolutions = assetResolutionsOf(source)
+  for (let index = 0; index < source.getPageCount(); index += 1) {
+    const single = await PDFDocument.create()
+    single.setTitle("Sakekeep friend book")
+    single.setCreator("Sakekeep local prototype")
+    single.setProducer("Sakekeep / pdf-lib")
+    const [page] = await single.copyPages(source, [index])
+    single.addPage(page)
+    const pageId = pageIds[index]
+    setPdfXMetadata(
+      single,
+      icc,
+      assetResolutions.filter((entry) => entry.pageId === pageId)
+    )
+    yield await single.save({ useObjectStreams: false, addDefaultPage: false })
+  }
 }
 
 export async function inspectPdf(

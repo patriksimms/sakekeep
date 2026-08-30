@@ -1,7 +1,10 @@
-import { PDFArray, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
+import { readFile } from "node:fs/promises"
+import { resolve } from "node:path"
+
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
-import { fitSingleLineTextSize, inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
+import { bookPagePdfs, fitSingleLineTextSize, inspectPdf, renderBookPdf } from "./pdf-renderer.ts"
 import { fillerPalette } from "../domain/filler-art.ts"
 import { pageSpecification } from "../domain/page-format.ts"
 import {
@@ -33,6 +36,18 @@ function colorOperator(hex: string): RegExp {
     (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
   )
   return new RegExp(`${channels.join(" ")} (rg|RG)\n`)
+}
+
+/** The colour profile bytes a page carries in its PDF/X output intent. */
+async function outputIntentProfile(bytes: Uint8Array): Promise<Uint8Array> {
+  const document = await PDFDocument.load(bytes)
+  const intents = document.catalog.lookup(PDFName.of("OutputIntents"))
+  if (!(intents instanceof PDFArray)) throw new Error("The document has no output intent.")
+  const intent = intents.lookup(0)
+  if (!(intent instanceof PDFDict)) throw new Error("The output intent is not a dictionary.")
+  const profile = intent.lookup(PDFName.of("DestOutputProfile"))
+  if (!(profile instanceof PDFRawStream)) throw new Error("The profile is not a stream.")
+  return decodePDFRawStream(profile).decode()
 }
 
 describe("PDF renderer", () => {
@@ -202,5 +217,63 @@ describe("PDF renderer", () => {
     expect(await inspectPdf(bytes, pageSpecification("a5", "landscape"))).toMatchObject({
       pageBoxesValid: false,
     })
+  })
+
+  it("renders one print-ready single-page PDF per book page", async () => {
+    const layout = layoutFixture()
+    const cover = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
+    const submission = submissionFixture("10000000-0000-4000-8000-000000000003", 1)
+    const input = {
+      book: {
+        projectId: layout.projectId,
+        settings: cycleSettings,
+        pages: [
+          {
+            id: "standalone:cover",
+            kind: "standalone" as const,
+            layoutId: cover.id,
+            problems: [],
+          },
+          {
+            id: `submission:${submission.id}`,
+            kind: "submission" as const,
+            submissionId: submission.id,
+            layoutId: layout.id,
+            problems: [],
+          },
+        ],
+        sourceFingerprint: "page-split-test",
+        generatedAt: "2026-08-29T00:00:00.000Z",
+        updatedAt: "2026-08-29T00:00:00.000Z",
+      },
+      layouts: [layout, cover],
+      submissions: [submission],
+      form: completeForm,
+      marks: false,
+    }
+
+    const book = await renderBookPdf(input)
+    const pages: Uint8Array[] = []
+    for await (const page of bookPagePdfs(
+      book,
+      input.book.pages.map((page) => page.id)
+    )) {
+      pages.push(page)
+    }
+
+    expect(pages).toHaveLength(input.book.pages.length)
+    for (const page of pages) {
+      const inspection = await inspectPdf(page)
+      expect(inspection.pageCount).toBe(1)
+      expect(inspection.pageBoxesValid).toBe(true)
+      expect(inspection.fontsEmbedded).toBe(true)
+      expect(inspection.outputIntentEmbedded).toBe(true)
+      expect(inspection.pdfxMetadata).toBe(true)
+      // The profile is deflated once and reused, so verify a page still carries the real
+      // profile bytes rather than a stream the reader cannot decode.
+      expect(await outputIntentProfile(page)).toEqual(
+        new Uint8Array(await readFile(resolve(".local/icc/PSOcoated_v3.icc")))
+      )
+    }
   })
 })

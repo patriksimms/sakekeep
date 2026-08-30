@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { HttpError } from "./http.ts"
 import {
   archiveProject,
+  cleanupOrphanedObjects,
   closeProject,
   createLayout,
   createProject,
@@ -16,7 +17,9 @@ import {
   getProject,
   listProjects,
   publishProject,
+  recordExport,
   reorderLayouts,
+  reserveObjects,
   setAssetFocalPoint,
   setProjectPageFormat,
   unarchiveProject,
@@ -25,10 +28,10 @@ import {
   updateSubmissionTextAnswers,
 } from "./repository.ts"
 import { db } from "./db/index.ts"
-import { books } from "./db/schema.ts"
-import { eq } from "drizzle-orm"
+import { assetTombstones, books, exportsTable } from "./db/schema.ts"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
-import { FORM_SCHEMA_VERSION, type FormSchema } from "../domain/types.ts"
+import { FORM_SCHEMA_VERSION, type ExportReport, type FormSchema } from "../domain/types.ts"
 import { shareTokenForProject } from "./share-token.ts"
 import { completeForm } from "../test/fixtures.ts"
 
@@ -844,5 +847,277 @@ describe("cover and standalone layouts", () => {
     const reloaded = await getProject(project.id)
     expect(reloaded.layouts).toHaveLength(converted.layouts.length)
     expect(reloaded.book!.pages).toEqual(converted.book!.pages)
+  })
+})
+
+function exportReport(projectId: string): ExportReport {
+  return {
+    version: 1,
+    projectId,
+    sourceFingerprint: "reserved-export",
+    generatedAt: "2026-08-30T00:00:00.000Z",
+    specification: {
+      standard: "DIN/ISO A5",
+      trimMm: [210, 148],
+      bleedMm: 3,
+      mediaBoxMm: [216, 154],
+      safeMarginMm: 6,
+      targetPpi: 300,
+      blockingPpi: 150,
+      printCondition: "PSO Coated v3 / FOGRA51",
+      marks: false,
+    },
+    checks: [],
+    overrides: [],
+    pdfx: { target: "PDF/X-4", structurallyVerified: true, limitation: null },
+  }
+}
+
+async function claimStamp(key: string): Promise<Date | null | undefined> {
+  const [row] = await db
+    .select({ claimedAt: assetTombstones.claimedAt })
+    .from(assetTombstones)
+    .where(inArray(assetTombstones.objectKey, [key]))
+  return row?.claimedAt
+}
+
+async function reservedKeys(keys: string[]): Promise<string[]> {
+  const rows = await db
+    .select({ objectKey: assetTombstones.objectKey })
+    .from(assetTombstones)
+    .where(inArray(assetTombstones.objectKey, keys))
+  return rows.map((row) => row.objectKey).sort()
+}
+
+describe("export object reservations", () => {
+  it("hands reserved keys over to the export row that takes ownership", async () => {
+    const project = await createProject({ title: "Reserved export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`, `${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+
+    await recordExport({
+      projectId: project.id,
+      sourceFingerprint: "reserved-export",
+      pdfObjectKey: keys[0]!,
+      reportObjectKey: keys[1]!,
+      pagePdfZipObjectKey: keys[2]!,
+      pageJpegZipObjectKey: null,
+      report: exportReport(project.id),
+    })
+
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("keeps a reservation when the export row cannot be written", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    // An unknown project fails the foreign key, so the handover must not happen either.
+    await expect(
+      recordExport({
+        projectId: "99999999-9999-4999-8999-999999999999",
+        sourceFingerprint: "orphan-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport("99999999-9999-4999-8999-999999999999"),
+      })
+    ).rejects.toThrow()
+
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
+  })
+
+  it("refuses to record an export whose reservation a sweep already claimed", async () => {
+    const project = await createProject({ title: "Swept export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    // The sweep won the keys and deleted the files, so the export row must not be written
+    // against downloads that no longer exist.
+    await expect(
+      recordExport({
+        projectId: project.id,
+        sourceFingerprint: "swept-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport(project.id),
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    const [recorded] = await db
+      .select({ id: exportsTable.id })
+      .from(exportsTable)
+      .where(eq(exportsTable.projectId, project.id))
+    expect(recorded).toBeUndefined()
+  })
+
+  it("lets exactly one of a sweep and an export win the same reservation", async () => {
+    const project = await createProject({ title: "Contested export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    // Both go for the same rows on their own connection; whichever commits first takes
+    // the keys and the other has to come away empty.
+    const [swept, recorded] = await Promise.allSettled([
+      cleanupOrphanedObjects(),
+      recordExport({
+        projectId: project.id,
+        sourceFingerprint: "contested-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport(project.id),
+      }),
+    ])
+
+    expect(swept.status).toBe("fulfilled")
+    const exportRows = await db
+      .select({ id: exportsTable.id })
+      .from(exportsTable)
+      .where(eq(exportsTable.projectId, project.id))
+    const sweptKeys = (swept as PromiseFulfilledResult<{ removed: number }>).value.removed
+    if (recorded.status === "fulfilled") {
+      // The export won, so the sweep must not have taken its files with it.
+      expect(exportRows).toHaveLength(1)
+      expect(sweptKeys).toBe(0)
+    } else {
+      expect(exportRows).toHaveLength(0)
+      expect(sweptKeys).toBe(keys.length)
+    }
+    // Either way the reservation is gone: nothing is left half-claimed.
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("holds a claimed tombstone until the deletion is confirmed and retries an abandoned one", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    // A deleter that took the key on and died before it could delete the object.
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'`, claimedAt: sql`now()` })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    const held = await claimStamp(keys[0]!)
+    await cleanupOrphanedObjects()
+    // The row outlives the claim, so nothing about the pending deletion was lost, and the
+    // sweep leaves a live claim exactly as it found it.
+    expect(await reservedKeys(keys)).toEqual(keys)
+    expect(await claimStamp(keys[0]!)).toEqual(held)
+
+    await db
+      .update(assetTombstones)
+      .set({ claimedAt: sql`now() - interval '1 hour'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    // Once the lease is up the object is offered again and this sweep finishes the job.
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("stamps a taken-over claim afresh so the previous holder cannot settle it", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    const abandoned = new Date(Date.now() - 60 * 60 * 1000)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'`, claimedAt: abandoned })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    // Take the object on the way a sweep would, then stop before deleting anything.
+    await db
+      .update(assetTombstones)
+      .set({ claimedAt: new Date() })
+      .where(inArray(assetTombstones.objectKey, keys))
+    const takenOver = await claimStamp(keys[0]!)
+    expect(takenOver).not.toEqual(abandoned)
+
+    // The stamp the abandoned holder would settle against no longer matches, so its row
+    // delete finds nothing and the new holder keeps the object.
+    await db
+      .delete(assetTombstones)
+      .where(
+        and(inArray(assetTombstones.objectKey, keys), eq(assetTombstones.claimedAt, abandoned))
+      )
+    expect(await reservedKeys(keys)).toEqual(keys)
+    expect(await claimStamp(keys[0]!)).toEqual(takenOver)
+
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
+  })
+
+  it("refuses to record an export while a deleter holds its keys", async () => {
+    const project = await createProject({ title: "Claimed export" })
+    createdProjectIds.add(project.id)
+    const base = `projects/${project.id}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/book.pdf`, `${base}/report.txt`]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ claimedAt: sql`now()` })
+      .where(inArray(assetTombstones.objectKey, keys))
+
+    // The object may already be gone, so a claim in progress is as good as a completed one.
+    await expect(
+      recordExport({
+        projectId: project.id,
+        sourceFingerprint: "claimed-export",
+        pdfObjectKey: keys[0]!,
+        reportObjectKey: keys[1]!,
+        pagePdfZipObjectKey: null,
+        pageJpegZipObjectKey: null,
+        report: exportReport(project.id),
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    // The failed attempt rolled back, so the deleter still holds what it claimed.
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, keys))
+  })
+
+  it("sweeps a reservation only once it has had time to be claimed", async () => {
+    const base = `projects/${crypto.randomUUID()}/exports/${crypto.randomUUID()}`
+    const keys = [`${base}/pages.zip`]
+
+    await reserveObjects(keys)
+    await cleanupOrphanedObjects()
+    // A write that is still uploading must survive a sweep that runs beside it.
+    expect(await reservedKeys(keys)).toEqual(keys)
+
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    expect(await reservedKeys(keys)).toEqual([])
   })
 })

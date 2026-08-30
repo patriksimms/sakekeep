@@ -332,5 +332,7 @@ export interface ExportArtifact {
   id: string
   pdfUrl: string
   reportUrl: string
+  pagePdfZipUrl: string
+  pageJpegZipUrl: string
   report: ExportReport
 }

@@ -1,3 +1,5 @@
+import { Readable } from "node:stream"
+
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
@@ -6,6 +8,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3"
+import { Upload } from "@aws-sdk/lib-storage"
 
 import { env } from "./env"
 
@@ -68,6 +71,32 @@ export async function putObject(input: {
       ContentType: input.contentType,
     })
   )
+}
+
+/** One part at a time, so a streamed body costs a part of memory rather than its full size. */
+const UPLOAD_PART_BYTES = 8 * 1024 * 1024
+
+/**
+ * Uploads a body that is produced as it goes, without ever holding it whole. Used for the
+ * per-page export bundles, whose size grows with the page count of the book.
+ */
+export async function putObjectStream(input: {
+  key: string
+  body: AsyncIterable<Uint8Array>
+  contentType: string
+}): Promise<void> {
+  await ensureBucket()
+  await new Upload({
+    client: s3,
+    queueSize: 1,
+    partSize: UPLOAD_PART_BYTES,
+    params: {
+      Bucket: configuration.S3_BUCKET,
+      Key: input.key,
+      Body: Readable.from(input.body),
+      ContentType: input.contentType,
+    },
+  }).done()
 }
 
 export async function getObject(key: string): Promise<{

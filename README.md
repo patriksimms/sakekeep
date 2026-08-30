@@ -68,6 +68,8 @@ Re-running `bun run db:seed` resets only those two deterministic demo projects.
 7. Generate and review one page per response plus optional standalone pages.
 8. Resolve blocking text, print-area, gallery, and image-resolution problems.
 9. Export a structurally verified PDF/X-4-targeted PDF and preflight report.
+   Every export also produces a ZIP of one PDF per page and a ZIP of one
+   300 PPI JPEG per page, so the format is chosen when downloading.
 
 Published or closed projects can be duplicated into a fresh draft without
 copying responses or the public token.
@@ -152,6 +154,8 @@ deployment.
   layout schema; raw Fabric JSON is never persisted
 - `pdf-lib`, bundled OFL static fonts, and a locally downloaded PSO Coated v3
   output intent for individual-page DIN A4, A5, and A6 exports
+- PDFium (WebAssembly) with Sharp for the optional per-page JPEG bundle, and
+  `fflate` for the ZIP bundles
 
 Share tokens encode 192 HMAC-derived bits. Only their SHA-256 digest is stored
 in PostgreSQL. Form and layout autosaves use revision checks and serialized
@@ -188,5 +192,15 @@ restricted Clerk sign-up in issue #23 are complete.
 
 `docker compose down` preserves service volumes. To remove all local database
 and object-store data, use `docker compose down -v` only when that destructive
-reset is intended. Normal project deletion writes object tombstones before
-best-effort cleanup; `bun run storage:cleanup` safely retries failures.
+reset is intended. A tombstone marks an object as unowned and doubles as a
+claim ticket: project deletion, an in-flight export, and `bun run
+storage:cleanup` all have to claim the row before they may touch the object, so
+exactly one of them wins and the others back off. The row outlives the claim
+and is only dropped once the object store confirms the delete, so a process
+that dies mid-cleanup leaves the work behind for a later run; an abandoned
+claim is offered again after fifteen minutes. Project deletion tombstones its
+objects and deletes them straight away; an export holds tombstones over its
+uploads and clears them when it records the export row. `storage:cleanup` only
+goes after tombstones older than an hour, and an export that somehow runs past
+that fails with a conflict instead of being recorded against files the sweep
+already removed.
