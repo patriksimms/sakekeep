@@ -211,7 +211,14 @@ function BackgroundPicker({
         </DialogHeader>
         <Field>
           <FieldLabel>This layout is for</FieldLabel>
-          <Select value={role} onValueChange={(value) => value && setRole(value as LayoutRole)}>
+          <Select
+            items={LAYOUT_ROLES.map((candidate) => ({
+              value: candidate,
+              label: layoutRoleLabel(candidate),
+            }))}
+            value={role}
+            onValueChange={(value) => value && setRole(value as LayoutRole)}
+          >
             <SelectTrigger className="w-full" aria-label="New layout role">
               <SelectValue />
             </SelectTrigger>
