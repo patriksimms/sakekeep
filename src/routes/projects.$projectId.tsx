@@ -407,6 +407,13 @@ function ProjectWorkspace() {
             project={project}
             onProjectChange={setProject}
             view={search.bookView ?? "grid"}
+            onEditLayouts={() => {
+              void navigate({
+                to: "/projects/$projectId",
+                params: { projectId },
+                search: (current) => ({ ...current, tab: "layouts" }),
+              })
+            }}
             onViewChange={(bookView) => {
               void navigate({
                 to: "/projects/$projectId",

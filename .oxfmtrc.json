@@ -3,6 +3,7 @@
   "singleQuote": false,
   "trailingComma": "es5",
   "ignorePatterns": [
+    ".vscode/**",
     "src/routeTree.gen.ts",
     "src/domain/font-metrics.generated.ts",
     "drizzle/**",

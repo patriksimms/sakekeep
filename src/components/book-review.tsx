@@ -70,7 +70,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select.tsx"
-import { Textarea } from "#/components/ui/textarea.tsx"
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group.tsx"
 import { LayoutPageElements } from "#/components/layout-page.tsx"
 import { type PhotoFocusControls } from "#/components/photo-focus-slot.tsx"
@@ -87,17 +86,17 @@ import {
   type GenerationSettings,
   type PageProblem,
   type Project,
+  type LayoutRecord,
   type StandaloneBookPage,
-  type StandalonePageType,
 } from "#/domain/types.ts"
+import { isCoverRole, layoutRoleLabel, responseLayouts } from "#/domain/layout-roles.ts"
+import { pinCoverPages } from "#/domain/generation.ts"
 import { submissionLabel } from "#/domain/submission-label.ts"
 import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
 import { pageSpecification } from "#/domain/page-format.ts"
 
-// Standalone page text is sized in cqw like every submission-page element, so a preview stays a
-// faithful miniature at any width. Viewport units would ignore the preview's own size.
 export function PagePreview({
   page,
   project,
@@ -115,16 +114,12 @@ export function PagePreview({
   selectedElementId?: string
   photoFocus?: PhotoFocusControls
 }) {
-  const layout =
-    page.kind === "submission"
-      ? project.layouts.find((candidate) => candidate.id === page.layoutId)
-      : null
+  const layout = project.layouts.find((candidate) => candidate.id === page.layoutId)
   const submission =
     page.kind === "submission"
       ? project.submissions?.find((candidate) => candidate.id === page.submissionId)
       : null
-  const background =
-    page.kind === "standalone" ? page.background : (layout?.schema.background ?? "#fffdf7")
+  const background = layout?.schema.background ?? "#fffdf7"
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   return (
     <div
@@ -136,21 +131,12 @@ export function PagePreview({
       }}
       data-testid="page-preview"
     >
-      {page.kind === "standalone" ? (
-        page.pageType !== "blank" && (
-          <div className="absolute inset-[12%] flex flex-col justify-center">
-            <p className="font-heading text-[3cqw] leading-tight">{page.title}</p>
-            <p className="mt-[1cqw] line-clamp-5 whitespace-pre-wrap text-[1.3cqw] text-muted-foreground">
-              {page.body}
-            </p>
-          </div>
-        )
-      ) : layout && submission ? (
+      {layout && (page.kind === "standalone" || submission) ? (
         <LayoutPageElements
           schema={layout.schema}
           content={{
             questions: project.formSchema.questions,
-            submission,
+            submission: submission ?? undefined,
             decorativeAssetUrl,
             photoFocus,
           }}
@@ -174,15 +160,19 @@ export function PagePreview({
   )
 }
 
-function AddStandaloneDialog({ onAdd }: { onAdd: (page: StandaloneBookPage) => void }) {
+function AddStandaloneDialog({
+  layouts,
+  onAdd,
+}: {
+  layouts: LayoutRecord[]
+  onAdd: (page: StandaloneBookPage) => void
+}) {
   const [open, setOpen] = useState(false)
-  const [pageType, setPageType] = useState<StandalonePageType>("cover")
-  const [title, setTitle] = useState("A book of memories")
-  const [body, setBody] = useState("")
-  const [background, setBackground] = useState("#f4ede1")
+  const [layoutId, setLayoutId] = useState(layouts[0]?.id ?? "")
+  const selected = layouts.find((layout) => layout.id === layoutId) ?? layouts[0]
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" />}>
+      <DialogTrigger render={<Button variant="outline" disabled={layouts.length === 0} />}>
         <PlusIcon data-icon="inline-start" />
         Standalone page
       </DialogTrigger>
@@ -190,60 +180,38 @@ function AddStandaloneDialog({ onAdd }: { onAdd: (page: StandaloneBookPage) => v
         <DialogHeader>
           <DialogTitle>Add a standalone page</DialogTitle>
           <DialogDescription>
-            Cover, introduction, closing, and blank pages are independent of submissions.
+            Standalone pages carry no response. Design them in the layout editor, then place them
+            anywhere in the book.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field>
-            <FieldLabel>Page type</FieldLabel>
-            <Select
-              value={pageType}
-              onValueChange={(value) => setPageType(value as StandalonePageType)}
-            >
-              <SelectTrigger className="w-full" aria-label="Standalone page type">
+            <FieldLabel>Layout</FieldLabel>
+            <Select value={selected?.id} onValueChange={(value) => value && setLayoutId(value)}>
+              <SelectTrigger className="w-full" aria-label="Standalone page layout">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="cover">Cover</SelectItem>
-                  <SelectItem value="introduction">Introduction</SelectItem>
-                  <SelectItem value="closing">Closing</SelectItem>
-                  <SelectItem value="blank">Blank</SelectItem>
+                  {layouts.map((layout) => (
+                    <SelectItem key={layout.id} value={layout.id}>
+                      {layout.name}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
-          {pageType !== "blank" && (
-            <>
-              <Field>
-                <FieldLabel>Title</FieldLabel>
-                <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-              </Field>
-              <Field>
-                <FieldLabel>Body</FieldLabel>
-                <Textarea value={body} onChange={(event) => setBody(event.target.value)} />
-              </Field>
-            </>
-          )}
-          <Field>
-            <FieldLabel>Background</FieldLabel>
-            <Input
-              type="color"
-              value={background}
-              onChange={(event) => setBackground(event.target.value)}
-            />
-          </Field>
         </FieldGroup>
         <DialogFooter>
           <Button
+            disabled={!selected}
             onClick={() => {
+              if (!selected) return
               onAdd({
                 id: `standalone:${crypto.randomUUID()}`,
                 kind: "standalone",
-                pageType,
-                title: pageType === "blank" ? "" : title,
-                body: pageType === "blank" ? "" : body,
-                background,
+                layoutId: selected.id,
                 problems: [],
               })
               setOpen(false)
@@ -314,12 +282,14 @@ function ProblemList({
 }
 
 function pageCaption(page: BookPage, project: Project) {
-  if (page.kind === "standalone") return page.pageType
   return project.layouts.find((layout) => layout.id === page.layoutId)?.name ?? "Missing layout"
 }
 
 function pageLabel(page: BookPage, project: Project) {
-  if (page.kind === "standalone") return `${page.pageType}: ${page.title || "Blank"}`
+  const layout = project.layouts.find((candidate) => candidate.id === page.layoutId)
+  if (page.kind === "standalone") {
+    return layout ? `${layoutRoleLabel(layout.role)}: ${layout.name}` : "Missing layout"
+  }
   const submission = project.submissions?.find((candidate) => candidate.id === page.submissionId)
   return submission ? submissionLabel(project.formSchema, submission) : "Response ?"
 }
@@ -389,11 +359,14 @@ export function BookReview({
   onProjectChange,
   view = "grid",
   onViewChange,
+  onEditLayouts,
 }: {
   project: Project
   onProjectChange: (project: Project) => void
   view?: BookView
   onViewChange?: (view: BookView) => void
+  /** Switches the workspace to the layout editor, where standalone pages are designed. */
+  onEditLayouts?: () => void
 }) {
   const defaultSettings: GenerationSettings = {
     mode: "cycle",
@@ -462,6 +435,9 @@ export function BookReview({
   const book = project.book
   const pages = book?.pages ?? []
   const selected = pages.find((page) => page.id === selectedId) ?? pages[0]
+  const selectedLayout = project.layouts.find((layout) => layout.id === selected?.layoutId)
+  // Only response layouts may back a response page; generation would discard any other choice.
+  const assignableLayouts = responseLayouts(project.layouts)
   const problems = pages.flatMap((page) => page.problems)
 
   const changeView = (next: BookView, source: "toggle" | "page_tile" | "problem_shortcut") => {
@@ -557,14 +533,18 @@ export function BookReview({
 
   const focusPhoto = focusAssetId ? findPhoto(submissions, focusAssetId) : undefined
 
+  const isPinnedPage = (page: BookPage) =>
+    isCoverRole(project.layouts.find((layout) => layout.id === page.layoutId)?.role ?? "submission")
+
   const reorder = (pageId: string, targetId: string) => {
     if (!book || pageId === targetId) return
     const next = [...book.pages]
     const sourceIndex = next.findIndex((page) => page.id === pageId)
     const targetIndex = next.findIndex((page) => page.id === targetId)
+    if (isPinnedPage(next[sourceIndex]!)) return
     const [moved] = next.splice(sourceIndex, 1)
     next.splice(targetIndex, 0, moved!)
-    void updatePages(next)
+    void updatePages(pinCoverPages(next, project.layouts))
   }
 
   return (
@@ -599,7 +579,10 @@ export function BookReview({
             </ToggleGroup>
           )}
           {book && (
-            <AddStandaloneDialog onAdd={(page) => void updatePages([...book.pages, page])} />
+            <AddStandaloneDialog
+              layouts={project.layouts.filter((layout) => layout.role === "static")}
+              onAdd={(page) => void updatePages([...book.pages, page])}
+            />
           )}
           <AlertDialog>
             <AlertDialogTrigger render={<Button />}>
@@ -757,7 +740,7 @@ export function BookReview({
                       {book.pages.map((page, index) => (
                         <li
                           key={page.id}
-                          draggable
+                          draggable={!isPinnedPage(page)}
                           onDragStart={() => setDraggedId(page.id)}
                           onDragOver={(event: DragEvent) => event.preventDefault()}
                           onDrop={() => {
@@ -792,7 +775,11 @@ export function BookReview({
                               size="icon-xs"
                               variant="ghost"
                               aria-label={`Move page ${index + 1} up`}
-                              disabled={index === 0}
+                              disabled={
+                                index === 0 ||
+                                isPinnedPage(page) ||
+                                isPinnedPage(book.pages[index - 1]!)
+                              }
                               onClick={() => reorder(page.id, book.pages[index - 1]!.id)}
                             >
                               <ArrowUpIcon />
@@ -801,7 +788,11 @@ export function BookReview({
                               size="icon-xs"
                               variant="ghost"
                               aria-label={`Move page ${index + 1} down`}
-                              disabled={index === book.pages.length - 1}
+                              disabled={
+                                index === book.pages.length - 1 ||
+                                isPinnedPage(page) ||
+                                isPinnedPage(book.pages[index + 1]!)
+                              }
                               onClick={() => reorder(page.id, book.pages[index + 1]!.id)}
                             >
                               <ArrowDownIcon />
@@ -867,7 +858,7 @@ export function BookReview({
                     </CardHeader>
                     <CardContent>
                       <Select
-                        items={project.layouts.map((layout) => ({
+                        items={assignableLayouts.map((layout) => ({
                           label: layout.name,
                           value: layout.id,
                         }))}
@@ -900,7 +891,7 @@ export function BookReview({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            {project.layouts.map((layout) => (
+                            {assignableLayouts.map((layout) => (
                               <SelectItem key={layout.id} value={layout.id}>
                                 {layout.name}
                               </SelectItem>
@@ -914,71 +905,41 @@ export function BookReview({
                 {selected?.kind === "standalone" && (
                   <Card className="mt-4 bg-card/90">
                     <CardHeader>
-                      <CardTitle>Edit standalone page</CardTitle>
-                      <CardAction>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label="Delete standalone page"
-                          onClick={() =>
-                            void updatePages(book.pages.filter((page) => page.id !== selected.id))
-                          }
-                        >
-                          <Trash2Icon />
-                        </Button>
-                      </CardAction>
+                      <CardTitle>Standalone page</CardTitle>
+                      <CardDescription>
+                        {selectedLayout
+                          ? `${selectedLayout.name} — ${layoutRoleLabel(selectedLayout.role)}`
+                          : "This page references a layout that no longer exists."}
+                      </CardDescription>
+                      {selectedLayout?.role === "static" && (
+                        <CardAction>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="Delete standalone page"
+                            onClick={() =>
+                              void updatePages(book.pages.filter((page) => page.id !== selected.id))
+                            }
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        </CardAction>
+                      )}
                     </CardHeader>
-                    <CardContent>
-                      <FieldGroup>
-                        <Field>
-                          <FieldLabel>Title</FieldLabel>
-                          <Input
-                            value={selected.title}
-                            disabled={selected.pageType === "blank"}
-                            onChange={(event) =>
-                              void updatePages(
-                                book.pages.map((page) =>
-                                  page.id === selected.id && page.kind === "standalone"
-                                    ? { ...page, title: event.target.value }
-                                    : page
-                                )
-                              )
-                            }
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel>Body</FieldLabel>
-                          <Textarea
-                            value={selected.body}
-                            disabled={selected.pageType === "blank"}
-                            onChange={(event) =>
-                              void updatePages(
-                                book.pages.map((page) =>
-                                  page.id === selected.id && page.kind === "standalone"
-                                    ? { ...page, body: event.target.value }
-                                    : page
-                                )
-                              )
-                            }
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel>Background</FieldLabel>
-                          <Input
-                            type="color"
-                            value={selected.background}
-                            onChange={(event) =>
-                              void updatePages(
-                                book.pages.map((page) =>
-                                  page.id === selected.id && page.kind === "standalone"
-                                    ? { ...page, background: event.target.value }
-                                    : page
-                                )
-                              )
-                            }
-                          />
-                        </Field>
-                      </FieldGroup>
+                    <CardContent className="flex flex-col gap-3">
+                      <p className="text-sm text-muted-foreground">
+                        {selectedLayout && isCoverRole(selectedLayout.role)
+                          ? `The ${layoutRoleLabel(selectedLayout.role).toLowerCase()} always stays ${
+                              selectedLayout.role === "front-cover" ? "first" : "last"
+                            }. Delete its layout to remove the page.`
+                          : "Design this page in the layout editor; every change appears here after the next generation."}
+                      </p>
+                      {onEditLayouts && (
+                        <Button variant="outline" className="self-start" onClick={onEditLayouts}>
+                          <LayoutTemplateIcon data-icon="inline-start" />
+                          Open in layout editor
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 )}

@@ -3,9 +3,11 @@ import {
   type FormSchema,
   type GenerationSettings,
   type LayoutRecord,
+  type LayoutRole,
   type SubmissionSummary,
 } from "#/domain/types.ts"
 import { addElement, emptyLayoutSchema } from "#/domain/layout.ts"
+import { layoutRoleLabel } from "#/domain/layout-roles.ts"
 
 export const completeForm: FormSchema = {
   version: FORM_SCHEMA_VERSION,
@@ -73,7 +75,26 @@ export function layoutFixture(
     name: `Layout ${position + 1}`,
     position,
     revision: 0,
+    role: "submission",
     schema,
+    updatedAt: "2026-07-18T00:00:00.000Z",
+  }
+}
+
+/** A layout backing a cover or standalone page: static text only, no response behind it. */
+export function standaloneLayoutFixture(
+  id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  role: LayoutRole = "static",
+  position = 1
+): LayoutRecord {
+  return {
+    id,
+    projectId: "99999999-9999-4999-8999-999999999999",
+    name: layoutRoleLabel(role),
+    position,
+    revision: 0,
+    role,
+    schema: addElement(emptyLayoutSchema(), "static-text"),
     updatedAt: "2026-07-18T00:00:00.000Z",
   }
 }

@@ -38,15 +38,7 @@ export const bookPageValidator = z.discriminatedUnion("kind", [
   z.object({
     id: z.string().min(1),
     kind: z.literal("standalone"),
-    pageType: z.union([
-      z.literal("cover"),
-      z.literal("introduction"),
-      z.literal("closing"),
-      z.literal("blank"),
-    ]),
-    title: z.string().max(500),
-    body: z.string().max(100_000),
-    background: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    layoutId: z.string().uuid(),
     problems: z.array(problemSchema),
   }),
 ])

@@ -1,4 +1,5 @@
 import {
+  FORM_SCHEMA_VERSION,
   type BookPage,
   type FormSchema,
   type GeneratedBook,
@@ -6,11 +7,13 @@ import {
   type LayoutElement,
   type LayoutRecord,
   type PageProblem,
+  type StandaloneBookPage,
   type SubmissionBookPage,
   type SubmissionSummary,
 } from "./types"
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
-import { pageSpecificationForLayout } from "./page-format.ts"
+import { findLayoutByRole, isCoverRole, responseLayouts } from "./layout-roles.ts"
+import { pageSpecificationForLayout, type PageSpecification } from "./page-format.ts"
 import { questionPrompt } from "./layout-question-palette.ts"
 import {
   assignPhotosToFrames,
@@ -39,11 +42,13 @@ function seededUnit(seed: string, key: string): number {
   return ((value ^ (value >>> 14)) >>> 0) / 4294967296
 }
 
+/** Only response layouts take part; cover and standalone layouts back their own pages. */
 export function deterministicLayoutAssignments(
   submissions: SubmissionSummary[],
-  layouts: LayoutRecord[],
+  allLayouts: LayoutRecord[],
   settings: GenerationSettings
 ): Record<string, string> {
+  const layouts = responseLayouts(allLayouts)
   if (layouts.length === 0) return {}
   const validLayoutIds = new Set(layouts.map((layout) => layout.id))
   const assignments: Record<string, string> = {}
@@ -93,7 +98,7 @@ function textElementName(
 
 function textOverflowMessage(
   name: string,
-  response: number,
+  location: string,
   policy: "shrink" | "truncate" | "flag",
   fit: TextLayoutResult,
   heightMm: number
@@ -104,9 +109,9 @@ function textOverflowMessage(
       ? `${fit.effectiveFontSize} pt minimum`
       : `configured ${fit.effectiveFontSize} pt size`
   if (fit.availableLines === 0) {
-    return `${name} ${action} on Response ${response}. Its text bounding box is too short for one line at the ${size} (needs ${fit.lineHeightMm.toFixed(2)} mm, has ${heightMm.toFixed(2)} mm).`
+    return `${name} ${action} on ${location}. Its text bounding box is too short for one line at the ${size} (needs ${fit.lineHeightMm.toFixed(2)} mm, has ${heightMm.toFixed(2)} mm).`
   }
-  return `${name} ${action} on Response ${response}. It needs ${lineCount(fit.requiredLines)} at the ${size}, but only ${lineCount(fit.availableLines)} ${fit.availableLines === 1 ? "fits" : "fit"}.`
+  return `${name} ${action} on ${location}. It needs ${lineCount(fit.requiredLines)} at the ${size}, but only ${lineCount(fit.availableLines)} ${fit.availableLines === 1 ? "fits" : "fit"}.`
 }
 
 function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<string, string> {
@@ -179,6 +184,88 @@ function photoSlotMessage(
   return `${plural(question.emptySlotCount, "photo slot")} for "${prompt}" ${question.emptySlotCount === 1 ? "stays" : "stay"} empty on Response ${response}. ${capacity}`
 }
 
+/**
+ * The checks that depend only on where an element sits, not on the response behind the page.
+ * Shared by response pages and standalone pages.
+ */
+function inspectElementPlacement(
+  pageId: string,
+  element: LayoutElement,
+  specification: PageSpecification
+): PageProblem[] {
+  const problems: PageProblem[] = []
+  if (elementExtendsBeyondBleed(element, specification)) {
+    problems.push(
+      problem(
+        pageId,
+        "outside-print-area",
+        "An element extends beyond the 3 mm bleed boundary.",
+        element.type === "bound-text",
+        { elementId: element.id }
+      )
+    )
+  } else if (isCriticalElementOutsideSafeArea(element, specification)) {
+    problems.push(
+      problem(
+        pageId,
+        "outside-print-area",
+        "Text or critical content is outside the 6 mm safe area.",
+        true,
+        { elementId: element.id }
+      )
+    )
+  }
+  if (element.type === "decorative-image" && !element.assetId) {
+    problems.push(
+      problem(
+        pageId,
+        "empty-decorative-image",
+        "A decorative image has no image selected and will be omitted from preview and export.",
+        false,
+        { elementId: element.id }
+      )
+    )
+  }
+  return problems
+}
+
+const EMPTY_FORM: FormSchema = { version: FORM_SCHEMA_VERSION, questions: [] }
+
+/**
+ * A cover or standalone page has no response behind it, so only placement and the fit of its own
+ * text can go wrong. Response-bound elements cannot be authored on such a layout and are ignored.
+ */
+export function inspectStandalonePage(pageId: string, layout: LayoutRecord): PageProblem[] {
+  const specification = pageSpecificationForLayout(layout.schema)
+  const problemNames = textProblemNames(layout.schema.elements, EMPTY_FORM)
+  const problems: PageProblem[] = []
+  for (const element of layout.schema.elements) {
+    problems.push(...inspectElementPlacement(pageId, element, specification))
+    if (element.type !== "static-text") continue
+    const runs = textRunsForElement(element, undefined, undefined)
+    const content = runs.map((run) => run.text).join("\n")
+    if (!content.trim()) continue
+    const fit = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
+    if (fit.fits && !fit.truncated) continue
+    problems.push(
+      problem(
+        pageId,
+        "text-overflow",
+        textOverflowMessage(
+          problemNames.get(element.id)!,
+          layout.name,
+          element.text.overflow,
+          fit,
+          element.geometry.height
+        ),
+        !fit.fits,
+        { elementId: element.id }
+      )
+    )
+  }
+  return problems
+}
+
 export function inspectSubmissionPage(
   pageId: string,
   layout: LayoutRecord,
@@ -198,39 +285,7 @@ export function inspectSubmissionPage(
   const pageSpecification = pageSpecificationForLayout(layout.schema)
 
   for (const element of layout.schema.elements) {
-    if (elementExtendsBeyondBleed(element, pageSpecification)) {
-      problems.push(
-        problem(
-          pageId,
-          "outside-print-area",
-          "An element extends beyond the 3 mm bleed boundary.",
-          element.type === "bound-text",
-          { elementId: element.id }
-        )
-      )
-    } else if (isCriticalElementOutsideSafeArea(element, pageSpecification)) {
-      problems.push(
-        problem(
-          pageId,
-          "outside-print-area",
-          "Text or critical content is outside the 6 mm safe area.",
-          true,
-          { elementId: element.id }
-        )
-      )
-    }
-
-    if (element.type === "decorative-image" && !element.assetId) {
-      problems.push(
-        problem(
-          pageId,
-          "empty-decorative-image",
-          "A decorative image has no image selected and will be omitted from preview and export.",
-          false,
-          { elementId: element.id }
-        )
-      )
-    }
+    problems.push(...inspectElementPlacement(pageId, element, pageSpecification))
 
     if (element.type === "bound-text" || element.type === "static-text") {
       const question =
@@ -267,7 +322,7 @@ export function inspectSubmissionPage(
             "text-overflow",
             textOverflowMessage(
               problemNames.get(element.id)!,
-              submission.sequence,
+              `Response ${submission.sequence}`,
               element.text.overflow,
               fit,
               element.geometry.height
@@ -341,6 +396,83 @@ export function inspectSubmissionPage(
   return problems
 }
 
+export interface BookPageIssue {
+  pageId: string
+  reason: string
+}
+
+/**
+ * Rejects page sets a client must never be able to persist: a response page on a layout that
+ * generation would not assign, a standalone page on a response layout (generation drops it on the
+ * next run), a duplicated cover, or a page introduced with a layout the project does not own.
+ *
+ * A page that already exists in the stored book keeps its layout even when that layout is gone:
+ * deleting a layout deliberately leaves the stale book referencing it until it is regenerated.
+ */
+export function invalidBookPages(
+  pages: BookPage[],
+  layouts: LayoutRecord[],
+  storedPageIds: ReadonlySet<string>
+): BookPageIssue[] {
+  const layoutById = new Map(layouts.map((layout) => [layout.id, layout]))
+  const issues: BookPageIssue[] = []
+  const coverPageCounts = new Map<string, number>()
+  for (const page of pages) {
+    const layout = layoutById.get(page.layoutId)
+    if (!layout) {
+      if (!storedPageIds.has(page.id)) {
+        issues.push({ pageId: page.id, reason: "references a layout this project does not own" })
+      }
+      continue
+    }
+    if (page.kind === "submission" && layout.role !== "submission") {
+      issues.push({ pageId: page.id, reason: "is a response page on a non-response layout" })
+      continue
+    }
+    if (page.kind === "standalone" && layout.role === "submission") {
+      issues.push({ pageId: page.id, reason: "is a standalone page on a response layout" })
+      continue
+    }
+    if (!isCoverRole(layout.role)) continue
+    const seen = (coverPageCounts.get(layout.id) ?? 0) + 1
+    coverPageCounts.set(layout.id, seen)
+    if (seen > 1) {
+      issues.push({ pageId: page.id, reason: "duplicates a cover page" })
+    }
+  }
+  return issues
+}
+
+/**
+ * Restores the pinned order after pages were rearranged: the front-cover page first, the
+ * back-cover page last, every other page in the order it was given.
+ */
+export function pinCoverPages(pages: BookPage[], layouts: LayoutRecord[]): BookPage[] {
+  const roleByLayoutId = new Map(layouts.map((layout) => [layout.id, layout.role]))
+  const roleOf = (page: BookPage) =>
+    page.kind === "standalone" ? roleByLayoutId.get(page.layoutId) : undefined
+  return [
+    ...pages.filter((page) => roleOf(page) === "front-cover"),
+    ...pages.filter((page) => !isCoverRole(roleOf(page) ?? "submission")),
+    ...pages.filter((page) => roleOf(page) === "back-cover"),
+  ]
+}
+
+/** The pinned page for a cover role, or nothing when the project has no such layout. */
+function coverPages(layouts: LayoutRecord[], role: "front-cover" | "back-cover"): BookPage[] {
+  const layout = findLayoutByRole(layouts, role)
+  if (!layout) return []
+  const id = `standalone:${layout.id}`
+  return [
+    {
+      id,
+      kind: "standalone",
+      layoutId: layout.id,
+      problems: inspectStandalonePage(id, layout),
+    },
+  ]
+}
+
 export function generateBook(input: {
   projectId: string
   form: FormSchema
@@ -355,6 +487,10 @@ export function generateBook(input: {
   }
   const submissions = [...input.submissions].sort((left, right) => left.sequence - right.sequence)
   const layouts = [...input.layouts].sort((left, right) => left.position - right.position)
+  const responses = responseLayouts(layouts)
+  if (submissions.length > 0 && responses.length === 0) {
+    throw new Error("Create at least one response layout before generating the book.")
+  }
   const assignments = deterministicLayoutAssignments(submissions, layouts, input.settings)
   const layoutById = new Map(layouts.map((layout) => [layout.id, layout]))
 
@@ -377,13 +513,20 @@ export function generateBook(input: {
     }
   })
 
-  const standalonePages =
-    input.previousBook?.pages.filter((page) => page.kind === "standalone") ?? []
-  const allPages: BookPage[] = [...submissionPages, ...standalonePages]
+  // Standalone pages survive regeneration, but only while the layout behind them still exists.
+  const standalonePages: StandaloneBookPage[] = (input.previousBook?.pages ?? []).flatMap(
+    (page) => {
+      if (page.kind !== "standalone") return []
+      const layout = layoutById.get(page.layoutId)
+      if (!layout || layout.role !== "static") return []
+      return [{ ...page, problems: inspectStandalonePage(page.id, layout) }]
+    }
+  )
+  const bodyPages: BookPage[] = [...submissionPages, ...standalonePages]
   const previousOrder = new Map(
     input.previousBook?.pages.map((page, index) => [page.id, index]) ?? []
   )
-  allPages.sort((left, right) => {
+  bodyPages.sort((left, right) => {
     const leftIndex = previousOrder.get(left.id)
     const rightIndex = previousOrder.get(right.id)
     if (leftIndex === undefined && rightIndex === undefined) return 0
@@ -391,6 +534,12 @@ export function generateBook(input: {
     if (rightIndex === undefined) return -1
     return leftIndex - rightIndex
   })
+
+  const allPages: BookPage[] = [
+    ...coverPages(layouts, "front-cover"),
+    ...bodyPages,
+    ...coverPages(layouts, "back-cover"),
+  ]
 
   const now = input.now ?? new Date().toISOString()
   const sourceFingerprint = fingerprintBookSource({

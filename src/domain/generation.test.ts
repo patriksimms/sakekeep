@@ -5,9 +5,18 @@ import {
   deterministicLayoutAssignments,
   effectivePpi,
   generateBook,
+  inspectStandalonePage,
   inspectSubmissionPage,
+  invalidBookPages,
+  pinCoverPages,
 } from "./generation.ts"
-import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
+import {
+  completeForm,
+  cycleSettings,
+  layoutFixture,
+  standaloneLayoutFixture,
+  submissionFixture,
+} from "../test/fixtures.ts"
 import { addElement } from "./layout.ts"
 import { type ImageAnswer, type LayoutRecord } from "./types.ts"
 
@@ -37,9 +46,11 @@ describe("book generation", () => {
 
   it("preserves manual assignments, standalone pages, and page order", () => {
     const submissions = submissionIds.slice(0, 2).map(submissionFixture)
+    const standaloneLayout = standaloneLayoutFixture()
     const layouts = [
       layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0),
       layoutFixture("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 1),
+      standaloneLayout,
     ]
     const first = generateBook({
       projectId: layouts[0]!.projectId,
@@ -50,12 +61,9 @@ describe("book generation", () => {
       now: "2026-07-18T00:00:00.000Z",
     })
     const standalone = {
-      id: "standalone:cover",
+      id: "standalone:intro",
       kind: "standalone" as const,
-      pageType: "cover" as const,
-      title: "Our book",
-      body: "",
-      background: "#fffdf7",
+      layoutId: standaloneLayout.id,
       problems: [],
     }
     const previousBook = {
@@ -83,6 +91,278 @@ describe("book generation", () => {
         (page) => page.kind === "submission" && page.submissionId === submissions[0]!.id
       )
     ).toMatchObject({ layoutId: layouts[1]!.id })
+  })
+
+  it("pins the covers first and last and keeps them out of response assignment", () => {
+    const submissions = submissionIds.slice(0, 2).map(submissionFixture)
+    const response = layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0)
+    const front = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
+    const back = standaloneLayoutFixture("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "back-cover", 2)
+
+    const book = generateBook({
+      projectId: response.projectId,
+      form: completeForm,
+      submissions,
+      // Deliberately out of order: the covers are pinned by role, not by position.
+      layouts: [back, response, front],
+      settings: cycleSettings,
+      now: "2026-07-18T00:00:00.000Z",
+    })
+
+    expect(book.pages.map((page) => page.kind)).toEqual([
+      "standalone",
+      "submission",
+      "submission",
+      "standalone",
+    ])
+    expect(book.pages.at(0)).toMatchObject({ layoutId: front.id })
+    expect(book.pages.at(-1)).toMatchObject({ layoutId: back.id })
+    for (const page of book.pages) {
+      if (page.kind === "submission") expect(page.layoutId).toBe(response.id)
+    }
+  })
+
+  it("keeps the covers pinned when the book is regenerated after a reorder", () => {
+    const submissions = submissionIds.slice(0, 2).map(submissionFixture)
+    const response = layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0)
+    const front = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
+    const layouts = [response, front]
+    const first = generateBook({
+      projectId: response.projectId,
+      form: completeForm,
+      submissions,
+      layouts,
+      settings: cycleSettings,
+      now: "2026-07-18T00:00:00.000Z",
+    })
+
+    const regenerated = generateBook({
+      projectId: response.projectId,
+      form: completeForm,
+      submissions,
+      layouts,
+      settings: cycleSettings,
+      previousBook: { ...first, pages: [...first.pages].reverse() },
+      now: "2026-07-18T00:01:00.000Z",
+    })
+
+    expect(regenerated.pages[0]).toMatchObject({ kind: "standalone", layoutId: front.id })
+  })
+
+  it("drops a standalone page whose layout was deleted", () => {
+    const response = layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0)
+    const standalone = standaloneLayoutFixture()
+    const previousBook = generateBook({
+      projectId: response.projectId,
+      form: completeForm,
+      submissions: [],
+      layouts: [response, standalone],
+      settings: cycleSettings,
+      now: "2026-07-18T00:00:00.000Z",
+    })
+    const withPage = {
+      ...previousBook,
+      pages: [
+        {
+          id: "standalone:page",
+          kind: "standalone" as const,
+          layoutId: standalone.id,
+          problems: [],
+        },
+      ],
+    }
+
+    expect(
+      generateBook({
+        projectId: response.projectId,
+        form: completeForm,
+        submissions: [],
+        layouts: [response, standalone],
+        settings: cycleSettings,
+        previousBook: withPage,
+        now: "2026-07-18T00:01:00.000Z",
+      }).pages
+    ).toHaveLength(1)
+    expect(
+      generateBook({
+        projectId: response.projectId,
+        form: completeForm,
+        submissions: [],
+        layouts: [response],
+        settings: cycleSettings,
+        previousBook: withPage,
+        now: "2026-07-18T00:01:00.000Z",
+      }).pages
+    ).toEqual([])
+  })
+
+  it("refuses to generate responses without a response layout", () => {
+    const front = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 0)
+
+    expect(() =>
+      generateBook({
+        projectId: front.projectId,
+        form: completeForm,
+        submissions: [submissionFixture(submissionIds[0]!, 1)],
+        layouts: [front],
+        settings: cycleSettings,
+      })
+    ).toThrow(/response layout/)
+  })
+
+  it("reports overflowing text on a standalone page by its layout name", () => {
+    const layout = standaloneLayoutFixture()
+    layout.schema = {
+      ...layout.schema,
+      elements: layout.schema.elements.map((element) =>
+        element.type === "static-text"
+          ? {
+              ...element,
+              content: "A long note ".repeat(40),
+              geometry: { ...element.geometry, height: 6 },
+              text: { ...element.text, overflow: "flag" as const },
+            }
+          : element
+      ),
+    }
+
+    const problems = inspectStandalonePage("standalone:page", layout)
+
+    expect(problems.map((problem) => problem.code)).toContain("text-overflow")
+    expect(problems.find((problem) => problem.code === "text-overflow")!.message).toContain(
+      layout.name
+    )
+  })
+
+  it("re-pins covers after the pages were rearranged", () => {
+    const response = layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0)
+    const front = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
+    const back = standaloneLayoutFixture("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "back-cover", 2)
+    const standalone = standaloneLayoutFixture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "static", 3)
+    const pages = [
+      { id: "standalone:back", kind: "standalone" as const, layoutId: back.id, problems: [] },
+      {
+        id: "standalone:middle",
+        kind: "standalone" as const,
+        layoutId: standalone.id,
+        problems: [],
+      },
+      { id: "standalone:front", kind: "standalone" as const, layoutId: front.id, problems: [] },
+    ]
+
+    expect(
+      pinCoverPages(pages, [response, front, back, standalone]).map((page) => page.id)
+    ).toEqual(["standalone:front", "standalone:middle", "standalone:back"])
+  })
+
+  describe("book page validation", () => {
+    const response = layoutFixture("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 0)
+    const front = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
+    const standalone = standaloneLayoutFixture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "static", 2)
+    const layouts = [response, front, standalone]
+    const empty = new Set<string>()
+
+    it("accepts a response page and a standalone page on their own layouts", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "submission:1",
+              kind: "submission",
+              submissionId: submissionIds[0]!,
+              layoutId: response.id,
+              problems: [],
+            },
+            {
+              id: "standalone:1",
+              kind: "standalone",
+              layoutId: standalone.id,
+              problems: [],
+            },
+          ],
+          layouts,
+          empty
+        )
+      ).toEqual([])
+    })
+
+    it("rejects a standalone page placed on a response layout", () => {
+      expect(
+        invalidBookPages(
+          [{ id: "standalone:1", kind: "standalone", layoutId: response.id, problems: [] }],
+          layouts,
+          empty
+        )
+      ).toEqual([{ pageId: "standalone:1", reason: "is a standalone page on a response layout" }])
+    })
+
+    it("rejects a response page assigned to a layout generation would never pick", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "submission:1",
+              kind: "submission",
+              submissionId: submissionIds[0]!,
+              layoutId: front.id,
+              problems: [],
+            },
+          ],
+          layouts,
+          empty
+        )
+      ).toEqual([{ pageId: "submission:1", reason: "is a response page on a non-response layout" }])
+    })
+
+    it("rejects a duplicated cover page", () => {
+      const issues = invalidBookPages(
+        [
+          { id: "standalone:a", kind: "standalone", layoutId: front.id, problems: [] },
+          { id: "standalone:b", kind: "standalone", layoutId: front.id, problems: [] },
+        ],
+        layouts,
+        empty
+      )
+
+      expect(issues).toEqual([{ pageId: "standalone:b", reason: "duplicates a cover page" }])
+    })
+
+    it("rejects a new page on a layout the project does not own", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "standalone:new",
+              kind: "standalone",
+              layoutId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+              problems: [],
+            },
+          ],
+          layouts,
+          empty
+        )
+      ).toEqual([
+        { pageId: "standalone:new", reason: "references a layout this project does not own" },
+      ])
+    })
+
+    it("keeps a stored page whose layout was deleted, so a stale book stays editable", () => {
+      expect(
+        invalidBookPages(
+          [
+            {
+              id: "submission:1",
+              kind: "submission",
+              submissionId: submissionIds[0]!,
+              layoutId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+              problems: [],
+            },
+          ],
+          layouts,
+          new Set(["submission:1"])
+        )
+      ).toEqual([])
+    })
   })
 
   it("calculates effective resolution thresholds", () => {
