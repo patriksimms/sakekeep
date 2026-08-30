@@ -8,8 +8,6 @@ const exportSchema = z.object({
   marks: z.boolean().default(false),
   allowBlockingProblems: z.boolean().default(false),
   reviewedBookFingerprint: z.string().nullable().default(null),
-  pagePdfs: z.boolean().default(false),
-  pageJpegs: z.boolean().default(false),
 })
 
 export const Route = createFileRoute("/api/projects/$projectId/export")({

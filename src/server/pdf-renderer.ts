@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
+import { deflateSync } from "node:zlib"
 
 import fontkit from "@pdf-lib/fontkit"
 import {
@@ -490,13 +491,14 @@ function drawMarks(page: PDFPage, specification: PageSpecification) {
 
 function setPdfXMetadata(
   pdf: PDFDocument,
-  icc: Uint8Array,
+  deflatedIcc: Uint8Array,
   assetResolutions: AssetResolutionMetadata[]
 ) {
   const context = pdf.context
-  const iccStream = context.flateStream(icc, {
+  const iccStream = context.stream(deflatedIcc, {
     N: PDFNumber.of(4),
     Alternate: PDFName.of("DeviceCMYK"),
+    Filter: "FlateDecode",
   })
   const iccReference = context.register(iccStream)
   const outputIntent = context.obj({
@@ -600,10 +602,16 @@ export interface BookRenderInput {
   pageOrientation?: PageOrientation
 }
 
+/**
+ * The output intent profile, deflated once. Splitting a book gives every page its own
+ * output intent, and re-compressing two megabytes of profile per page would dominate the
+ * export.
+ */
 async function iccProfile(): Promise<Uint8Array> {
   try {
-    return await readFile(resolve(".local/icc/PSOcoated_v3.icc"))
-  } catch {
+    return deflateSync(await readFile(resolve(".local/icc/PSOcoated_v3.icc")))
+  } catch (error) {
+    if (error instanceof HttpError) throw error
     throw new HttpError(
       503,
       "The verified PSO Coated v3 profile is missing. Run `bun run setup:icc` and try again."
@@ -611,9 +619,6 @@ async function iccProfile(): Promise<Uint8Array> {
   }
 }
 
-// Rendering a subset of the book is what makes per-page files possible: every document
-// produced here carries the same page boxes, embedded fonts, and output intent, so a
-// single page is as print-ready as the complete book.
 async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uint8Array> {
   const icc = await iccProfile()
   const pdf = await PDFDocument.create()
@@ -718,12 +723,64 @@ export async function renderBookPdf(input: BookRenderInput): Promise<Uint8Array>
 }
 
 /** One single-page PDF per book page, in book order. */
-export async function renderBookPagePdfs(input: BookRenderInput): Promise<Uint8Array[]> {
+function assetResolutionsOf(document: PDFDocument): AssetResolutionMetadata[] {
+  const entries = document.catalog.lookup(PDFName.of("SakekeepAssetResolutions"))
+  if (!(entries instanceof PDFArray)) return []
+  const numberAt = (entry: PDFDict, key: string) => {
+    const value = entry.lookup(PDFName.of(key))
+    return value instanceof PDFNumber ? value.asNumber() : 0
+  }
+  const stringAt = (entry: PDFDict, key: string) => {
+    const value = entry.lookup(PDFName.of(key))
+    return value instanceof PDFString ? value.asString() : ""
+  }
+  return Array.from({ length: entries.size() }, (_, index) => entries.lookup(index)).flatMap(
+    (entry) =>
+      entry instanceof PDFDict
+        ? [
+            {
+              assetId: stringAt(entry, "AssetID"),
+              pageId: stringAt(entry, "PageID"),
+              elementId: stringAt(entry, "ElementID"),
+              pixelWidth: numberAt(entry, "PixelWidth"),
+              pixelHeight: numberAt(entry, "PixelHeight"),
+              placedWidthMm: numberAt(entry, "PlacedWidthMM"),
+              placedHeightMm: numberAt(entry, "PlacedHeightMM"),
+              effectivePpi: numberAt(entry, "EffectivePPI"),
+            },
+          ]
+        : []
+  )
+}
+
+/**
+ * Splits an exported book into one single-page PDF per page, in book order. The pages are
+ * copied rather than rendered again, so each file is the very page the preflighted book
+ * carries; only the catalog-level output intent and PDF/X metadata have to be re-applied,
+ * because those do not travel with a copied page.
+ */
+export async function splitBookPagePdfs(
+  bookPdf: Uint8Array,
+  pageIds: string[]
+): Promise<Uint8Array[]> {
+  const icc = await iccProfile()
+  const source = await PDFDocument.load(bookPdf)
+  const assetResolutions = assetResolutionsOf(source)
   const documents: Uint8Array[] = []
-  // Sequential on purpose: each page embeds its own fonts and images, and a large book
-  // rendered in parallel would hold every one of those documents in memory at once.
-  for (const bookPage of input.book.pages) {
-    documents.push(await renderPdf(input, [bookPage]))
+  for (let index = 0; index < source.getPageCount(); index += 1) {
+    const single = await PDFDocument.create()
+    single.setTitle("Sakekeep friend book")
+    single.setCreator("Sakekeep local prototype")
+    single.setProducer("Sakekeep / pdf-lib")
+    const [page] = await single.copyPages(source, [index])
+    single.addPage(page)
+    const pageId = pageIds[index]
+    setPdfXMetadata(
+      single,
+      icc,
+      assetResolutions.filter((entry) => entry.pageId === pageId)
+    )
+    documents.push(await single.save({ useObjectStreams: false, addDefaultPage: false }))
   }
   return documents
 }

@@ -80,14 +80,14 @@ function projectWithoutProblems(): Project {
   }
 }
 
-function artifactFixture(bundles: boolean): ExportArtifact {
+function artifactFixture(): ExportArtifact {
   const id = "55555555-5555-4555-8555-555555555555"
   return {
     id,
     pdfUrl: `/api/exports/${id}?file=pdf`,
     reportUrl: `/api/exports/${id}?file=report`,
-    pagePdfZipUrl: bundles ? `/api/exports/${id}?file=page-pdfs` : null,
-    pageJpegZipUrl: bundles ? `/api/exports/${id}?file=page-jpegs` : null,
+    pagePdfZipUrl: `/api/exports/${id}?file=page-pdfs`,
+    pageJpegZipUrl: `/api/exports/${id}?file=page-jpegs`,
     report: {
       sourceFingerprint: "current-source",
       checks: [],
@@ -96,14 +96,14 @@ function artifactFixture(bundles: boolean): ExportArtifact {
   } as unknown as ExportArtifact
 }
 
-describe("print export page bundles", () => {
-  it("requests the selected bundles and links only what was produced", async () => {
-    exportProject.mockResolvedValue(artifactFixture(true))
+describe("print export downloads", () => {
+  it("offers every format after one export, without asking up front", async () => {
+    exportProject.mockResolvedValue(artifactFixture())
     render(<ExportPanel project={projectWithoutProblems()} />)
 
-    fireEvent.click(screen.getByRole("switch", { name: "One PDF per page (ZIP)" }))
-    fireEvent.click(screen.getByRole("switch", { name: "One JPEG per page (ZIP)" }))
-    fireEvent.click(screen.getByRole("button", { name: "Export PDF + report" }))
+    expect(screen.queryByRole("switch", { name: /per page/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "Export book" }))
 
     await waitFor(() =>
       expect(exportProject).toHaveBeenCalledExactlyOnceWith(
@@ -112,28 +112,23 @@ describe("print export page bundles", () => {
           marks: false,
           allowBlockingProblems: false,
           reviewedBookFingerprint: "current-source",
-          pagePdfs: true,
-          pageJpegs: true,
         }
       )
     )
-    expect(
-      (await screen.findByRole("link", { name: "Download page PDFs" })).getAttribute("href")
-    ).toBe("/api/exports/55555555-5555-4555-8555-555555555555?file=page-pdfs")
-    expect(screen.getByRole("link", { name: "Download page JPEGs" }).getAttribute("href")).toBe(
-      "/api/exports/55555555-5555-4555-8555-555555555555?file=page-jpegs"
-    )
-  })
 
-  it("offers no bundle downloads for an export that was created without them", async () => {
-    exportProject.mockResolvedValue(artifactFixture(false))
-    render(<ExportPanel project={projectWithoutProblems()} />)
-
-    fireEvent.click(screen.getByRole("button", { name: "Export PDF + report" }))
-
-    expect(await screen.findByRole("link", { name: "Download PDF" })).toBeTruthy()
-    expect(screen.queryByRole("link", { name: "Download page PDFs" })).toBeNull()
-    expect(screen.queryByRole("link", { name: "Download page JPEGs" })).toBeNull()
+    const id = "55555555-5555-4555-8555-555555555555"
+    for (const [name, file] of [
+      ["Complete book (PDF)", "pdf"],
+      ["One PDF per page (ZIP)", "page-pdfs"],
+      ["One JPEG per page (ZIP)", "page-jpegs"],
+      ["Preflight report (TXT)", "report"],
+    ]) {
+      expect(
+        (
+          await screen.findByRole("link", { name: new RegExp(name!.replace(/[()]/g, "\\$&")) })
+        ).getAttribute("href")
+      ).toBe(`/api/exports/${id}?file=${file}`)
+    }
   })
 })
 
@@ -141,16 +136,16 @@ describe("print export blocking problem override", () => {
   it("requires an explicit opt-in and confirmation before requesting the export", async () => {
     render(<ExportPanel project={projectWithBlockingProblem()} />)
 
-    const exportButton = screen.getByRole("button", { name: "Export PDF + report" })
+    const exportButton = screen.getByRole("button", { name: "Export book" })
     expect((exportButton as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(screen.getByRole("switch", { name: "Export despite blocking problems" }))
     expect(screen.getByText("1 blocking page problem accepted")).toBeTruthy()
     expect(
-      (screen.getByRole("button", { name: "Export PDF + report" }) as HTMLButtonElement).disabled
+      (screen.getByRole("button", { name: "Export book" }) as HTMLButtonElement).disabled
     ).toBe(false)
 
-    fireEvent.click(screen.getByRole("button", { name: "Export PDF + report" }))
+    fireEvent.click(screen.getByRole("button", { name: "Export book" }))
     expect(exportProject).not.toHaveBeenCalled()
 
     fireEvent.click(await screen.findByRole("button", { name: "Export anyway" }))
@@ -162,8 +157,6 @@ describe("print export blocking problem override", () => {
           marks: false,
           allowBlockingProblems: true,
           reviewedBookFingerprint: "current-source",
-          pagePdfs: false,
-          pageJpegs: false,
         }
       )
     )

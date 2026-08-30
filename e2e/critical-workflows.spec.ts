@@ -997,27 +997,27 @@ test.describe.serial("critical local prototype workflows", () => {
     await expectAccessible(page)
 
     await page.getByRole("tab", { name: "5. Export" }).click()
-    await page.getByRole("switch", { name: "One PDF per page (ZIP)" }).click()
-    await page.getByRole("switch", { name: "One JPEG per page (ZIP)" }).click()
     const exportResponse = page.waitForResponse(
       (response) =>
         response.url().includes(`/${closedProjectId}/export`) &&
         response.request().method() === "POST"
     )
-    await page.getByRole("button", { name: "Export PDF + report" }).click()
+    await page.getByRole("button", { name: "Export book" }).click()
     expect((await exportResponse).status()).toBe(201)
     await expect(page.getByText("Export complete")).toBeVisible()
-    await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible()
-    await expect(page.getByRole("link", { name: "Download report" })).toBeVisible()
 
-    for (const name of ["Download page PDFs", "Download page JPEGs"]) {
+    // One export produces every format, so all four downloads have to resolve.
+    for (const [name, contentType] of [
+      ["Complete book (PDF)", "application/pdf"],
+      ["One PDF per page (ZIP)", "application/zip"],
+      ["One JPEG per page (ZIP)", "application/zip"],
+      ["Preflight report (TXT)", "text/plain"],
+    ]) {
       const link = page.getByRole("link", { name })
       await expect(link).toBeVisible()
-      const bundle = await page.request.get((await link.getAttribute("href"))!)
-      expect(bundle.status()).toBe(200)
-      expect(bundle.headers()["content-type"]).toContain("application/zip")
-      // Every ZIP starts with the local file header signature of its first entry.
-      expect((await bundle.body()).subarray(0, 2).toString("latin1")).toBe("PK")
+      const download = await page.request.get((await link.getAttribute("href"))!)
+      expect(download.status()).toBe(200)
+      expect(download.headers()["content-type"]).toContain(contentType!)
     }
     await expectAccessible(page)
   })

@@ -86,33 +86,37 @@ describe("export page bundles", () => {
     getProject.mockResolvedValue(cleanProject())
   })
 
-  it("stores no bundle and offers no bundle download when neither is requested", async () => {
+  it("stores every format for a single export", async () => {
     const artifact = await exportProject("99999999-9999-4999-8999-999999999999", {
       marks: false,
       allowBlockingProblems: false,
       reviewedBookFingerprint: null,
-      pagePdfs: false,
-      pageJpegs: false,
     })
 
-    expect(artifact.pagePdfZipUrl).toBeNull()
-    expect(artifact.pageJpegZipUrl).toBeNull()
     expect(
       putObject.mock.calls.map(([input]) => (input as { contentType: string }).contentType)
-    ).toEqual(["application/pdf", "text/plain; charset=utf-8"])
+    ).toEqual([
+      "application/pdf",
+      "text/plain; charset=utf-8",
+      "application/zip",
+      "application/zip",
+    ])
     expect(recordExport).toHaveBeenCalledWith(
-      expect.objectContaining({ pagePdfZipObjectKey: null, pageJpegZipObjectKey: null })
+      expect.objectContaining({
+        pagePdfZipObjectKey: expect.stringContaining("sakekeep-pages-pdf.zip"),
+        pageJpegZipObjectKey: expect.stringContaining("sakekeep-pages-jpeg.zip"),
+      })
     )
+    expect(artifact.pdfUrl).toBe(`/api/exports/${artifact.id}?file=pdf`)
+    expect(artifact.reportUrl).toBe(`/api/exports/${artifact.id}?file=report`)
   })
 
-  it("stores one entry per book page in each requested bundle", async () => {
+  it("stores one entry per book page in each bundle", async () => {
     const pageCount = cleanProject().book!.pages.length
     const artifact = await exportProject("99999999-9999-4999-8999-999999999999", {
       marks: false,
       allowBlockingProblems: false,
       reviewedBookFingerprint: null,
-      pagePdfs: true,
-      pageJpegs: true,
     })
 
     expect(artifact.pagePdfZipUrl).toBe(`/api/exports/${artifact.id}?file=page-pdfs`)
@@ -145,8 +149,6 @@ describe("export blocking problem override", () => {
         marks: false,
         allowBlockingProblems: true,
         reviewedBookFingerprint: "reviewed-book",
-        pagePdfs: false,
-        pageJpegs: false,
       })
     ).rejects.toMatchObject({
       status: 409,

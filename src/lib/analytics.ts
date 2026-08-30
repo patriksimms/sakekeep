@@ -56,8 +56,6 @@ interface AnalyticsEvents {
     blocking_override: boolean
     problem_count: number
     printer_marks: boolean
-    page_pdfs: boolean
-    page_jpegs: boolean
   }
 }
 

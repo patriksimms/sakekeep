@@ -27,7 +27,7 @@ import {
   AlertDialogTrigger,
 } from "#/components/ui/alert-dialog.tsx"
 import { Badge } from "#/components/ui/badge.tsx"
-import { Button, buttonVariants } from "#/components/ui/button.tsx"
+import { Button } from "#/components/ui/button.tsx"
 import {
   Card,
   CardContent,
@@ -46,8 +46,6 @@ import { projectApi } from "#/lib/api.ts"
 export function ExportPanel({ project }: { project: Project }) {
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const [marks, setMarks] = useState(false)
-  const [pagePdfs, setPagePdfs] = useState(false)
-  const [pageJpegs, setPageJpegs] = useState(false)
   const [allowBlockingProblems, setAllowBlockingProblems] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [artifact, setArtifact] = useState<ExportArtifact | null>(null)
@@ -72,18 +70,14 @@ export function ExportPanel({ project }: { project: Project }) {
         marks,
         allowBlockingProblems,
         reviewedBookFingerprint: project.book?.sourceFingerprint ?? null,
-        pagePdfs,
-        pageJpegs,
       })
       setArtifact(result)
       captureAnalyticsEvent("export:completed", {
         blocking_override: allowBlockingProblems && blocking > 0,
         problem_count: blocking,
         printer_marks: marks,
-        page_pdfs: pagePdfs,
-        page_jpegs: pageJpegs,
       })
-      toast.success("PDF and preflight report exported")
+      toast.success("Book exported — pick a format below")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Export failed")
     } finally {
@@ -179,7 +173,9 @@ export function ExportPanel({ project }: { project: Project }) {
         <CardHeader>
           <CardTitle>Printer options</CardTitle>
           <CardDescription>
-            Bleed is always included. Marks are optional because printer requirements differ.
+            Bleed is always included. Marks are optional because printer requirements differ. Every
+            export produces the complete book, one PDF per page, and one JPEG per page, so you
+            choose a format when downloading.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -194,34 +190,6 @@ export function ExportPanel({ project }: { project: Project }) {
                 <FieldLabel htmlFor="printer-marks">Crop and printer marks</FieldLabel>
                 <FieldDescription>
                   Off by default. Pages are never imposed as spreads.
-                </FieldDescription>
-              </div>
-            </Field>
-            <Field orientation="horizontal">
-              <Switch
-                id="page-pdfs"
-                checked={pagePdfs}
-                onCheckedChange={(checked) => setPagePdfs(checked === true)}
-              />
-              <div>
-                <FieldLabel htmlFor="page-pdfs">One PDF per page (ZIP)</FieldLabel>
-                <FieldDescription>
-                  Adds a ZIP with one print-ready single-page PDF per book page, next to the
-                  complete book.
-                </FieldDescription>
-              </div>
-            </Field>
-            <Field orientation="horizontal">
-              <Switch
-                id="page-jpegs"
-                checked={pageJpegs}
-                onCheckedChange={(checked) => setPageJpegs(checked === true)}
-              />
-              <div>
-                <FieldLabel htmlFor="page-jpegs">One JPEG per page (ZIP)</FieldLabel>
-                <FieldDescription>
-                  Adds a ZIP with a 300 PPI JPEG per page, bleed included. Useful for previews and
-                  photo prints, not for offset printing.
                 </FieldDescription>
               </div>
             </Field>
@@ -261,7 +229,7 @@ export function ExportPanel({ project }: { project: Project }) {
                 ) : (
                   <FileCheck2Icon data-icon="inline-start" />
                 )}
-                {exporting ? "Rendering and preflighting…" : "Export PDF + report"}
+                {exporting ? "Rendering and preflighting…" : "Export book"}
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -285,7 +253,7 @@ export function ExportPanel({ project }: { project: Project }) {
               ) : (
                 <FileCheck2Icon data-icon="inline-start" />
               )}
-              {exporting ? "Rendering and preflighting…" : "Export PDF + report"}
+              {exporting ? "Rendering and preflighting…" : "Export book"}
             </Button>
           )}
         </CardFooter>
@@ -333,39 +301,49 @@ export function ExportPanel({ project }: { project: Project }) {
               <AlertDescription>{artifact.report.pdfx.limitation}</AlertDescription>
             </Alert>
           </CardContent>
-          <CardFooter className="flex flex-wrap gap-2">
-            <a href={artifact.pdfUrl} download className={buttonVariants()}>
-              <DownloadIcon data-icon="inline-start" />
-              Download PDF
-            </a>
-            <a
-              href={artifact.reportUrl}
-              download
-              className={buttonVariants({ variant: "outline" })}
-            >
-              <FileTextIcon data-icon="inline-start" />
-              Download report
-            </a>
-            {artifact.pagePdfZipUrl && (
-              <a
-                href={artifact.pagePdfZipUrl}
-                download
-                className={buttonVariants({ variant: "outline" })}
-              >
-                <FileArchiveIcon data-icon="inline-start" />
-                Download page PDFs
-              </a>
-            )}
-            {artifact.pageJpegZipUrl && (
-              <a
-                href={artifact.pageJpegZipUrl}
-                download
-                className={buttonVariants({ variant: "outline" })}
-              >
-                <ImagesIcon data-icon="inline-start" />
-                Download page JPEGs
-              </a>
-            )}
+          <CardFooter className="flex-col items-stretch gap-3">
+            <p className="text-sm font-medium">Downloads</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                {
+                  href: artifact.pdfUrl,
+                  icon: <DownloadIcon aria-hidden="true" />,
+                  label: "Complete book (PDF)",
+                  detail: "Every page in one print-ready file.",
+                },
+                {
+                  href: artifact.pagePdfZipUrl,
+                  icon: <FileArchiveIcon aria-hidden="true" />,
+                  label: "One PDF per page (ZIP)",
+                  detail: "The same print-ready pages as separate files.",
+                },
+                {
+                  href: artifact.pageJpegZipUrl,
+                  icon: <ImagesIcon aria-hidden="true" />,
+                  label: "One JPEG per page (ZIP)",
+                  detail: "300 PPI images with bleed, for previews and photo prints.",
+                },
+                {
+                  href: artifact.reportUrl,
+                  icon: <FileTextIcon aria-hidden="true" />,
+                  label: "Preflight report (TXT)",
+                  detail: "What was checked before this export was stored.",
+                },
+              ].map((download) => (
+                <a
+                  key={download.label}
+                  href={download.href}
+                  download
+                  className="flex items-start gap-3 rounded-lg border bg-background p-3 transition-colors hover:bg-accent"
+                >
+                  {download.icon}
+                  <span>
+                    <span className="block text-sm font-medium">{download.label}</span>
+                    <span className="block text-xs text-muted-foreground">{download.detail}</span>
+                  </span>
+                </a>
+              ))}
+            </div>
           </CardFooter>
         </Card>
       )}

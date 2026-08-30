@@ -67,9 +67,9 @@ Re-running `bun run db:seed` resets only those two deterministic demo projects.
 6. Create canonical millimetre-based layouts with the Fabric.js editor.
 7. Generate and review one page per response plus optional standalone pages.
 8. Resolve blocking text, print-area, gallery, and image-resolution problems.
-9. Export a structurally verified PDF/X-4-targeted PDF and preflight report,
-   optionally with a ZIP of one PDF per page and a ZIP of one 300 PPI JPEG per
-   page.
+9. Export a structurally verified PDF/X-4-targeted PDF and preflight report.
+   Every export also produces a ZIP of one PDF per page and a ZIP of one
+   300 PPI JPEG per page, so the format is chosen when downloading.
 
 Published or closed projects can be duplicated into a fresh draft without
 copying responses or the public token.

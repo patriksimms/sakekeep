@@ -1,11 +1,14 @@
-import { PDFArray, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
+import { readFile } from "node:fs/promises"
+import { resolve } from "node:path"
+
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
 import {
   fitSingleLineTextSize,
   inspectPdf,
-  renderBookPagePdfs,
   renderBookPdf,
+  splitBookPagePdfs,
 } from "./pdf-renderer.ts"
 import { fillerPalette } from "../domain/filler-art.ts"
 import { pageSpecification } from "../domain/page-format.ts"
@@ -31,6 +34,18 @@ function colorOperator(hex: string): RegExp {
     (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
   )
   return new RegExp(`${channels.join(" ")} (rg|RG)\n`)
+}
+
+/** The colour profile bytes a page carries in its PDF/X output intent. */
+async function outputIntentProfile(bytes: Uint8Array): Promise<Uint8Array> {
+  const document = await PDFDocument.load(bytes)
+  const intents = document.catalog.lookup(PDFName.of("OutputIntents"))
+  if (!(intents instanceof PDFArray)) throw new Error("The document has no output intent.")
+  const intent = intents.lookup(0)
+  if (!(intent instanceof PDFDict)) throw new Error("The output intent is not a dictionary.")
+  const profile = intent.lookup(PDFName.of("DestOutputProfile"))
+  if (!(profile instanceof PDFRawStream)) throw new Error("The profile is not a stream.")
+  return decodePDFRawStream(profile).decode()
 }
 
 describe("PDF renderer", () => {
@@ -238,7 +253,11 @@ describe("PDF renderer", () => {
       marks: false,
     }
 
-    const pages = await renderBookPagePdfs(input)
+    const book = await renderBookPdf(input)
+    const pages = await splitBookPagePdfs(
+      book,
+      input.book.pages.map((page) => page.id)
+    )
 
     expect(pages).toHaveLength(input.book.pages.length)
     for (const page of pages) {
@@ -248,6 +267,11 @@ describe("PDF renderer", () => {
       expect(inspection.fontsEmbedded).toBe(true)
       expect(inspection.outputIntentEmbedded).toBe(true)
       expect(inspection.pdfxMetadata).toBe(true)
+      // The profile is deflated once and reused, so verify a page still carries the real
+      // profile bytes rather than a stream the reader cannot decode.
+      expect(await outputIntentProfile(page)).toEqual(
+        new Uint8Array(await readFile(resolve(".local/icc/PSOcoated_v3.icc")))
+      )
     }
   })
 })

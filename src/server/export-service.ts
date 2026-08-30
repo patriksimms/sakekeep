@@ -5,7 +5,7 @@ import { type ExportArtifact } from "../domain/types"
 import { HttpError } from "./http"
 import { putObject } from "./object-store"
 import { renderPageJpegs } from "./page-raster"
-import { inspectPdf, renderBookPagePdfs, renderBookPdf } from "./pdf-renderer"
+import { inspectPdf, renderBookPdf, splitBookPagePdfs } from "./pdf-renderer"
 import { getProject, recordExport } from "./repository"
 import { createZip, pageEntryName } from "./zip"
 
@@ -15,8 +15,6 @@ export async function exportProject(
     marks: boolean
     allowBlockingProblems: boolean
     reviewedBookFingerprint: string | null
-    pagePdfs: boolean
-    pageJpegs: boolean
   }
 ): Promise<ExportArtifact> {
   const project = await getProject(projectId, true)
@@ -80,32 +78,34 @@ export async function exportProject(
     throw new HttpError(409, "Automated preflight failed. No final export was stored.", { report })
   }
 
-  // Bundles are built only after preflight passed, so a rejected export never spends
-  // time rendering per-page files or rasterizing them.
+  // Every export carries the same set of files, so the organizer picks a format when
+  // downloading instead of predicting it before the render. Bundles are built after
+  // preflight passed, so a rejected export never spends time on them.
   const pageCount = project.book.pages.length
-  const pagePdfZip = options.pagePdfs
-    ? createZip(
-        (await renderBookPagePdfs(renderInput)).map((page, index) => ({
-          name: pageEntryName(index, pageCount, "pdf"),
-          data: page,
-        }))
+  const pagePdfZip = createZip(
+    (
+      await splitBookPagePdfs(
+        pdf,
+        project.book.pages.map((page) => page.id)
       )
-    : null
-  const pageJpegZip = options.pageJpegs
-    ? createZip(
-        (await renderPageJpegs(pdf)).map((image, index) => ({
-          name: pageEntryName(index, pageCount, "jpg"),
-          data: image,
-        }))
-      )
-    : null
+    ).map((page, index) => ({
+      name: pageEntryName(index, pageCount, "pdf"),
+      data: page,
+    }))
+  )
+  const pageJpegZip = createZip(
+    (await renderPageJpegs(pdf)).map((image, index) => ({
+      name: pageEntryName(index, pageCount, "jpg"),
+      data: image,
+    }))
+  )
 
   const id = crypto.randomUUID()
   const baseKey = `projects/${projectId}/exports/${id}`
   const pdfObjectKey = `${baseKey}/sakekeep-${project.pageFormat}-${project.pageOrientation}.pdf`
   const reportObjectKey = `${baseKey}/preflight-report.txt`
-  const pagePdfZipObjectKey = pagePdfZip ? `${baseKey}/sakekeep-pages-pdf.zip` : null
-  const pageJpegZipObjectKey = pageJpegZip ? `${baseKey}/sakekeep-pages-jpeg.zip` : null
+  const pagePdfZipObjectKey = `${baseKey}/sakekeep-pages-pdf.zip`
+  const pageJpegZipObjectKey = `${baseKey}/sakekeep-pages-jpeg.zip`
   await putObject({
     key: pdfObjectKey,
     body: pdf,
@@ -116,20 +116,16 @@ export async function exportProject(
     body: Buffer.from(reportAsText(report), "utf8"),
     contentType: "text/plain; charset=utf-8",
   })
-  if (pagePdfZip && pagePdfZipObjectKey) {
-    await putObject({
-      key: pagePdfZipObjectKey,
-      body: pagePdfZip,
-      contentType: "application/zip",
-    })
-  }
-  if (pageJpegZip && pageJpegZipObjectKey) {
-    await putObject({
-      key: pageJpegZipObjectKey,
-      body: pageJpegZip,
-      contentType: "application/zip",
-    })
-  }
+  await putObject({
+    key: pagePdfZipObjectKey,
+    body: pagePdfZip,
+    contentType: "application/zip",
+  })
+  await putObject({
+    key: pageJpegZipObjectKey,
+    body: pageJpegZip,
+    contentType: "application/zip",
+  })
   const exportId = await recordExport({
     projectId,
     sourceFingerprint: project.book.sourceFingerprint,
@@ -143,8 +139,8 @@ export async function exportProject(
     id: exportId,
     pdfUrl: `/api/exports/${exportId}?file=pdf`,
     reportUrl: `/api/exports/${exportId}?file=report`,
-    pagePdfZipUrl: pagePdfZipObjectKey ? `/api/exports/${exportId}?file=page-pdfs` : null,
-    pageJpegZipUrl: pageJpegZipObjectKey ? `/api/exports/${exportId}?file=page-jpegs` : null,
+    pagePdfZipUrl: `/api/exports/${exportId}?file=page-pdfs`,
+    pageJpegZipUrl: `/api/exports/${exportId}?file=page-jpegs`,
     report,
   }
 }
