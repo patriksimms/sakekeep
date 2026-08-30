@@ -8,12 +8,14 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 import {
   type ExportReport,
   type FormSchema,
   type GeneratedBook,
   type GenerationSettings,
+  type LayoutRole,
   type LayoutSchema,
   type PageFormat,
   type PageOrientation,
@@ -155,6 +157,7 @@ export const layouts = pgTable(
     name: text("name").notNull(),
     position: integer("position").notNull(),
     revision: integer("revision").notNull().default(0),
+    role: text("role").$type<LayoutRole>().notNull().default("submission"),
     schema: jsonb("schema").$type<LayoutSchema>().notNull(),
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -171,6 +174,14 @@ export const layouts = pgTable(
   },
   (table) => [
     uniqueIndex("layouts_project_position_unique").on(table.projectId, table.position),
+    // A book has one front and one back cover; the partial indexes keep that true under
+    // concurrent writes, alongside the in-transaction check in the repository.
+    uniqueIndex("layouts_project_front_cover_unique")
+      .on(table.projectId)
+      .where(sql`${table.role} = 'front-cover'`),
+    uniqueIndex("layouts_project_back_cover_unique")
+      .on(table.projectId)
+      .where(sql`${table.role} = 'back-cover'`),
     index("layouts_project_index").on(table.projectId),
   ]
 )

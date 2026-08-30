@@ -18,6 +18,8 @@ import {
   pushGraphicsState,
   rectangle,
   rgb,
+  rotateDegrees,
+  translate,
   type PDFFont,
   type PDFImage,
   type PDFPage,
@@ -66,11 +68,6 @@ const POINTS_PER_MM = 72 / 25.4
 // picker does not grow every exported PDF.
 type EmbeddedFonts = Partial<Record<FontCut, PDFFont>>
 
-// Standalone cover and divider pages are rendered by the exporter itself rather
-// than by a layout, so their typography is fixed.
-const STANDALONE_TITLE_CUT = "SourceSerif4-Bold" satisfies FontCut
-const STANDALONE_BODY_CUT = "Inter-Regular" satisfies FontCut
-
 interface AssetResolutionMetadata {
   assetId: string
   pageId: string
@@ -118,6 +115,37 @@ async function embedImage(pdf: PDFDocument, assetId: string): Promise<PDFImage> 
   const asset = await getAsset(assetId)
   const source = await getObject(asset.objectKey)
   return asset.mimeType === "image/png" ? pdf.embedPng(source.body) : pdf.embedJpg(source.body)
+}
+
+/**
+ * Rotates everything `draw` paints around the top-left corner of `geometry`, which is the corner
+ * the preview turns an element around (`transform-origin: top left`). Page space counts Y upwards
+ * where CSS counts it downwards, so the same visual turn is the negated angle here.
+ *
+ * A transformation matrix rather than pdf-lib's per-call `rotate` option: a clip path, the photo
+ * inside it, and every slot of a gallery have to turn as one, while `rotate` would turn each
+ * drawing around its own anchor and pull the frame apart.
+ */
+function withTopLeftRotation(
+  page: PDFPage,
+  geometry: LayoutElement["geometry"],
+  specification: PageSpecification,
+  draw: () => void
+) {
+  if (!geometry.rotation) {
+    draw()
+    return
+  }
+  const pivotX = pt(specification.bleedMm + geometry.x)
+  const pivotY = pdfY(geometry.y, 0, specification)
+  page.pushOperators(
+    pushGraphicsState(),
+    translate(pivotX, pivotY),
+    rotateDegrees(-geometry.rotation),
+    translate(-pivotX, -pivotY)
+  )
+  draw()
+  page.pushOperators(popGraphicsState())
 }
 
 function drawCroppedImage(
@@ -190,25 +218,6 @@ function drawFillerArt(input: {
   }
 }
 
-function wrapText(text: string, font: PDFFont, size: number, width: number) {
-  const lines: string[] = []
-  for (const explicitLine of text.replace(/\r\n/g, "\n").split("\n")) {
-    const words = explicitLine.split(/\s+/)
-    let line = ""
-    for (const word of words) {
-      const candidate = line ? `${line} ${word}` : word
-      if (font.widthOfTextAtSize(candidate, size) <= width || !line) {
-        line = candidate
-      } else {
-        lines.push(line)
-        line = word
-      }
-    }
-    lines.push(line)
-  }
-  return lines
-}
-
 function drawTextElement(input: {
   page: PDFPage
   fonts: EmbeddedFonts
@@ -256,7 +265,8 @@ async function drawElement(input: {
   page: PDFPage
   pageId: string
   element: LayoutElement
-  submission: SubmissionSummary
+  /** Absent on cover and standalone pages, which have no response behind them. */
+  submission?: SubmissionSummary
   photoAssignment: PhotoAssignment
   form: FormSchema
   fonts: EmbeddedFonts
@@ -282,7 +292,7 @@ async function drawElement(input: {
       runs: textRunsForElement(
         element,
         question,
-        element.type === "bound-text" ? input.submission.answers[element.questionId] : undefined
+        element.type === "bound-text" ? input.submission?.answers[element.questionId] : undefined
       ),
       settings: element.text,
       geometry,
@@ -340,7 +350,9 @@ async function drawElement(input: {
       placedHeightMm: geometry.height,
       effectivePpi: effectivePpi(image.width, image.height, geometry.width, geometry.height),
     })
-    drawCroppedImage(page, image, geometry, input.specification, element.focalPoint)
+    withTopLeftRotation(page, geometry, input.specification, () =>
+      drawCroppedImage(page, image, geometry, input.specification, element.focalPoint)
+    )
     return
   }
   if (element.type !== "image-frame" && element.type !== "gallery-frame") {
@@ -348,19 +360,23 @@ async function drawElement(input: {
   }
 
   const images = framePhotos(input.photoAssignment, element.id)
-  const seed = fillerSeed(input.submission.id, element.id)
+  // Filler art only appears where a photo frame stays empty, which a standalone page cannot have;
+  // the page id keeps the seed stable if one ever does.
+  const seed = fillerSeed(input.submission?.id ?? input.pageId, element.id)
   if (element.type === "image-frame") {
     const image = images[0]
     if (!image) {
-      drawFillerArt({
-        page,
-        geometry,
-        specification: input.specification,
-        palette: input.fillerPalette,
-        seed,
-        slotIndex: 0,
-        opacity: element.opacity,
-      })
+      withTopLeftRotation(page, geometry, input.specification, () =>
+        drawFillerArt({
+          page,
+          geometry,
+          specification: input.specification,
+          palette: input.fillerPalette,
+          seed,
+          slotIndex: 0,
+          opacity: element.opacity,
+        })
+      )
       return
     }
     const embeddedImage = await embedImage(input.pdf, image.assetId)
@@ -379,26 +395,36 @@ async function drawElement(input: {
         geometry.height
       ),
     })
-    drawCroppedImage(
-      page,
-      embeddedImage,
-      geometry,
-      input.specification,
-      effectiveFocalPoint(element, image)
+    withTopLeftRotation(page, geometry, input.specification, () =>
+      drawCroppedImage(
+        page,
+        embeddedImage,
+        geometry,
+        input.specification,
+        effectiveFocalPoint(element, image)
+      )
     )
     return
   }
   const slots = gallerySlots(element.arrangement, geometry.width, geometry.height, element.gap)
-  await Promise.all(
-    slots.map(async (slot, index) => {
+  // Every photo is embedded before anything is painted, so the frame's rotation can wrap one
+  // uninterrupted run of drawing operators and turn the whole gallery as a unit.
+  const slotPhotos = await Promise.all(
+    slots.map(async (_slot, index) => {
       const image = images[index]
+      return image ? { image, embedded: await embedImage(input.pdf, image.assetId) } : undefined
+    })
+  )
+  withTopLeftRotation(page, geometry, input.specification, () => {
+    slots.forEach((slot, index) => {
+      const photo = slotPhotos[index]
       const slotGeometry = {
         x: geometry.x + slot.x,
         y: geometry.y + slot.y,
         width: slot.width,
         height: slot.height,
       }
-      if (!image) {
+      if (!photo) {
         drawFillerArt({
           page,
           geometry: slotGeometry,
@@ -410,31 +436,30 @@ async function drawElement(input: {
         })
         return
       }
-      const embeddedImage = await embedImage(input.pdf, image.assetId)
       input.assetResolutions.push({
-        assetId: image.assetId,
+        assetId: photo.image.assetId,
         pageId: input.pageId,
         elementId: element.id,
-        pixelWidth: embeddedImage.width,
-        pixelHeight: embeddedImage.height,
+        pixelWidth: photo.embedded.width,
+        pixelHeight: photo.embedded.height,
         placedWidthMm: slot.width,
         placedHeightMm: slot.height,
         effectivePpi: effectivePpi(
-          embeddedImage.width,
-          embeddedImage.height,
+          photo.embedded.width,
+          photo.embedded.height,
           slot.width,
           slot.height
         ),
       })
       drawCroppedImage(
         page,
-        embeddedImage,
+        photo.embedded,
         slotGeometry,
         input.specification,
-        effectiveFocalPoint(element, image)
+        effectiveFocalPoint(element, photo.image)
       )
     })
-  )
+  })
 }
 
 function applyPageBoxes(page: PDFPage, specification: PageSpecification) {
@@ -556,21 +581,10 @@ function setPdfXMetadata(
   }
 }
 
-function standaloneText(page: BookPage): { title: string; body: string } {
-  if (page.kind !== "standalone") return { title: "", body: "" }
-  return { title: page.title, body: page.body }
-}
-
 /** Every static cut the book needs, including the bold cut used for labels. */
 function requiredCuts(pages: BookPage[], layouts: Map<string, LayoutRecord>): Set<FontCut> {
   const cuts = new Set<FontCut>()
   for (const bookPage of pages) {
-    if (bookPage.kind === "standalone") {
-      if (bookPage.pageType === "blank") continue
-      cuts.add(STANDALONE_TITLE_CUT)
-      cuts.add(STANDALONE_BODY_CUT)
-      continue
-    }
     for (const element of layouts.get(bookPage.layoutId)?.schema.elements ?? []) {
       if (element.type !== "bound-text" && element.type !== "static-text") continue
       cuts.add(fontCut(element.text.fontFamily, element.text.fontStyle, "normal"))
@@ -638,79 +652,35 @@ async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uin
   for (const bookPage of pages) {
     const page = pdf.addPage([pt(specification.mediaWidthMm), pt(specification.mediaHeightMm)])
     applyPageBoxes(page, specification)
-    if (bookPage.kind === "standalone") {
-      page.drawRectangle({
-        x: 0,
-        y: 0,
-        width: pt(specification.mediaWidthMm),
-        height: pt(specification.mediaHeightMm),
-        color: color(bookPage.background),
+    const layout = layouts.get(bookPage.layoutId)
+    const submission =
+      bookPage.kind === "submission" ? submissions.get(bookPage.submissionId) : undefined
+    if (!layout || (bookPage.kind === "submission" && !submission)) {
+      throw new HttpError(409, "A generated page references a missing layout or submission.")
+    }
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: pt(specification.mediaWidthMm),
+      height: pt(specification.mediaHeightMm),
+      color: color(layout.schema.background),
+    })
+    const photoAssignment = assignPhotosToFrames(layout.schema.elements, submission?.answers ?? {})
+    const palette = fillerPalette(layout.schema)
+    for (const element of layout.schema.elements) {
+      await drawElement({
+        pdf,
+        page,
+        pageId: bookPage.id,
+        element,
+        submission,
+        photoAssignment,
+        form: input.form,
+        fonts,
+        fillerPalette: palette,
+        assetResolutions,
+        specification,
       })
-      const content = standaloneText(bookPage)
-      if (bookPage.pageType !== "blank") {
-        const titleFont = embeddedFont(fonts, STANDALONE_TITLE_CUT)
-        const titleWidth = pt(Math.max(20, specification.trimWidthMm - 30))
-        const titleSize = fitSingleLineTextSize(
-          30,
-          titleFont.widthOfTextAtSize(content.title, 30),
-          titleWidth
-        )
-        page.drawText(content.title, {
-          x: pt(specification.bleedMm + 15),
-          y: pt(specification.bleedMm + specification.trimHeightMm * 0.68),
-          size: titleSize,
-          font: titleFont,
-          color: color("#292524"),
-        })
-        const bodyFont = embeddedFont(fonts, STANDALONE_BODY_CUT)
-        const bodyY = specification.bleedMm + specification.trimHeightMm * 0.68 - 14
-        const lines = wrapText(
-          content.body,
-          bodyFont,
-          12,
-          pt(Math.max(20, specification.trimWidthMm - 30))
-        )
-        const lineLimit = Math.max(1, Math.floor(((bodyY - 15) * POINTS_PER_MM) / 16))
-        lines.slice(0, lineLimit).forEach((line, index) => {
-          page.drawText(line, {
-            x: pt(specification.bleedMm + 15),
-            y: pt(bodyY) - index * 16,
-            size: 12,
-            font: bodyFont,
-            color: color("#57534e"),
-          })
-        })
-      }
-    } else {
-      const layout = layouts.get(bookPage.layoutId)
-      const submission = submissions.get(bookPage.submissionId)
-      if (!layout || !submission) {
-        throw new HttpError(409, "A generated page references a missing layout or submission.")
-      }
-      page.drawRectangle({
-        x: 0,
-        y: 0,
-        width: pt(specification.mediaWidthMm),
-        height: pt(specification.mediaHeightMm),
-        color: color(layout.schema.background),
-      })
-      const photoAssignment = assignPhotosToFrames(layout.schema.elements, submission.answers)
-      const palette = fillerPalette(layout.schema)
-      for (const element of layout.schema.elements) {
-        await drawElement({
-          pdf,
-          page,
-          pageId: bookPage.id,
-          element,
-          submission,
-          photoAssignment,
-          form: input.form,
-          fonts,
-          fillerPalette: palette,
-          assetResolutions,
-          specification,
-        })
-      }
     }
     if (input.marks) drawMarks(page, specification)
   }

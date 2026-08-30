@@ -4,7 +4,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { type BookPage, type Project } from "#/domain/types.ts"
-import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "#/test/fixtures.ts"
+import {
+  completeForm,
+  cycleSettings,
+  layoutFixture,
+  standaloneLayoutFixture,
+  submissionFixture,
+} from "#/test/fixtures.ts"
 
 const updateBook = vi.fn()
 
@@ -155,15 +161,13 @@ describe("book review problems", () => {
 describe("book review page grid", () => {
   function gridProject() {
     const layout = layoutFixture()
+    const cover = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
     const submission = submissionFixture("10000000-0000-4000-8000-000000000001", 1)
     const pages: BookPage[] = [
       {
         id: "standalone:cover",
         kind: "standalone",
-        pageType: "cover",
-        title: "A book of memories",
-        body: "For Lea",
-        background: "#f4ede1",
+        layoutId: cover.id,
         problems: [],
       },
       {
@@ -180,7 +184,7 @@ describe("book review page grid", () => {
       occasion: null,
       state: "closed",
       formSchema: completeForm,
-      layouts: [layout],
+      layouts: [layout, cover],
       submissions: [submission],
       bookStatus: "current",
       archivedAt: null,
@@ -202,7 +206,7 @@ describe("book review page grid", () => {
 
     const tiles = screen.getAllByTestId("book-page-tile")
     expect(tiles).toHaveLength(2)
-    expect(tiles[0]!.getAttribute("aria-label")).toContain("cover: A book of memories")
+    expect(tiles[0]!.getAttribute("aria-label")).toContain("Front cover: Front cover")
     expect(tiles[1]!.getAttribute("aria-label")).toContain("Person 1")
     expect(screen.queryByRole("combobox", { name: "Page layout" })).toBeNull()
   })

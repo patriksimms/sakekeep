@@ -186,18 +186,24 @@ export interface LayoutSchema {
   elements: LayoutElement[]
 }
 
+/**
+ * What a layout is for. Response layouts are assigned to submissions during generation; the
+ * other roles back pages that exist on their own. A project holds at most one cover of each side.
+ */
+export type LayoutRole = "submission" | "front-cover" | "back-cover" | "static"
+
 export interface LayoutRecord {
   id: string
   projectId: string
   name: string
   position: number
   revision: number
+  role: LayoutRole
   schema: LayoutSchema
   updatedAt: string
 }
 
 export type AssignmentMode = "cycle" | "seeded-random" | "manual"
-export type StandalonePageType = "cover" | "introduction" | "closing" | "blank"
 
 export interface GenerationSettings {
   mode: AssignmentMode
@@ -240,10 +246,7 @@ export interface SubmissionBookPage {
 export interface StandaloneBookPage {
   id: string
   kind: "standalone"
-  pageType: StandalonePageType
-  title: string
-  body: string
-  background: string
+  layoutId: string
   problems: PageProblem[]
 }
 

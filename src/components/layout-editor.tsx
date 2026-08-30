@@ -8,6 +8,7 @@ import {
   CheckIcon,
   CircleIcon,
   CopyIcon,
+  FileTextIcon,
   GalleryHorizontalIcon,
   GripVerticalIcon,
   ImageIcon,
@@ -17,6 +18,8 @@ import {
   LoaderCircleIcon,
   LockIcon,
   MinusIcon,
+  PanelBottomIcon,
+  PanelTopIcon,
   PlusIcon,
   Redo2Icon,
   RectangleHorizontalIcon,
@@ -124,35 +127,56 @@ import {
   type FormQuestion,
   type LayoutElement,
   type LayoutRecord,
+  type LayoutRole,
   type LayoutSchema,
   type PageFormat,
   type PageOrientation,
   type Project,
   type TextSettings,
 } from "#/domain/types.ts"
+import {
+  LAYOUT_ROLES,
+  allowsResponseBoundElements,
+  defaultLayoutName,
+  isCoverRole,
+  layoutRoleLabel,
+  orderedLayouts,
+  reorderableLayouts,
+} from "#/domain/layout-roles.ts"
 import { api, projectApi } from "#/lib/api.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
+/** Marks the tabs that are not response layouts, so a pinned cover reads as one at a glance. */
+const LAYOUT_ROLE_ICONS: Record<LayoutRole, LucideIcon | null> = {
+  submission: null,
+  "front-cover": PanelTopIcon,
+  "back-cover": PanelBottomIcon,
+  static: FileTextIcon,
+}
+
 function BackgroundPicker({
   compact = false,
   pageFormat,
   pageOrientation,
+  takenRoles,
   onCreate,
 }: {
   compact?: boolean
   pageFormat: PageFormat
   pageOrientation: PageOrientation
-  onCreate: (preset: BackgroundPreset) => Promise<void>
+  takenRoles: LayoutRole[]
+  onCreate: (preset: BackgroundPreset, role: LayoutRole) => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
+  const [role, setRole] = useState<LayoutRole>("submission")
   const [creatingId, setCreatingId] = useState<BackgroundPreset["id"] | null>(null)
 
   const create = async (preset: BackgroundPreset) => {
     setCreatingId(preset.id)
     try {
-      await onCreate(preset)
+      await onCreate(preset, role)
       captureAnalyticsEvent("layout_editor:background_created", {
         background_id: preset.id,
       })
@@ -185,6 +209,39 @@ function BackgroundPicker({
             Decorative elements start locked and can be unlocked in the editor.
           </DialogDescription>
         </DialogHeader>
+        <Field>
+          <FieldLabel>This layout is for</FieldLabel>
+          <Select
+            items={LAYOUT_ROLES.map((candidate) => ({
+              value: candidate,
+              label: layoutRoleLabel(candidate),
+            }))}
+            value={role}
+            onValueChange={(value) => value && setRole(value as LayoutRole)}
+          >
+            <SelectTrigger className="w-full" aria-label="New layout role">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {LAYOUT_ROLES.map((candidate) => (
+                  <SelectItem
+                    key={candidate}
+                    value={candidate}
+                    disabled={isCoverRole(candidate) && takenRoles.includes(candidate)}
+                  >
+                    {layoutRoleLabel(candidate)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            {allowsResponseBoundElements(role)
+              ? "Response layouts are assigned to submissions when the book is generated."
+              : "Standalone pages carry no response, so only static elements can be placed on them."}
+          </FieldDescription>
+        </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           {backgroundPresets(pageFormat, pageOrientation).map((preset) => (
             <Button
@@ -981,7 +1038,8 @@ const Editor = forwardRef<
   }
 
   const selected = schema.elements.find((element) => element.id === selectedId)
-  const questionPalette = layoutQuestionPalette(project.formSchema.questions)
+  const responseBound = allowsResponseBoundElements(layout.role)
+  const questionPalette = responseBound ? layoutQuestionPalette(project.formSchema.questions) : []
   const slotMismatches = new Map(
     photoSlotMismatches(schema.elements, project.formSchema.questions).map((mismatch) => [
       mismatch.questionId,
@@ -1194,49 +1252,62 @@ const Editor = forwardRef<
       <div className="min-w-0">
         <Card className="mb-4 bg-card/90">
           <CardContent className="flex flex-col gap-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {questionPalette.map((item) => {
-                const mismatch = slotMismatches.get(item.questionId)
-                return (
-                  <div
-                    key={item.questionId}
-                    className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/70 p-2"
-                  >
-                    <span className="flex min-w-0 flex-col">
-                      <span className="min-w-0 truncate text-sm font-medium" title={item.prompt}>
-                        {item.prompt}
-                      </span>
-                      {mismatch && (
-                        <span className="flex items-center gap-1 text-xs text-destructive">
-                          <TriangleAlertIcon aria-hidden="true" className="size-3 shrink-0" />
-                          {mismatch.slotCount} photo slot{mismatch.slotCount === 1 ? "" : "s"} for
-                          up to {mismatch.maxImages} upload{mismatch.maxImages === 1 ? "" : "s"}
+            {responseBound ? (
+              <>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {questionPalette.map((item) => {
+                    const mismatch = slotMismatches.get(item.questionId)
+                    return (
+                      <div
+                        key={item.questionId}
+                        className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-background/70 p-2"
+                      >
+                        <span className="flex min-w-0 flex-col">
+                          <span
+                            className="min-w-0 truncate text-sm font-medium"
+                            title={item.prompt}
+                          >
+                            {item.prompt}
+                          </span>
+                          {mismatch && (
+                            <span className="flex items-center gap-1 text-xs text-destructive">
+                              <TriangleAlertIcon aria-hidden="true" className="size-3 shrink-0" />
+                              {mismatch.slotCount} photo slot{mismatch.slotCount === 1 ? "" : "s"}{" "}
+                              for up to {mismatch.maxImages} upload
+                              {mismatch.maxImages === 1 ? "" : "s"}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                      {item.actions.map((action) => (
-                        <PaletteAction
-                          key={action.elementType}
-                          label={action.label}
-                          addLabel={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
-                          icon={
-                            action.elementType === "bound-text"
-                              ? TypeIcon
-                              : action.elementType === "image-frame"
-                                ? ImageIcon
-                                : GalleryHorizontalIcon
-                          }
-                          dragData={{ type: action.elementType, questionId: item.questionId }}
-                          onAdd={() => add(action.elementType, item.questionId)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <Separator />
+                        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                          {item.actions.map((action) => (
+                            <PaletteAction
+                              key={action.elementType}
+                              label={action.label}
+                              addLabel={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
+                              icon={
+                                action.elementType === "bound-text"
+                                  ? TypeIcon
+                                  : action.elementType === "image-frame"
+                                    ? ImageIcon
+                                    : GalleryHorizontalIcon
+                              }
+                              dragData={{ type: action.elementType, questionId: item.questionId }}
+                              onAdd={() => add(action.elementType, item.questionId)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <Separator />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {layoutRoleLabel(layout.role)} pages carry no response, so only static elements can
+                be placed on them.
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-1.5">
               <PaletteAction
                 label="Static text"
@@ -1588,6 +1659,32 @@ export function LayoutsPanel({
     }
   }
 
+  const tabLayouts = orderedLayouts(project.layouts)
+  const movable = reorderableLayouts(project.layouts)
+  const movableIndex = selected ? movable.findIndex((layout) => layout.id === selected.id) : -1
+
+  const canMove = (offset: -1 | 1) =>
+    movableIndex >= 0 && movableIndex + offset >= 0 && movableIndex + offset < movable.length
+
+  const moveLabel = (direction: "up" | "down") =>
+    selected && isCoverRole(selected.role)
+      ? `${layoutRoleLabel(selected.role)} always stays ${selected.role === "front-cover" ? "first" : "last"}`
+      : `Move layout ${direction}`
+
+  const moveSelectedLayout = async (offset: -1 | 1) => {
+    if (!canMove(offset)) return
+    await runAfterEditorSave(async () => {
+      const ids = movable.map((layout) => layout.id)
+      const index = movableIndex
+      ;[ids[index + offset], ids[index]] = [ids[index], ids[index + offset]]
+      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(project.id, {
+        action: "reorder",
+        layoutIds: ids,
+      })
+      updateLayouts(result.layouts)
+    })
+  }
+
   const deleteSelectedLayout = async () => {
     if (!selected || formatChanging || layoutChanging) return
 
@@ -1597,9 +1694,9 @@ export function LayoutsPanel({
       await projectApi.deleteLayout(project.id, selected.id)
       editorRef.current?.discard()
       const index = project.layouts.findIndex((layout) => layout.id === selected.id)
-      const remaining = project.layouts
-        .filter((layout) => layout.id !== selected.id)
-        .map((layout, position) => ({ ...layout, position }))
+      const remaining = orderedLayouts(
+        project.layouts.filter((layout) => layout.id !== selected.id)
+      ).map((layout, position) => ({ ...layout, position }))
       setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
       setEditorSaveState("saved")
       updateLayouts(remaining)
@@ -1724,8 +1821,9 @@ export function LayoutsPanel({
               onValueChange={(value) => void selectLayout(value)}
             >
               <TabsList className="max-w-full justify-start overflow-x-auto">
-                {project.layouts.map((layout) => {
+                {tabLayouts.map((layout) => {
                   const active = layout.id === selected?.id
+                  const RoleIcon = LAYOUT_ROLE_ICONS[layout.role]
 
                   return (
                     <TabsTrigger
@@ -1736,6 +1834,12 @@ export function LayoutsPanel({
                         if (active && event.key === "Delete") setDeleteDialogOpen(true)
                       }}
                     >
+                      {RoleIcon && (
+                        <RoleIcon
+                          aria-label={layoutRoleLabel(layout.role)}
+                          className="size-3.5 shrink-0 text-muted-foreground"
+                        />
+                      )}
                       <span className="truncate">{layout.name}</span>
                       {active && (
                         <span
@@ -1758,15 +1862,20 @@ export function LayoutsPanel({
               compact
               pageFormat={project.pageFormat}
               pageOrientation={project.pageOrientation}
-              onCreate={async (preset) => {
+              takenRoles={project.layouts.map((layout) => layout.role)}
+              onCreate={async (preset, role) => {
                 await runAfterEditorSave(async () => {
                   const layout = await projectApi.layoutAction<LayoutRecord>(project.id, {
                     action: "create",
                     name:
-                      preset.id === "blank"
-                        ? `Layout ${project.layouts.length + 1}`
+                      preset.id === "blank" || role !== "submission"
+                        ? defaultLayoutName(
+                            role,
+                            project.layouts.filter((item) => item.role === "submission").length
+                          )
                         : `${preset.name} background`,
                     backgroundPresetId: preset.id,
+                    role,
                   })
                   updateLayouts([...projectRef.current.layouts, layout])
                   setSelectedId(layout.id)
@@ -1795,57 +1904,24 @@ export function LayoutsPanel({
           </AlertDialog>
           {selected && (
             <>
-              <IconAction label="Move layout up" disabled={selected.position === 0}>
+              <IconAction label={moveLabel("up")} disabled={!canMove(-1)}>
                 <Button
                   variant="outline"
                   size="icon"
                   aria-label="Move layout up"
-                  disabled={selected.position === 0}
-                  onClick={async () => {
-                    if (selected.position === 0) return
-                    await runAfterEditorSave(async () => {
-                      const ids = project.layouts.map((layout) => layout.id)
-                      const index = ids.indexOf(selected.id)
-                      ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
-                      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(
-                        project.id,
-                        {
-                          action: "reorder",
-                          layoutIds: ids,
-                        }
-                      )
-                      updateLayouts(result.layouts)
-                    })
-                  }}
+                  disabled={!canMove(-1)}
+                  onClick={() => void moveSelectedLayout(-1)}
                 >
                   <ArrowUpIcon />
                 </Button>
               </IconAction>
-              <IconAction
-                label="Move layout down"
-                disabled={selected.position === project.layouts.length - 1}
-              >
+              <IconAction label={moveLabel("down")} disabled={!canMove(1)}>
                 <Button
                   variant="outline"
                   size="icon"
                   aria-label="Move layout down"
-                  disabled={selected.position === project.layouts.length - 1}
-                  onClick={async () => {
-                    if (selected.position === project.layouts.length - 1) return
-                    await runAfterEditorSave(async () => {
-                      const ids = project.layouts.map((layout) => layout.id)
-                      const index = ids.indexOf(selected.id)
-                      ;[ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]
-                      const result = await projectApi.layoutAction<{ layouts: LayoutRecord[] }>(
-                        project.id,
-                        {
-                          action: "reorder",
-                          layoutIds: ids,
-                        }
-                      )
-                      updateLayouts(result.layouts)
-                    })
-                  }}
+                  disabled={!canMove(1)}
+                  onClick={() => void moveSelectedLayout(1)}
                 >
                   <ArrowDownIcon />
                 </Button>

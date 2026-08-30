@@ -1,6 +1,6 @@
 {
-  "id": "f025d9b9-027c-41a8-a4a7-8fbce735c0f2",
-  "prevId": "c84c051e-3d45-4300-b117-2e389eccc0ef",
+  "id": "7f210c0b-19a2-4a66-93b8-99eebe6def25",
+  "prevId": "82660b58-9373-4f72-873d-4b7862da3b74",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -389,6 +389,13 @@
           "notNull": true,
           "default": 0
         },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submission'"
+        },
         "schema": {
           "name": "schema",
           "type": "jsonb",
@@ -428,6 +435,38 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "layouts_project_front_cover_unique": {
+          "name": "layouts_project_front_cover_unique",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"layouts\".\"role\" = 'front-cover'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "layouts_project_back_cover_unique": {
+          "name": "layouts_project_back_cover_unique",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"layouts\".\"role\" = 'back-cover'",
           "concurrently": false,
           "method": "btree",
           "with": {}

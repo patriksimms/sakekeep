@@ -202,6 +202,7 @@ const project: Project = {
       name: "All supported elements",
       position: 0,
       revision: 1,
+      role: "submission",
       schema,
       updatedAt: "2026-07-23T00:00:00.000Z",
     },

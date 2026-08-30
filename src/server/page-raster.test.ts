@@ -4,33 +4,36 @@ import { describe, expect, it } from "vitest"
 import { PAGE_SPEC } from "../domain/layout.ts"
 import { RASTER_PPI, renderPageJpegs } from "./page-raster.ts"
 import { renderBookPdf } from "./pdf-renderer.ts"
-import { completeForm, cycleSettings } from "../test/fixtures.ts"
+import { completeForm, cycleSettings, standaloneLayoutFixture } from "../test/fixtures.ts"
 
-const standalonePage = (id: string, background: string) => ({
-  id,
-  kind: "standalone" as const,
-  pageType: "cover" as const,
-  title: "Stories worth keeping",
-  body: "A representative standalone page.",
-  background,
-  problems: [],
-})
+/** A standalone layout whose page background is distinct, so rasters cannot come out equal. */
+const standaloneLayout = (id: string, position: number, background: string) => {
+  const layout = standaloneLayoutFixture(id, "static", position)
+  return { ...layout, schema: { ...layout.schema, background } }
+}
 
 describe("page rasterizer", () => {
   it("renders one 300 PPI JPEG per page, bleed included", async () => {
+    const cover = standaloneLayout("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 0, "#fffdf7")
+    const closing = standaloneLayout("dddddddd-dddd-4ddd-8ddd-dddddddddddd", 1, "#dfe8da")
     const pdf = await renderBookPdf({
       book: {
         projectId: "99999999-9999-4999-8999-999999999999",
         settings: cycleSettings,
         pages: [
-          standalonePage("standalone:cover", "#fffdf7"),
-          standalonePage("standalone:closing", "#dfe8da"),
+          { id: "standalone:cover", kind: "standalone" as const, layoutId: cover.id, problems: [] },
+          {
+            id: "standalone:closing",
+            kind: "standalone" as const,
+            layoutId: closing.id,
+            problems: [],
+          },
         ],
         sourceFingerprint: "raster-test",
         generatedAt: "2026-08-29T00:00:00.000Z",
         updatedAt: "2026-08-29T00:00:00.000Z",
       },
-      layouts: [],
+      layouts: [cover, closing],
       submissions: [],
       form: completeForm,
       marks: false,

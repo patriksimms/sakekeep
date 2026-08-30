@@ -12,7 +12,14 @@ import {
 } from "./pdf-renderer.ts"
 import { fillerPalette } from "../domain/filler-art.ts"
 import { pageSpecification } from "../domain/page-format.ts"
-import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "../test/fixtures.ts"
+import {
+  completeForm,
+  cycleSettings,
+  layoutFixture,
+  standaloneLayoutFixture,
+  submissionFixture,
+} from "../test/fixtures.ts"
+import { emptyLayoutSchema } from "../domain/layout.ts"
 
 /** The drawing operators of one page, so a test can assert what the exporter actually painted. */
 async function pageOperators(bytes: Uint8Array, index: number): Promise<string> {
@@ -55,23 +62,20 @@ describe("PDF renderer", () => {
   })
 
   it("emits individual A5 landscape pages with bleed, fonts, and output intent", async () => {
+    const cover = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 0)
+    const blank = standaloneLayoutFixture("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "static", 1)
+    blank.schema = { ...blank.schema, background: "#dfe8da", elements: [] }
     const pages = [
       {
         id: "standalone:cover",
         kind: "standalone" as const,
-        pageType: "cover" as const,
-        title: "Stories worth keeping",
-        body: "A representative standalone page.",
-        background: "#fffdf7",
+        layoutId: cover.id,
         problems: [],
       },
       {
         id: "standalone:blank",
         kind: "standalone" as const,
-        pageType: "blank" as const,
-        title: "",
-        body: "",
-        background: "#dfe8da",
+        layoutId: blank.id,
         problems: [],
       },
     ]
@@ -84,7 +88,7 @@ describe("PDF renderer", () => {
         generatedAt: "2026-07-18T00:00:00.000Z",
         updatedAt: "2026-07-18T00:00:00.000Z",
       },
-      layouts: [],
+      layouts: [cover, blank],
       submissions: [],
       form: completeForm,
       marks: false,
@@ -180,14 +184,16 @@ describe("PDF renderer", () => {
   })
 
   it("emits portrait pages with format-specific media and trim boxes", async () => {
+    const layout = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "static", 0)
+    layout.schema = {
+      ...emptyLayoutSchema("a6", "portrait"),
+      elements: layout.schema.elements,
+    }
     const pages = [
       {
         id: "standalone:portrait",
         kind: "standalone" as const,
-        pageType: "introduction" as const,
-        title: "Portrait book",
-        body: "This content stays within a narrow A6 page.",
-        background: "#fffdf7",
+        layoutId: layout.id,
         problems: [],
       },
     ]
@@ -200,7 +206,7 @@ describe("PDF renderer", () => {
         generatedAt: "2026-07-18T00:00:00.000Z",
         updatedAt: "2026-07-18T00:00:00.000Z",
       },
-      layouts: [],
+      layouts: [layout],
       submissions: [],
       form: completeForm,
       marks: true,
@@ -220,6 +226,7 @@ describe("PDF renderer", () => {
 
   it("renders one print-ready single-page PDF per book page", async () => {
     const layout = layoutFixture()
+    const cover = standaloneLayoutFixture("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "front-cover", 1)
     const submission = submissionFixture("10000000-0000-4000-8000-000000000003", 1)
     const input = {
       book: {
@@ -229,10 +236,7 @@ describe("PDF renderer", () => {
           {
             id: "standalone:cover",
             kind: "standalone" as const,
-            pageType: "cover" as const,
-            title: "Stories worth keeping",
-            body: "A representative standalone page.",
-            background: "#fffdf7",
+            layoutId: cover.id,
             problems: [],
           },
           {
@@ -247,7 +251,7 @@ describe("PDF renderer", () => {
         generatedAt: "2026-08-29T00:00:00.000Z",
         updatedAt: "2026-08-29T00:00:00.000Z",
       },
-      layouts: [layout],
+      layouts: [layout, cover],
       submissions: [submission],
       form: completeForm,
       marks: false,
