@@ -713,15 +713,18 @@ describe("cover and standalone layouts", () => {
     await createLayout(project.id, "Back", "blank", "back-cover")
     await createLayout(project.id, "Note", "blank", "static")
 
+    const source = await getProject(project.id)
     const copy = await duplicateProject(project.id)
     createdProjectIds.add(copy.id)
 
-    expect(copy.layouts.map((layout) => layout.role)).toEqual([
-      "front-cover",
-      "submission",
-      "static",
-      "back-cover",
-    ])
+    // Both are returned in stored position order, so the copy should match the source layout for
+    // layout; presentation order is derived from the role separately.
+    expect(copy.layouts.map((layout) => [layout.name, layout.role])).toEqual(
+      source.layouts.map((layout) => [layout.name, layout.role])
+    )
+    expect(copy.layouts.map((layout) => layout.role)).toContain("front-cover")
+    expect(copy.layouts.map((layout) => layout.role)).toContain("back-cover")
+    expect(copy.layouts.map((layout) => layout.role)).toContain("static")
   })
 
   it("refuses page edits that put a page on a layout of the wrong role", async () => {
