@@ -1,3 +1,5 @@
+import { isLocale, type Locale } from "#/lib/locale.ts"
+import * as m from "#/paraglide/messages.js"
 import type { PostHog } from "posthog-js"
 
 import type { BackgroundPresetId } from "#/domain/layout-backgrounds.ts"
@@ -20,6 +22,8 @@ let desiredUserId: string | undefined
 let userKnown = false
 
 interface AnalyticsEvents {
+  "locale:changed": { previous_locale: Locale; locale: Locale }
+  "project:created": { book_language: Locale; ui_locale: Locale }
   "responses:edit_saved": {
     changed_answer_count: number
     previous_edit_count: number
@@ -125,6 +129,8 @@ export async function setupAnalyticsConsent() {
     import("vanilla-cookieconsent"),
     import("vanilla-cookieconsent/dist/cookieconsent.css"),
   ])
+  const language = document.documentElement.lang
+  const locale = isLocale(language) ? language : "de"
   await CookieConsent.run({
     cookie: { expiresAfterDays: CONSENT_STORAGE_DAYS },
     categories: {
@@ -138,41 +144,46 @@ export async function setupAnalyticsConsent() {
       void applyConsent(cookie.categories)
     },
     language: {
-      default: "en",
+      default: locale,
       translations: {
-        en: {
+        [locale]: {
           consentModal: {
-            title: "Cookies & analytics",
-            description:
-              "Sakekeep uses PostHog analytics to understand how the app is used and to notice errors. Analytics only runs if you agree. Technically necessary storage is always active.",
-            acceptAllBtn: "Accept analytics",
-            acceptNecessaryBtn: "Decline analytics",
-            showPreferencesBtn: "Manage preferences",
-            footer: '<a href="/privacy">Privacy Policy</a>',
+            title: m.ui_cookies_analytics({}, { locale }),
+            description: m.ui_sakekeep_uses_posthog_analytics_to_understand_how_the_app_is_used(
+              {},
+              { locale }
+            ),
+            acceptAllBtn: m.ui_accept_analytics({}, { locale }),
+            acceptNecessaryBtn: m.ui_decline_analytics({}, { locale }),
+            showPreferencesBtn: m.ui_manage_preferences({}, { locale }),
+            footer: `<a href="/privacy">${m.ui_privacy({}, { locale })}</a>`,
           },
           preferencesModal: {
-            title: "Cookie preferences",
-            acceptAllBtn: "Accept analytics",
-            acceptNecessaryBtn: "Decline analytics",
-            savePreferencesBtn: "Save preferences",
-            closeIconLabel: "Close",
+            title: m.ui_cookie_preferences({}, { locale }),
+            acceptAllBtn: m.ui_accept_analytics({}, { locale }),
+            acceptNecessaryBtn: m.ui_decline_analytics({}, { locale }),
+            savePreferencesBtn: m.ui_save_preferences({}, { locale }),
+            closeIconLabel: m.ui_close({}, { locale }),
             sections: [
               {
-                title: "Technically necessary",
-                description:
-                  "Required for sign-in, session handling, and remembering your consent choice. Your consent decision is stored in your browser for 365 days.",
+                title: m.ui_technically_necessary({}, { locale }),
+                description: m.ui_required_for_sign_in_session_handling_and_remembering_your_consen(
+                  {},
+                  { locale }
+                ),
                 linkedCategory: "necessary",
               },
               {
-                title: "Analytics (PostHog)",
-                description:
-                  "Measures pageviews, feature usage, and browser errors so we can improve Sakekeep. PostHog stores identifiers in cookies and localStorage. If you are signed in, your account ID is linked to your analytics profile.",
+                title: m.ui_analytics_posthog({}, { locale }),
+                description: m.ui_measures_pageviews_feature_usage_and_browser_errors_so_we_can_imp(
+                  {},
+                  { locale }
+                ),
                 linkedCategory: ANALYTICS_CATEGORY,
               },
               {
-                title: "More information",
-                description:
-                  'Details on data processing are described in our <a href="/privacy">Privacy Policy</a>.',
+                title: m.ui_more_information({}, { locale }),
+                description: m.consent_more_information({}, { locale }),
               },
             ],
           },

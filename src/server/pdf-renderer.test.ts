@@ -1,3 +1,7 @@
+import fontkit from "@pdf-lib/fontkit"
+import { FONT_CUT_FILES, fontCut } from "../domain/fonts.ts"
+import { DEFAULT_TEXT_SETTINGS } from "../domain/layout.ts"
+import { layoutText } from "../domain/text-layout.ts"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
@@ -276,4 +280,51 @@ describe("PDF renderer", () => {
       )
     }
   })
+})
+
+it("prints exactly the shared German syllable lines while the organizer uses English", async () => {
+  const layout = standaloneLayoutFixture("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "front-cover", 0)
+  const settings = { ...DEFAULT_TEXT_SETTINGS, fontSize: 14, overflow: "flag" as const }
+  const content = "Geburtstagserinnerungen"
+  layout.schema.elements = [
+    {
+      id: "german",
+      type: "static-text",
+      opacity: 1,
+      geometry: { x: 20, y: 20, width: 32, height: 80, rotation: 0 },
+      text: settings,
+      content,
+    },
+  ]
+  const lines = layoutText([{ text: content }], 32, 80, settings, "de").renderedLines
+  const bytes = await renderBookPdf({
+    locale: "de",
+    layouts: [layout],
+    submissions: [],
+    form: completeForm,
+    marks: false,
+    book: {
+      projectId: layout.projectId,
+      settings: cycleSettings,
+      pages: [{ id: "german", kind: "standalone", layoutId: layout.id, problems: [] }],
+      sourceFingerprint: "de",
+      generatedAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    },
+  })
+  const document = await PDFDocument.load(bytes)
+  expect(document.getTitle()).toBe("Sakekeep Freundebuch")
+  const reference = await PDFDocument.create()
+  reference.registerFontkit(fontkit)
+  const font = await reference.embedFont(
+    await readFile(
+      resolve(FONT_CUT_FILES[fontCut(settings.fontFamily, settings.fontStyle, settings.fontWeight)])
+    ),
+    { subset: false }
+  )
+  const operators = await pageOperators(bytes, 0)
+  expect(lines.length).toBeGreaterThan(1)
+  expect(operators.match(/ Tj\n/g)).toHaveLength(lines.length)
+  for (const line of lines)
+    expect(operators).toContain(`${font.encodeText(line.text).toString()} Tj`)
 })

@@ -1,3 +1,6 @@
+import { getLocale } from "#/paraglide/runtime.js"
+import { type Locale } from "#/lib/locale.ts"
+import * as m from "#/paraglide/messages.js"
 import { z } from "zod"
 
 import {
@@ -25,17 +28,27 @@ function buildFormValidator(requireText: boolean) {
     ? z
         .string()
         .trim()
-        .min(1, "Enter a question prompt.")
-        .max(PROMPT_MAX, `Use no more than ${PROMPT_MAX} characters.`)
-    : z.string().trim().max(PROMPT_MAX, `Use no more than ${PROMPT_MAX} characters.`)
+        .min(1, { error: () => m.ui_enter_a_question_prompt() })
+        .max(PROMPT_MAX, { error: () => m.prompt_character_limit({ value0: PROMPT_MAX }) })
+    : z
+        .string()
+        .trim()
+        .max(PROMPT_MAX, { error: () => m.prompt_character_limit({ value0: PROMPT_MAX }) })
 
   const choiceLabelSchema = requireText
     ? z
         .string()
         .trim()
-        .min(1, "Enter a choice label.")
-        .max(CHOICE_LABEL_MAX, `Use no more than ${CHOICE_LABEL_MAX} characters.`)
-    : z.string().trim().max(CHOICE_LABEL_MAX, `Use no more than ${CHOICE_LABEL_MAX} characters.`)
+        .min(1, { error: () => m.ui_enter_a_choice_label() })
+        .max(CHOICE_LABEL_MAX, {
+          error: () => m.choice_character_limit({ value0: CHOICE_LABEL_MAX }),
+        })
+    : z
+        .string()
+        .trim()
+        .max(CHOICE_LABEL_MAX, {
+          error: () => m.choice_character_limit({ value0: CHOICE_LABEL_MAX }),
+        })
 
   const baseQuestion = z.object({
     id: idSchema,
@@ -63,8 +76,8 @@ function buildFormValidator(requireText: boolean) {
           label: choiceLabelSchema,
         })
       )
-      .min(2, "Offer at least two choices.")
-      .max(50, "Offer no more than 50 choices."),
+      .min(2, { error: () => m.ui_offer_at_least_two_choices() })
+      .max(50, { error: () => m.ui_offer_no_more_than_50_choices() }),
   })
 
   const imageQuestion = baseQuestion.extend({
@@ -91,7 +104,7 @@ function buildFormValidator(requireText: boolean) {
           context.addIssue({
             code: "custom",
             path: ["questions", questionIndex, "id"],
-            message: "Question IDs must be unique.",
+            message: m.ui_question_ids_must_be_unique(),
           })
         }
         questionIds.add(question.id)
@@ -102,7 +115,7 @@ function buildFormValidator(requireText: boolean) {
               context.addIssue({
                 code: "custom",
                 path: ["questions", questionIndex, "choices", choiceIndex, "id"],
-                message: "Choice IDs must be unique within a question.",
+                message: m.ui_choice_ids_must_be_unique_within_a_question(),
               })
             }
             choiceIds.add(choice.id)
@@ -154,7 +167,7 @@ export function validateFormForPublish(form: FormSchema): ValidationIssue[] {
   if (form.questions.length === 0) {
     issues.push({
       path: "questions",
-      message: "Add at least one valid question before publishing.",
+      message: m.ui_add_at_least_one_valid_question_before_publishing(),
     })
   }
 
@@ -241,38 +254,39 @@ function isBlank(answer: SubmissionAnswer | undefined): boolean {
 function validateText(
   question: Extract<FormQuestion, { type: "single-line" | "multiline" }>,
   answer: SubmissionAnswer | undefined,
-  issues: ValidationIssue[]
+  issues: ValidationIssue[],
+  locale: Locale = getLocale()
 ) {
   if (answer === undefined || answer === "") return
   if (typeof answer !== "string") {
     issues.push({
       path: `answers.${question.id}`,
-      message: "Expected a text answer.",
+      message: m.ui_expected_a_text_answer({}, { locale }),
     })
     return
   }
   if (question.characterLimit && answer.length > question.characterLimit) {
     issues.push({
       path: `answers.${question.id}`,
-      message: `Use no more than ${question.characterLimit} characters.`,
+      message: m.answer_character_limit({ value0: question.characterLimit }, { locale }),
     })
   }
   if (question.type === "single-line" && answer.includes("\n")) {
     issues.push({
       path: `answers.${question.id}`,
-      message: "Single-line answers cannot contain line breaks.",
+      message: m.ui_single_line_answers_cannot_contain_line_breaks({}, { locale }),
     })
   }
   if (question.type === "single-line" && question.validateUrl && answer.trim()) {
     try {
       const url = new URL(answer)
       if (url.protocol !== "http:" && url.protocol !== "https:") {
-        throw new Error("Unsupported URL protocol")
+        throw new Error(m.ui_unsupported_url_protocol({}, { locale }))
       }
     } catch {
       issues.push({
         path: `answers.${question.id}`,
-        message: "Enter a valid HTTP or HTTPS URL.",
+        message: m.ui_enter_a_valid_http_or_https_url({}, { locale }),
       })
     }
   }
@@ -281,13 +295,14 @@ function validateText(
 function validateChoices(
   question: Extract<FormQuestion, { type: "radio" | "checkboxes" }>,
   answer: SubmissionAnswer | undefined,
-  issues: ValidationIssue[]
+  issues: ValidationIssue[],
+  locale: Locale = getLocale()
 ) {
   if (answer === undefined) return
   if (!Array.isArray(answer) || answer.some((value) => typeof value !== "string")) {
     issues.push({
       path: `answers.${question.id}`,
-      message: "Expected a list of choices.",
+      message: m.ui_expected_a_list_of_choices({}, { locale }),
     })
     return
   }
@@ -295,20 +310,20 @@ function validateChoices(
   if (question.type === "radio" && selected.length > 1) {
     issues.push({
       path: `answers.${question.id}`,
-      message: "Choose only one option.",
+      message: m.ui_choose_only_one_option({}, { locale }),
     })
   }
   const allowed = new Set(question.choices.map((choice) => choice.id))
   if (selected.some((choiceId) => !allowed.has(choiceId))) {
     issues.push({
       path: `answers.${question.id}`,
-      message: "An answer contains an unknown choice.",
+      message: m.ui_an_answer_contains_an_unknown_choice({}, { locale }),
     })
   }
   if (new Set(selected).size !== selected.length) {
     issues.push({
       path: `answers.${question.id}`,
-      message: "A choice cannot be selected more than once.",
+      message: m.duplicate_choice({}, { locale }),
     })
   }
 }
@@ -317,19 +332,20 @@ function validateImages(
   question: Extract<FormQuestion, { type: "images" }>,
   answer: SubmissionAnswer | undefined,
   uploads: UploadedImageDescriptor[],
-  issues: ValidationIssue[]
+  issues: ValidationIssue[],
+  locale: Locale = getLocale()
 ) {
   if (answer !== undefined && !Array.isArray(answer)) {
     issues.push({
       path: `answers.${question.id}`,
-      message: "Expected a list of images.",
+      message: m.ui_expected_a_list_of_images({}, { locale }),
     })
   }
   const questionUploads = uploads.filter((upload) => upload.questionId === question.id)
   if (questionUploads.length > question.maxImages) {
     issues.push({
       path: `answers.${question.id}`,
-      message: `Upload no more than ${question.maxImages} images.`,
+      message: m.image_upload_limit({ value0: question.maxImages }, { locale }),
     })
   }
   for (const upload of questionUploads) {
@@ -340,13 +356,13 @@ function validateImages(
     ) {
       issues.push({
         path: `answers.${question.id}.${upload.index}`,
-        message: `${upload.name} is not a supported JPEG, PNG, WebP, HEIF, or HEIC image.`,
+        message: m.unsupported_upload({ value0: upload.name }, { locale }),
       })
     }
     if (upload.sizeBytes > 15 * 1024 * 1024) {
       issues.push({
         path: `answers.${question.id}.${upload.index}`,
-        message: `${upload.name} is larger than 15 MB.`,
+        message: m.upload_too_large({ value0: upload.name }, { locale }),
       })
     }
   }
@@ -355,11 +371,12 @@ function validateImages(
 export function validateSubmission(
   form: FormSchema,
   answers: SubmissionAnswers,
-  uploads: UploadedImageDescriptor[] = []
+  uploads: UploadedImageDescriptor[] = [],
+  locale: Locale = "en"
 ): ValidationIssue[] {
   const formResult = formSchemaValidator.safeParse(form)
   if (!formResult.success) {
-    return [{ path: "form", message: "The published form schema is invalid." }]
+    return [{ path: "form", message: m.ui_the_published_form_schema_is_invalid({}, { locale }) }]
   }
 
   const issues: ValidationIssue[] = []
@@ -368,7 +385,7 @@ export function validateSubmission(
     if (!knownQuestionIds.has(answerId)) {
       issues.push({
         path: `answers.${answerId}`,
-        message: "The answer does not belong to this form.",
+        message: m.ui_the_answer_does_not_belong_to_this_form({}, { locale }),
       })
     }
   }
@@ -376,7 +393,7 @@ export function validateSubmission(
     if (!knownQuestionIds.has(upload.questionId)) {
       issues.push({
         path: `uploads.${upload.questionId}`,
-        message: "The image does not belong to this form.",
+        message: m.ui_the_image_does_not_belong_to_this_form({}, { locale }),
       })
     }
   }
@@ -390,8 +407,8 @@ export function validateSubmission(
         path: `answers.${question.id}`,
         message:
           question.type === "checkboxes"
-            ? "Select at least one option."
-            : "This question is required.",
+            ? m.ui_select_at_least_one_option({}, { locale })
+            : m.ui_this_question_is_required({}, { locale }),
       })
       continue
     }
@@ -399,14 +416,14 @@ export function validateSubmission(
     switch (question.type) {
       case "single-line":
       case "multiline":
-        validateText(question, answer, issues)
+        validateText(question, answer, issues, locale)
         break
       case "radio":
       case "checkboxes":
-        validateChoices(question, answer, issues)
+        validateChoices(question, answer, issues, locale)
         break
       case "images":
-        validateImages(question, answer, uploads, issues)
+        validateImages(question, answer, uploads, issues, locale)
         break
     }
   }
@@ -415,7 +432,7 @@ export function validateSubmission(
   if (totalBytes > 50 * 1024 * 1024) {
     issues.push({
       path: "uploads",
-      message: "All images in one submission must total no more than 50 MB.",
+      message: m.ui_all_images_in_one_submission_must_total_no_more_than_50_mb({}, { locale }),
     })
   }
   return issues
@@ -431,7 +448,7 @@ export function validateEditedTextAnswers(
     if (question.type !== "single-line" && question.type !== "multiline") continue
     const answer = answers[question.id]
     if (question.required && isBlank(answer)) {
-      issues.push({ path: `answers.${question.id}`, message: "This question is required." })
+      issues.push({ path: `answers.${question.id}`, message: m.ui_this_question_is_required() })
       continue
     }
     validateText(question, answer, issues)

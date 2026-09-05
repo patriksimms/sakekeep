@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { createFileRoute } from "@tanstack/react-router"
 
 import { HttpError, jsonError } from "#/server/http.ts"
@@ -18,7 +19,7 @@ function requestedFile(
     const isPdfBundle = file === "page-pdfs"
     const objectKey = isPdfBundle ? record.pagePdfZipObjectKey : record.pageJpegZipObjectKey
     if (!objectKey) {
-      throw new HttpError(404, "This export was created without that page bundle.")
+      throw new HttpError(404, m.ui_this_export_was_created_without_that_page_bundle())
     }
     return {
       objectKey,

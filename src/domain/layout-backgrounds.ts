@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { emptyLayoutSchema, resizeLayoutSchema } from "./layout.ts"
 import { pageSpecification } from "./page-format.ts"
 import {
@@ -534,22 +535,30 @@ const postcardFramePortrait: LayoutSchema = {
 export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   {
     id: "blank",
-    name: "Blank",
+    get name() {
+      return m.ui_blank()
+    },
     schema: emptyLayoutSchema(),
   },
   {
     id: "geometric-collage",
-    name: "Geometric collage",
+    get name() {
+      return m.ui_geometric_collage()
+    },
     schema: geometricCollageLandscape,
   },
   {
     id: "sunset-arches",
-    name: "Sunset arches",
+    get name() {
+      return m.ui_sunset_arches()
+    },
     schema: sunsetArchesLandscape,
   },
   {
     id: "postcard-frame",
-    name: "Postcard frame",
+    get name() {
+      return m.ui_postcard_frame()
+    },
     schema: postcardFrameLandscape,
   },
 ]

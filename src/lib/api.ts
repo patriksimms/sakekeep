@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { type Locale } from "#/lib/locale.ts"
 import { type ExportArtifact, type Project, type ProjectSummary } from "#/domain/types.ts"
 
 export class ApiError extends Error {
@@ -26,7 +28,7 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(
       response.status,
-      payload.error ?? `Request failed with HTTP ${response.status}.`,
+      payload.error ?? m.http_failure({ value0: response.status }),
       payload.details
     )
   }
@@ -36,7 +38,7 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const projectApi = {
   list: () => api<{ projects: ProjectSummary[] }>("/api/projects"),
-  create: (input: { title: string; occasion?: string | null }) =>
+  create: (input: { bookLanguage: Locale; title: string; occasion?: string | null }) =>
     api<Project>("/api/projects", {
       method: "POST",
       body: JSON.stringify(input),

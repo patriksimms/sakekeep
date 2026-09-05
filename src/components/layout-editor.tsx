@@ -1,3 +1,5 @@
+import { orientationLabel } from "#/domain/project-labels.ts"
+import * as m from "#/paraglide/messages.js"
 import {
   AlignCenterHorizontalIcon,
   AlignCenterVerticalIcon,
@@ -182,7 +184,7 @@ function BackgroundPicker({
       })
       setOpen(false)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Create failed")
+      toast.error(error instanceof Error ? error.message : m.ui_create_failed())
     } finally {
       setCreatingId(null)
     }
@@ -191,26 +193,30 @@ function BackgroundPicker({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
+        data-testid="button-new-layout"
         render={
           <Button
+            data-testid="button-new-layout"
             variant={compact ? "ghost" : "default"}
             size={compact ? "icon-sm" : "default"}
-            aria-label={compact ? "New layout" : undefined}
+            aria-label={compact ? m.ui_new_layout() : undefined}
           />
         }
       >
         <PlusIcon data-icon={compact ? undefined : "inline-start"} />
-        {!compact && "New layout"}
+        {!compact && m.ui_new_layout()}
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Choose a background</DialogTitle>
+          <DialogTitle data-testid="heading-choose-a-background">
+            {m.ui_choose_a_background()}
+          </DialogTitle>
           <DialogDescription>
-            Decorative elements start locked and can be unlocked in the editor.
+            {m.ui_decorative_elements_start_locked_and_can_be_unlocked_in_the_edito()}{" "}
           </DialogDescription>
         </DialogHeader>
         <Field>
-          <FieldLabel>This layout is for</FieldLabel>
+          <FieldLabel>{m.ui_this_layout_is_for()}</FieldLabel>
           <Select
             items={LAYOUT_ROLES.map((candidate) => ({
               value: candidate,
@@ -219,7 +225,11 @@ function BackgroundPicker({
             value={role}
             onValueChange={(value) => value && setRole(value as LayoutRole)}
           >
-            <SelectTrigger className="w-full" aria-label="New layout role">
+            <SelectTrigger
+              data-testid="combobox-new-layout-role"
+              className="w-full"
+              aria-label={m.ui_new_layout_role()}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -238,8 +248,8 @@ function BackgroundPicker({
           </Select>
           <FieldDescription>
             {allowsResponseBoundElements(role)
-              ? "Response layouts are assigned to submissions when the book is generated."
-              : "Standalone pages carry no response, so only static elements can be placed on them."}
+              ? m.ui_response_layouts_are_assigned_to_submissions_when_the_book_is_gen()
+              : m.ui_standalone_pages_carry_no_response_so_only_static_elements_can_be()}
           </FieldDescription>
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -249,7 +259,8 @@ function BackgroundPicker({
               variant="outline"
               className="h-auto min-w-0 flex-col items-stretch gap-2 p-2"
               disabled={creatingId !== null}
-              aria-label={`Create ${preset.name} background`}
+              data-testid={`create-background-${preset.id}`}
+              aria-label={m.create_background({ value0: preset.name })}
               onClick={() => void create(preset)}
             >
               <span
@@ -291,7 +302,7 @@ function IconAction({
             <span
               className="inline-flex rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               tabIndex={0}
-              aria-label={`${label} unavailable`}
+              aria-label={m.unavailable_element({ value0: label })}
             />
           }
         >
@@ -310,7 +321,7 @@ function IconAction({
 }
 
 function elementLabel(element: LayoutElement, questions: FormQuestion[]): string {
-  if (element.type === "static-text") return element.content || "Static text"
+  if (element.type === "static-text") return element.content || m.ui_static_text()
   if (
     element.type === "bound-text" ||
     element.type === "image-frame" ||
@@ -319,27 +330,32 @@ function elementLabel(element: LayoutElement, questions: FormQuestion[]): string
     return boundQuestionLabel(questions, element.questionId)
   }
   const labels: Record<LayoutElement["type"], string> = {
-    "bound-text": "Question text",
-    "static-text": "Static text",
-    "image-frame": "Image frame",
-    "gallery-frame": "Gallery",
-    rectangle: "Rectangle",
-    circle: "Circle",
-    line: "Line",
-    "decorative-image": "Decorative image",
+    "bound-text": m.ui_question_text(),
+    "static-text": m.ui_static_text(),
+    "image-frame": m.ui_image_frame(),
+    "gallery-frame": m.ui_gallery(),
+    rectangle: m.ui_rectangle(),
+    circle: m.ui_circle(),
+    line: m.ui_line(),
+    "decorative-image": m.ui_decorative_image(),
   }
   return labels[element.type]
 }
 
 function SaveIndicator({ state }: { state: SaveState }) {
   const value = {
-    saved: { icon: CheckIcon, label: "Saved" },
-    unsaved: { icon: SaveIcon, label: "Unsaved" },
-    saving: { icon: LoaderCircleIcon, label: "Saving…" },
-    failed: { icon: XCircleIcon, label: "Save failed" },
+    saved: { icon: CheckIcon, label: m.ui_saved() },
+    unsaved: { icon: SaveIcon, label: m.ui_unsaved() },
+    saving: { icon: LoaderCircleIcon, label: m.ui_saving() },
+    failed: { icon: XCircleIcon, label: m.ui_save_failed() },
   }[state]
   return (
-    <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span
+      data-testid="save-status"
+      data-save-state={state}
+      role="status"
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+    >
       <value.icon className={state === "saving" ? "animate-spin" : undefined} />
       {value.label}
     </span>
@@ -365,7 +381,7 @@ function PaletteAction({
         draggable
         data-palette-element-type={dragData.type}
         data-palette-question-id={dragData.questionId}
-        title={`Drag ${label} to the canvas`}
+        title={m.drag_element({ value0: label })}
         className="flex h-7 min-w-0 cursor-grab items-center gap-1.5 px-2 text-[0.8rem] font-medium select-none active:cursor-grabbing"
         onDragStart={(event) => {
           event.dataTransfer.effectAllowed = "copy"
@@ -380,6 +396,7 @@ function PaletteAction({
         variant="ghost"
         size="icon-sm"
         className="rounded-l-none border-l"
+        data-testid={`add-${dragData.type}`}
         aria-label={addLabel}
         onClick={onAdd}
       >
@@ -410,18 +427,30 @@ function TextSettingsEditor({
   return (
     <FieldGroup>
       <Field>
-        <FieldLabel>Font family</FieldLabel>
+        <FieldLabel data-testid="text-ui_font_family">{m.ui_font_family()}</FieldLabel>
         <Select
           value={settings.fontFamily}
           onValueChange={(value) => onChange(withFontFamily(settings, value as FontFamily))}
         >
-          <SelectTrigger className="w-full" aria-label="Font family">
+          <SelectTrigger
+            data-testid="combobox-font-family"
+            className="w-full"
+            aria-label={m.ui_font_family()}
+          >
             <SelectValue style={{ fontFamily: cssFontStack(settings.fontFamily) }} />
           </SelectTrigger>
           <SelectContent>
             {FONT_FAMILY_GROUPS.map((group) => (
               <SelectGroup key={group.category}>
-                <SelectLabel>{group.category}</SelectLabel>
+                <SelectLabel>
+                  {
+                    {
+                      Sans: m.font_group_sans(),
+                      Serif: m.font_group_serif(),
+                      Handwriting: m.font_group_handwriting(),
+                    }[group.category]
+                  }
+                </SelectLabel>
                 {group.families.map((family) => (
                   <SelectItem
                     key={family}
@@ -438,14 +467,14 @@ function TextSettingsEditor({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <NumericField
-          label="Font size"
+          label={m.ui_font_size()}
           value={settings.fontSize}
           min={limits.fontSize.min}
           max={limits.fontSize.max}
           onChange={(fontSize) => onChange({ ...settings, fontSize })}
         />
         <NumericField
-          label="Minimum"
+          label={m.label_minimum()}
           value={settings.minFontSize}
           min={limits.fontSize.min}
           max={limits.fontSize.max}
@@ -453,9 +482,9 @@ function TextSettingsEditor({
         />
       </div>
       <Field>
-        <FieldLabel>Text colour</FieldLabel>
+        <FieldLabel>{m.ui_text_colour()}</FieldLabel>
         <Input
-          aria-label="Text colour"
+          aria-label={m.ui_text_colour()}
           type="color"
           value={settings.color}
           onChange={(event) => onChange({ ...settings, color: event.target.value })}
@@ -463,8 +492,12 @@ function TextSettingsEditor({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field>
-          <FieldLabel>Style</FieldLabel>
+          <FieldLabel>{m.ui_style()}</FieldLabel>
           <Select
+            items={[
+              { value: "normal", label: m.ui_normal() },
+              { value: "italic", label: m.ui_italic() },
+            ]}
             value={settings.fontStyle}
             onValueChange={(value) =>
               onChange({
@@ -473,22 +506,30 @@ function TextSettingsEditor({
               })
             }
           >
-            <SelectTrigger className="w-full" aria-label="Font style">
+            <SelectTrigger
+              data-testid="combobox-font-style"
+              className="w-full"
+              aria-label={m.ui_font_style()}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="normal">{m.ui_normal()}</SelectItem>
                 <SelectItem value="italic" disabled={!FONT_FAMILIES[settings.fontFamily].hasItalic}>
-                  Italic
+                  {m.ui_italic()}{" "}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>
         </Field>
         <Field>
-          <FieldLabel>Weight</FieldLabel>
+          <FieldLabel>{m.ui_weight()}</FieldLabel>
           <Select
+            items={[
+              { value: "normal", label: m.ui_normal() },
+              { value: "bold", label: m.ui_bold() },
+            ]}
             value={settings.fontWeight}
             onValueChange={(value) =>
               onChange({
@@ -497,21 +538,30 @@ function TextSettingsEditor({
               })
             }
           >
-            <SelectTrigger className="w-full" aria-label="Font weight">
+            <SelectTrigger
+              data-testid="combobox-font-weight"
+              className="w-full"
+              aria-label={m.ui_font_weight()}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="bold">Bold</SelectItem>
+                <SelectItem value="normal">{m.ui_normal()}</SelectItem>
+                <SelectItem value="bold">{m.ui_bold()}</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>
         </Field>
       </div>
       <Field>
-        <FieldLabel>Alignment</FieldLabel>
+        <FieldLabel>{m.ui_alignment()}</FieldLabel>
         <Select
+          items={[
+            { value: "left", label: m.ui_left() },
+            { value: "center", label: m.ui_centre() },
+            { value: "right", label: m.ui_right() },
+          ]}
           value={settings.alignment}
           onValueChange={(value) =>
             onChange({
@@ -520,21 +570,30 @@ function TextSettingsEditor({
             })
           }
         >
-          <SelectTrigger className="w-full" aria-label="Text alignment">
+          <SelectTrigger
+            data-testid="combobox-text-alignment"
+            className="w-full"
+            aria-label={m.ui_text_alignment()}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value="left">Left</SelectItem>
-              <SelectItem value="center">Centre</SelectItem>
-              <SelectItem value="right">Right</SelectItem>
+              <SelectItem value="left">{m.ui_left()}</SelectItem>
+              <SelectItem value="center">{m.ui_centre()}</SelectItem>
+              <SelectItem value="right">{m.ui_right()}</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
       </Field>
       <Field>
-        <FieldLabel>Vertical alignment</FieldLabel>
+        <FieldLabel>{m.ui_vertical_alignment()}</FieldLabel>
         <Select
+          items={[
+            { value: "top", label: m.ui_top() },
+            { value: "middle", label: m.ui_middle() },
+            { value: "bottom", label: m.ui_bottom() },
+          ]}
           value={settings.verticalAlignment}
           onValueChange={(value) =>
             onChange({
@@ -543,28 +602,37 @@ function TextSettingsEditor({
             })
           }
         >
-          <SelectTrigger className="w-full" aria-label="Vertical text alignment">
+          <SelectTrigger
+            data-testid="combobox-vertical-text-alignment"
+            className="w-full"
+            aria-label={m.ui_vertical_text_alignment()}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value="top">Top</SelectItem>
-              <SelectItem value="middle">Middle</SelectItem>
-              <SelectItem value="bottom">Bottom</SelectItem>
+              <SelectItem value="top">{m.ui_top()}</SelectItem>
+              <SelectItem value="middle">{m.ui_middle()}</SelectItem>
+              <SelectItem value="bottom">{m.ui_bottom()}</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
-        <FieldDescription>Where the text sits inside its bounding box.</FieldDescription>
+        <FieldDescription>{m.ui_where_the_text_sits_inside_its_bounding_box()}</FieldDescription>
       </Field>
       <NumericField
-        label="Line height"
+        label={m.label_line_height()}
         value={settings.lineHeight}
         step={0.05}
         onChange={(lineHeight) => onChange({ ...settings, lineHeight })}
       />
       <Field>
-        <FieldLabel>Overflow policy</FieldLabel>
+        <FieldLabel>{m.ui_overflow_policy()}</FieldLabel>
         <Select
+          items={[
+            { value: "shrink", label: m.ui_shrink_to_minimum() },
+            { value: "truncate", label: m.ui_truncate_visibly() },
+            { value: "flag", label: m.ui_flag_for_attention() },
+          ]}
           value={settings.overflow}
           onValueChange={(value) =>
             onChange({
@@ -573,14 +641,18 @@ function TextSettingsEditor({
             })
           }
         >
-          <SelectTrigger className="w-full" aria-label="Overflow policy">
+          <SelectTrigger
+            data-testid="combobox-overflow-policy"
+            className="w-full"
+            aria-label={m.ui_overflow_policy()}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value="shrink">Shrink to minimum</SelectItem>
-              <SelectItem value="truncate">Truncate visibly</SelectItem>
-              <SelectItem value="flag">Flag for attention</SelectItem>
+              <SelectItem value="shrink">{m.ui_shrink_to_minimum()}</SelectItem>
+              <SelectItem value="truncate">{m.ui_truncate_visibly()}</SelectItem>
+              <SelectItem value="flag">{m.ui_flag_for_attention()}</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -627,33 +699,33 @@ function ElementInspector({
       <FieldGroup>
         <div className="grid grid-cols-2 gap-3">
           <NumericField
-            label="X (mm)"
+            label={m.label_x_mm()}
             value={element.geometry.x}
             onChange={(value) => updateGeometry("x", value)}
           />
           <NumericField
-            label="Y (mm)"
+            label={m.label_y_mm()}
             value={element.geometry.y}
             onChange={(value) => updateGeometry("y", value)}
           />
           <NumericField
-            label="Width"
+            label={m.ui_width()}
             value={element.geometry.width}
             onChange={(value) => updateGeometry("width", Math.max(0.1, value))}
           />
           <NumericField
-            label="Height"
+            label={m.ui_height()}
             value={element.geometry.height}
             onChange={(value) => updateGeometry("height", Math.max(0.1, value))}
           />
         </div>
         <NumericField
-          label="Rotation"
+          label={m.label_rotation()}
           value={element.geometry.rotation}
           onChange={(value) => updateGeometry("rotation", value)}
         />
         <NumericField
-          label="Opacity"
+          label={m.label_opacity()}
           value={element.opacity}
           step={0.05}
           min={0}
@@ -668,7 +740,7 @@ function ElementInspector({
           />
           <FieldLabel htmlFor={`locked-${element.id}`}>
             {element.locked ? <LockIcon /> : <UnlockIcon />}
-            Lock element
+            {m.ui_lock_element()}{" "}
           </FieldLabel>
         </Field>
       </FieldGroup>
@@ -679,14 +751,16 @@ function ElementInspector({
         <>
           <Separator />
           <Field>
-            <FieldLabel>Question binding</FieldLabel>
+            <FieldLabel data-testid="text-ui_question_binding">
+              {m.ui_question_binding()}
+            </FieldLabel>
             <p
-              aria-label="Question binding"
+              aria-label={m.ui_question_binding()}
               className="rounded-lg border bg-muted/45 px-3 py-2 text-sm"
             >
               {questionPrompt(boundQuestion)}
             </p>
-            <FieldDescription>Frozen with the published questionnaire.</FieldDescription>
+            <FieldDescription>{m.ui_frozen_with_the_published_questionnaire()}</FieldDescription>
           </Field>
         </>
       )}
@@ -704,9 +778,10 @@ function ElementInspector({
       {element.type === "static-text" && (
         <>
           <Field>
-            <FieldLabel>Content</FieldLabel>
+            <FieldLabel>{m.ui_content()}</FieldLabel>
             <Textarea
-              aria-label="Content"
+              data-testid="static-text-content"
+              aria-label={m.ui_content()}
               value={element.content}
               onChange={(event) => onChange({ ...element, content: event.target.value })}
             />
@@ -722,8 +797,14 @@ function ElementInspector({
       {element.type === "gallery-frame" && (
         <>
           <Field>
-            <FieldLabel>Arrangement</FieldLabel>
+            <FieldLabel>{m.ui_arrangement()}</FieldLabel>
             <Select
+              items={[
+                { value: "two-portrait", label: m.ui_two_portraits() },
+                { value: "four-square", label: m.ui_four_squares() },
+                { value: "hero-two", label: m.ui_hero_plus_two() },
+                { value: "three-column", label: m.ui_three_columns() },
+              ]}
               value={element.arrangement}
               onValueChange={(arrangement) =>
                 onChange({
@@ -732,21 +813,25 @@ function ElementInspector({
                 })
               }
             >
-              <SelectTrigger className="w-full" aria-label="Arrangement">
+              <SelectTrigger
+                data-testid="combobox-arrangement"
+                className="w-full"
+                aria-label={m.ui_arrangement()}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="two-portrait">Two portraits</SelectItem>
-                  <SelectItem value="four-square">Four squares</SelectItem>
-                  <SelectItem value="hero-two">Hero plus two</SelectItem>
-                  <SelectItem value="three-column">Three columns</SelectItem>
+                  <SelectItem value="two-portrait">{m.ui_two_portraits()}</SelectItem>
+                  <SelectItem value="four-square">{m.ui_four_squares()}</SelectItem>
+                  <SelectItem value="hero-two">{m.ui_hero_plus_two()}</SelectItem>
+                  <SelectItem value="three-column">{m.ui_three_columns()}</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <NumericField
-            label="Slot gap (mm)"
+            label={m.label_slot_gap_mm()}
             value={element.gap}
             min={0}
             max={limits.gapMax}
@@ -757,9 +842,9 @@ function ElementInspector({
       {(element.type === "rectangle" || element.type === "circle" || element.type === "line") && (
         <>
           <Field>
-            <FieldLabel>Fill</FieldLabel>
+            <FieldLabel>{m.ui_fill()}</FieldLabel>
             <Input
-              aria-label="Fill colour"
+              aria-label={m.ui_fill_colour()}
               type="color"
               value={element.fill === "transparent" ? "#ffffff" : element.fill}
               disabled={element.type === "line"}
@@ -767,16 +852,16 @@ function ElementInspector({
             />
           </Field>
           <Field>
-            <FieldLabel>Stroke</FieldLabel>
+            <FieldLabel>{m.ui_stroke()}</FieldLabel>
             <Input
-              aria-label="Stroke colour"
+              aria-label={m.ui_stroke_colour()}
               type="color"
               value={element.stroke}
               onChange={(event) => onChange({ ...element, stroke: event.target.value })}
             />
           </Field>
           <NumericField
-            label="Stroke width"
+            label={m.ui_stroke_width()}
             value={element.strokeWidth}
             min={0}
             max={limits.strokeWidthMax}
@@ -790,10 +875,13 @@ function ElementInspector({
         <>
           <Separator />
           <Field>
-            <FieldLabel>{element.assetId ? "Replace image" : "Choose image"}</FieldLabel>
+            <FieldLabel>{element.assetId ? m.ui_replace_image() : m.ui_choose_image()}</FieldLabel>
             <Input
               type="file"
-              aria-label={element.assetId ? "Replace decorative image" : "Choose decorative image"}
+              data-testid="decorative-image-file"
+              aria-label={
+                element.assetId ? m.ui_replace_decorative_image() : m.ui_choose_decorative_image()
+              }
               accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/*"
               disabled={decorativeUploading}
               onChange={(event) => {
@@ -804,21 +892,22 @@ function ElementInspector({
             />
             <FieldDescription>
               {decorativeUploading
-                ? "Uploading image…"
+                ? m.ui_uploading_image()
                 : element.assetId
-                  ? "Replacing or removing it keeps this element’s size and position."
-                  : "The placeholder appears only in the layout editor."}
+                  ? m.ui_replacing_or_removing_it_keeps_this_element_s_size_and_position()
+                  : m.ui_the_placeholder_appears_only_in_the_layout_editor()}
             </FieldDescription>
           </Field>
           {element.assetId && (
             <Button
+              data-testid="button-remove-image"
               type="button"
               variant="outline"
               disabled={decorativeUploading}
               onClick={() => onChange({ ...element, assetId: undefined })}
             >
               <Trash2Icon data-icon="inline-start" />
-              Remove image
+              {m.ui_remove_image()}{" "}
             </Button>
           )}
         </>
@@ -828,10 +917,10 @@ function ElementInspector({
         element.type === "gallery-frame") && (
         <>
           <Separator />
-          <p className="text-sm font-medium">Focal point</p>
+          <p className="text-sm font-medium">{m.ui_focal_point()}</p>
           <div className="grid grid-cols-2 gap-3">
             <NumericField
-              label="Horizontal"
+              label={m.label_horizontal()}
               value={element.focalPoint?.x ?? 0.5}
               step={0.05}
               onChange={(x) =>
@@ -845,7 +934,7 @@ function ElementInspector({
               }
             />
             <NumericField
-              label="Vertical"
+              label={m.label_vertical()}
               value={element.focalPoint?.y ?? 0.5}
               step={0.05}
               onChange={(y) =>
@@ -859,7 +948,7 @@ function ElementInspector({
               }
             />
           </div>
-          <FieldDescription>Values run from 0 to 1.</FieldDescription>
+          <FieldDescription>{m.ui_values_run_from_0_to_1()}</FieldDescription>
         </>
       )}
     </div>
@@ -950,7 +1039,7 @@ const Editor = forwardRef<
           return true
         } catch (error) {
           setSaveState("failed")
-          toast.error(error instanceof Error ? error.message : "Layout save failed")
+          toast.error(error instanceof Error ? error.message : m.ui_layout_save_failed())
           return false
         } finally {
           saveInFlight.current = null
@@ -1052,7 +1141,7 @@ const Editor = forwardRef<
     questionId?: string,
     center?: { x: number; y: number }
   ) => {
-    const next = addElement(schemaRef.current, type, questionId, center)
+    const next = addElement(schemaRef.current, type, questionId, center, project.bookLanguage)
     const added = next.elements.at(-1)!
     markChanged(next)
     setSelectedId(added.id)
@@ -1063,8 +1152,11 @@ const Editor = forwardRef<
       nextElement.type === "bound-text"
         ? project.formSchema.questions.find((item) => item.id === nextElement.questionId)
         : undefined
-    const label = nextElement.type === "bound-text" ? boundTextLabel(nextElement, question) : ""
-    const constrainedElement = enforceMinimumTextBoxHeight(nextElement, label)
+    const label =
+      nextElement.type === "bound-text"
+        ? boundTextLabel(nextElement, question, project.bookLanguage)
+        : ""
+    const constrainedElement = enforceMinimumTextBoxHeight(nextElement, label, project.bookLanguage)
     markChanged({
       ...schema,
       elements: schema.elements.map((element) =>
@@ -1151,9 +1243,9 @@ const Editor = forwardRef<
       if (!changed) return
       markChanged(next)
       setSelectedId(elementId)
-      toast.success("Decorative image updated")
+      toast.success(m.ui_decorative_image_updated())
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed")
+      toast.error(error instanceof Error ? error.message : m.ui_upload_failed())
     } finally {
       setDecorativeUploadingId(null)
     }
@@ -1161,7 +1253,7 @@ const Editor = forwardRef<
 
   return (
     <div
-      aria-label="Layout editor workspace"
+      aria-label={m.ui_layout_editor_workspace()}
       className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]"
       onKeyDown={(event) => {
         const activeObject = canvas.current?.getActiveObject() as
@@ -1188,12 +1280,12 @@ const Editor = forwardRef<
       }}
     >
       <Card
-        aria-label="Layers"
+        aria-label={m.ui_layers()}
         className="h-48 bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
       >
         <CardHeader>
-          <CardTitle>Layers</CardTitle>
-          <CardDescription>Topmost first</CardDescription>
+          <CardTitle data-testid="heading-layers">{m.ui_layers()}</CardTitle>
+          <CardDescription>{m.ui_topmost_first()}</CardDescription>
         </CardHeader>
         <CardContent className="min-h-0 flex-1">
           <ScrollArea className="h-full">
@@ -1214,7 +1306,7 @@ const Editor = forwardRef<
                     <button
                       type="button"
                       draggable
-                      aria-label={`Drag ${label} layer`}
+                      aria-label={m.drag_layer({ value0: label })}
                       className="inline-flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
                       onDragStart={(event) => {
                         event.dataTransfer.effectAllowed = "move"
@@ -1228,6 +1320,7 @@ const Editor = forwardRef<
                     </button>
                     <Button
                       data-layer-select
+                      data-testid={`layer-${element.type}`}
                       type="button"
                       variant={selectedId === element.id ? "secondary" : "ghost"}
                       className="h-auto min-w-0 flex-1 justify-start text-left"
@@ -1241,7 +1334,7 @@ const Editor = forwardRef<
               })}
               {schema.elements.length === 0 && (
                 <p className="py-5 text-center text-xs text-muted-foreground">
-                  Add an element from the toolbar.
+                  {m.ui_add_an_element_from_the_toolbar()}{" "}
                 </p>
               )}
             </div>
@@ -1272,9 +1365,10 @@ const Editor = forwardRef<
                           {mismatch && (
                             <span className="flex items-center gap-1 text-xs text-destructive">
                               <TriangleAlertIcon aria-hidden="true" className="size-3 shrink-0" />
-                              {mismatch.slotCount} photo slot{mismatch.slotCount === 1 ? "" : "s"}{" "}
-                              for up to {mismatch.maxImages} upload
-                              {mismatch.maxImages === 1 ? "" : "s"}
+                              {m.photo_capacity({
+                                slots: mismatch.slotCount,
+                                uploads: mismatch.maxImages,
+                              })}
                             </span>
                           )}
                         </span>
@@ -1283,7 +1377,10 @@ const Editor = forwardRef<
                             <PaletteAction
                               key={action.elementType}
                               label={action.label}
-                              addLabel={`Add ${action.label.toLowerCase()} for ${item.prompt}`}
+                              addLabel={m.add_question_element({
+                                value0: action.label.toLowerCase(),
+                                value1: item.prompt,
+                              })}
                               icon={
                                 action.elementType === "bound-text"
                                   ? TypeIcon
@@ -1304,42 +1401,42 @@ const Editor = forwardRef<
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {layoutRoleLabel(layout.role)} pages carry no response, so only static elements can
-                be placed on them.
+                {layoutRoleLabel(layout.role)}{" "}
+                {m.ui_pages_carry_no_response_so_only_static_elements_can_be_placed_on_()}{" "}
               </p>
             )}
             <div className="flex flex-wrap items-center gap-1.5">
               <PaletteAction
-                label="Static text"
-                addLabel="Add static text"
+                label={m.ui_static_text()}
+                addLabel={m.label_add_static_text()}
                 icon={TypeIcon}
                 dragData={{ type: "static-text" }}
                 onAdd={() => add("static-text")}
               />
               <PaletteAction
-                label="Rectangle"
-                addLabel="Add rectangle"
+                label={m.ui_rectangle()}
+                addLabel={m.label_add_rectangle()}
                 icon={RectangleHorizontalIcon}
                 dragData={{ type: "rectangle" }}
                 onAdd={() => add("rectangle")}
               />
               <PaletteAction
-                label="Circle"
-                addLabel="Add circle"
+                label={m.ui_circle()}
+                addLabel={m.label_add_circle()}
                 icon={CircleIcon}
                 dragData={{ type: "circle" }}
                 onAdd={() => add("circle")}
               />
               <PaletteAction
-                label="Line"
-                addLabel="Add line"
+                label={m.ui_line()}
+                addLabel={m.label_add_line()}
                 icon={MinusIcon}
                 dragData={{ type: "line" }}
                 onAdd={() => add("line")}
               />
               <PaletteAction
-                label="Decorative image"
-                addLabel="Add decorative image"
+                label={m.ui_decorative_image()}
+                addLabel={m.label_add_decorative_image()}
                 icon={ImagePlusIcon}
                 dragData={{ type: "decorative-image" }}
                 onAdd={() => add("decorative-image")}
@@ -1353,6 +1450,7 @@ const Editor = forwardRef<
           className="print-canvas flex min-h-[420px] items-center justify-center overflow-auto rounded-xl border p-3 sm:p-6"
         >
           <LayoutCanvas
+            locale={project.bookLanguage}
             schema={schema}
             width={canvasWidth}
             selectedId={selectedId}
@@ -1366,16 +1464,18 @@ const Editor = forwardRef<
       </div>
 
       <Card
-        aria-label="Inspector"
+        data-testid="layout-inspector"
+        aria-label={m.ui_inspector()}
         className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
       >
         <CardHeader>
           <div className="-mx-1 flex items-center gap-0.5">
-            <IconAction label="Undo" disabled={historyIndex.current <= 0}>
+            <IconAction label={m.ui_undo()} disabled={historyIndex.current <= 0}>
               <Button
+                data-testid="button-undo"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Undo"
+                aria-label={m.ui_undo()}
                 disabled={historyIndex.current <= 0}
                 onClick={() => {
                   if (historyIndex.current <= 0) return
@@ -1386,11 +1486,15 @@ const Editor = forwardRef<
                 <Undo2Icon />
               </Button>
             </IconAction>
-            <IconAction label="Redo" disabled={historyIndex.current >= history.current.length - 1}>
+            <IconAction
+              label={m.ui_redo()}
+              disabled={historyIndex.current >= history.current.length - 1}
+            >
               <Button
+                data-testid="button-redo"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Redo"
+                aria-label={m.ui_redo()}
                 disabled={historyIndex.current >= history.current.length - 1}
                 onClick={() => {
                   if (historyIndex.current >= history.current.length - 1) return
@@ -1410,18 +1514,18 @@ const Editor = forwardRef<
           <ScrollArea className="h-full pr-3">
             <FieldGroup>
               <Field>
-                <FieldLabel>Layout name</FieldLabel>
+                <FieldLabel>{m.ui_layout_name()}</FieldLabel>
                 <Input
-                  aria-label="Layout name"
+                  aria-label={m.ui_layout_name()}
                   value={name}
                   maxLength={200}
                   onChange={(event) => changeName(event.target.value)}
                 />
               </Field>
               <Field>
-                <FieldLabel>Page background</FieldLabel>
+                <FieldLabel>{m.ui_page_background()}</FieldLabel>
                 <Input
-                  aria-label="Page background"
+                  aria-label={m.ui_page_background()}
                   type="color"
                   value={schema.background}
                   onChange={(event) =>
@@ -1444,11 +1548,12 @@ const Editor = forwardRef<
                 decorativeUploading={decorativeUploadingId === selected.id}
                 actions={
                   <>
-                    <IconAction label="Align horizontal centre">
+                    <IconAction label={m.ui_align_horizontal_centre()}>
                       <Button
+                        data-testid="button-align-horizontal-centre"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Align horizontal centre"
+                        aria-label={m.ui_align_horizontal_centre()}
                         onClick={() =>
                           changeSelected({
                             ...selected,
@@ -1462,11 +1567,12 @@ const Editor = forwardRef<
                         <AlignCenterHorizontalIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Align vertical centre">
+                    <IconAction label={m.ui_align_vertical_centre()}>
                       <Button
+                        data-testid="button-align-vertical-centre"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Align vertical centre"
+                        aria-label={m.ui_align_vertical_centre()}
                         onClick={() =>
                           changeSelected({
                             ...selected,
@@ -1480,55 +1586,60 @@ const Editor = forwardRef<
                         <AlignCenterVerticalIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Send backward one layer" disabled={isBackmost}>
+                    <IconAction label={m.ui_send_backward_one_layer()} disabled={isBackmost}>
                       <Button
+                        data-testid="button-send-backward-one-layer"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Send backward one layer"
+                        aria-label={m.ui_send_backward_one_layer()}
                         disabled={isBackmost}
                         onClick={() => moveLayer("backward")}
                       >
                         <ArrowDownIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Bring forward one layer" disabled={isFrontmost}>
+                    <IconAction label={m.ui_bring_forward_one_layer()} disabled={isFrontmost}>
                       <Button
+                        data-testid="button-bring-forward-one-layer"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Bring forward one layer"
+                        aria-label={m.ui_bring_forward_one_layer()}
                         disabled={isFrontmost}
                         onClick={() => moveLayer("forward")}
                       >
                         <ArrowUpIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Send to back" disabled={isBackmost}>
+                    <IconAction label={m.ui_send_to_back()} disabled={isBackmost}>
                       <Button
+                        data-testid="button-send-to-back"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Send to back"
+                        aria-label={m.ui_send_to_back()}
                         disabled={isBackmost}
                         onClick={() => moveLayer("back")}
                       >
                         <SendToBackIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Bring to front" disabled={isFrontmost}>
+                    <IconAction label={m.ui_bring_to_front()} disabled={isFrontmost}>
                       <Button
+                        data-testid="button-bring-to-front"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Bring to front"
+                        aria-label={m.ui_bring_to_front()}
                         disabled={isFrontmost}
                         onClick={() => moveLayer("front")}
                       >
                         <BringToFrontIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Duplicate selected element">
+                    <IconAction label={m.ui_duplicate_selected_element()}>
                       <Button
+                        data-testid="button-duplicate-selected-element"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Duplicate selected element"
+                        aria-label={m.ui_duplicate_selected_element()}
                         onClick={() => {
                           const duplicate = {
                             ...structuredClone(selected),
@@ -1549,11 +1660,12 @@ const Editor = forwardRef<
                         <CopyIcon />
                       </Button>
                     </IconAction>
-                    <IconAction label="Delete selected element">
+                    <IconAction label={m.ui_delete_selected_element()}>
                       <Button
+                        data-testid="button-delete-selected-element"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label="Delete selected element"
+                        aria-label={m.ui_delete_selected_element()}
                         onClick={deleteSelected}
                       >
                         <Trash2Icon />
@@ -1563,8 +1675,11 @@ const Editor = forwardRef<
                 }
               />
             ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Select an element on the canvas or in the layers list.
+              <p
+                data-testid="text-ui_select_an_element_on_the_canvas_or_in_the_layers_list"
+                className="py-8 text-center text-sm text-muted-foreground"
+              >
+                {m.ui_select_an_element_on_the_canvas_or_in_the_layers_list()}{" "}
               </p>
             )}
           </ScrollArea>
@@ -1603,9 +1718,9 @@ export function LayoutsPanel({
     return (
       <Alert>
         <ArchiveIcon />
-        <AlertTitle>This project is archived</AlertTitle>
+        <AlertTitle>{m.ui_this_project_is_archived()}</AlertTitle>
         <AlertDescription>
-          Layouts stay exactly as they were. Unarchive the project to edit them again.
+          {m.ui_layouts_stay_exactly_as_they_were_unarchive_the_project_to_edit_t()}{" "}
         </AlertDescription>
       </Alert>
     )
@@ -1615,10 +1730,9 @@ export function LayoutsPanel({
     return (
       <Alert>
         <LockIcon />
-        <AlertTitle>Layout authoring begins after collection closes</AlertTitle>
+        <AlertTitle>{m.ui_layout_authoring_begins_after_collection_closes()}</AlertTitle>
         <AlertDescription>
-          This keeps the workflow deliberate and ensures the response set is final before
-          generation.
+          {m.ui_this_keeps_the_workflow_deliberate_and_ensures_the_response_set_i()}{" "}
         </AlertDescription>
       </Alert>
     )
@@ -1668,8 +1782,11 @@ export function LayoutsPanel({
 
   const moveLabel = (direction: "up" | "down") =>
     selected && isCoverRole(selected.role)
-      ? `${layoutRoleLabel(selected.role)} always stays ${selected.role === "front-cover" ? "first" : "last"}`
-      : `Move layout ${direction}`
+      ? m.pinned_cover({
+          value0: layoutRoleLabel(selected.role),
+          value1: selected.role === "front-cover" ? m.position_first() : m.position_last(),
+        })
+      : m.move_layout({ value0: direction === "up" ? m.direction_up() : m.direction_down() })
 
   const moveSelectedLayout = async (offset: -1 | 1) => {
     if (!canMove(offset)) return
@@ -1702,7 +1819,7 @@ export function LayoutsPanel({
       updateLayouts(remaining)
     } catch (error) {
       void editorRef.current?.flush()
-      toast.error(error instanceof Error ? error.message : "Delete failed")
+      toast.error(error instanceof Error ? error.message : m.ui_delete_failed())
     } finally {
       setLayoutChanging(false)
     }
@@ -1735,9 +1852,14 @@ export function LayoutsPanel({
         page_orientation: pageOrientation,
         layouts_reset: resetLayouts,
       })
-      toast.success(`Page format changed to ${pageFormatLabel(pageFormat)} ${pageOrientation}`)
+      toast.success(
+        m.page_format_changed({
+          value0: pageFormatLabel(pageFormat),
+          value1: orientationLabel(pageOrientation),
+        })
+      )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Page format change failed")
+      toast.error(error instanceof Error ? error.message : m.ui_page_format_change_failed())
     } finally {
       setFormatChanging(false)
       setPendingOrientation(null)
@@ -1751,10 +1873,12 @@ export function LayoutsPanel({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <h2 className="font-heading text-2xl">Page layouts</h2>
+          <h2 data-testid="heading-page-layouts" className="font-heading text-2xl">
+            {m.ui_page_layouts()}
+          </h2>
           <div className="flex items-end gap-2">
             <Field className="w-24 gap-1">
-              <FieldLabel>Page size</FieldLabel>
+              <FieldLabel>{m.ui_page_size()}</FieldLabel>
               <Select
                 items={PAGE_FORMATS.map((format) => ({
                   value: format,
@@ -1767,7 +1891,7 @@ export function LayoutsPanel({
                   void changePageFormat(value as PageFormat, project.pageOrientation)
                 }}
               >
-                <SelectTrigger aria-label="Page size">
+                <SelectTrigger data-testid="combobox-page-size" aria-label={m.ui_page_size()}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1782,9 +1906,13 @@ export function LayoutsPanel({
               </Select>
             </Field>
             <Field className="w-32 gap-1">
-              <FieldLabel>Orientation</FieldLabel>
+              <FieldLabel>{m.ui_orientation()}</FieldLabel>
               <Select
                 value={project.pageOrientation}
+                items={PAGE_ORIENTATIONS.map((value) => ({
+                  value,
+                  label: orientationLabel(value),
+                }))}
                 disabled={formatControlsDisabled}
                 onValueChange={(value) => {
                   if (!value || value === project.pageOrientation) return
@@ -1793,14 +1921,23 @@ export function LayoutsPanel({
                   else void changePageFormat(project.pageFormat, orientation, true)
                 }}
               >
-                <SelectTrigger aria-label="Page orientation" className="capitalize">
+                <SelectTrigger
+                  data-testid="combobox-page-orientation"
+                  aria-label={m.ui_page_orientation()}
+                  className="capitalize"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     {PAGE_ORIENTATIONS.map((orientation) => (
-                      <SelectItem key={orientation} value={orientation} className="capitalize">
-                        {orientation}
+                      <SelectItem
+                        data-testid={`orientation-${orientation}`}
+                        key={orientation}
+                        value={orientation}
+                        className="capitalize"
+                      >
+                        {orientationLabel(orientation)}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -1843,7 +1980,8 @@ export function LayoutsPanel({
                       <span className="truncate">{layout.name}</span>
                       {active && (
                         <span
-                          aria-label={`Delete ${layout.name}`}
+                          data-testid={`delete-layout-${layout.id}`}
+                          aria-label={m.delete_named_layout({ value0: layout.name })}
                           onClick={(event) => {
                             event.stopPropagation()
                             setDeleteDialogOpen(true)
@@ -1873,7 +2011,7 @@ export function LayoutsPanel({
                             role,
                             project.layouts.filter((item) => item.role === "submission").length
                           )
-                        : `${preset.name} background`,
+                        : m.background_name({ value0: preset.name }),
                     backgroundPresetId: preset.id,
                     role,
                   })
@@ -1886,18 +2024,21 @@ export function LayoutsPanel({
           <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete this layout?</AlertDialogTitle>
+                <AlertDialogTitle data-testid="heading-delete-this-layout">
+                  {m.ui_delete_this_layout()}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  If this layout is used in the generated book, you must regenerate before export.
+                  {m.ui_if_this_layout_is_used_in_the_generated_book_you_must_regenerate_()}{" "}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
                 <AlertDialogAction
+                  data-testid="button-delete-layout"
                   variant="destructive"
                   onClick={() => void deleteSelectedLayout()}
                 >
-                  Delete layout
+                  {m.ui_delete_layout()}{" "}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -1906,9 +2047,10 @@ export function LayoutsPanel({
             <>
               <IconAction label={moveLabel("up")} disabled={!canMove(-1)}>
                 <Button
+                  data-testid="button-move-layout-up"
                   variant="outline"
                   size="icon"
-                  aria-label="Move layout up"
+                  aria-label={m.ui_move_layout_up()}
                   disabled={!canMove(-1)}
                   onClick={() => void moveSelectedLayout(-1)}
                 >
@@ -1917,9 +2059,10 @@ export function LayoutsPanel({
               </IconAction>
               <IconAction label={moveLabel("down")} disabled={!canMove(1)}>
                 <Button
+                  data-testid="button-move-layout-down"
                   variant="outline"
                   size="icon"
-                  aria-label="Move layout down"
+                  aria-label={m.ui_move_layout_down()}
                   disabled={!canMove(1)}
                   onClick={() => void moveSelectedLayout(1)}
                 >
@@ -1927,6 +2070,7 @@ export function LayoutsPanel({
                 </Button>
               </IconAction>
               <Button
+                data-testid="button-duplicate-layout"
                 variant="outline"
                 onClick={async () => {
                   await runAfterEditorSave(async () => {
@@ -1940,7 +2084,7 @@ export function LayoutsPanel({
                 }}
               >
                 <CopyIcon data-icon="inline-start" />
-                Duplicate layout
+                {m.ui_duplicate_layout()}{" "}
               </Button>
             </>
           )}
@@ -1964,9 +2108,11 @@ export function LayoutsPanel({
             <span className="mb-2 flex size-12 items-center justify-center rounded-xl bg-muted">
               <LayoutTemplateIcon />
             </span>
-            <CardTitle>Create the first layout</CardTitle>
+            <CardTitle data-testid="heading-create-the-first-layout">
+              {m.ui_create_the_first_layout()}
+            </CardTitle>
             <CardDescription>
-              Add text, image frames, galleries, shapes, and decorative images.
+              {m.ui_add_text_image_frames_galleries_shapes_and_decorative_images()}{" "}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -1980,16 +2126,25 @@ export function LayoutsPanel({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset layouts and change orientation?</AlertDialogTitle>
+            <AlertDialogTitle data-testid="heading-reset-layouts-and-change-orientation">
+              {m.ui_reset_layouts_and_change_orientation()}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Changing to {pendingOrientation} removes {project.layouts.length} layout
-              {project.layouts.length === 1 ? "" : "s"} and creates one blank Layout 1. This cannot
-              be undone. You must regenerate the book before export.
+              {m.orientation_reset({
+                orientation:
+                  pendingOrientation === "portrait"
+                    ? m.orientation_portrait()
+                    : m.orientation_landscape(),
+                count: project.layouts.length,
+              })}{" "}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={formatChanging}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel" disabled={formatChanging}>
+              {m.ui_cancel()}
+            </AlertDialogCancel>
             <AlertDialogAction
+              data-testid="button-reset-layouts"
               variant="destructive"
               disabled={formatChanging || !pendingOrientation}
               onClick={() => {
@@ -2000,7 +2155,7 @@ export function LayoutsPanel({
               {formatChanging && (
                 <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
               )}
-              Reset layouts
+              {m.ui_reset_layouts()}{" "}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,3 +1,4 @@
+import { type Locale } from "#/lib/locale.ts"
 import {
   index,
   integer,
@@ -28,6 +29,7 @@ export const projects = pgTable(
   {
     id: uuid("id").primaryKey(),
     title: text("title").notNull(),
+    bookLanguage: text("book_language").$type<Locale>().notNull().default("de"),
     occasion: text("occasion"),
     state: text("state").$type<"draft" | "collecting" | "closed">().notNull().default("draft"),
     formSchema: jsonb("form_schema").$type<FormSchema>().notNull(),

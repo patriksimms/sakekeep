@@ -1,3 +1,6 @@
+import { orientationLabel } from "#/domain/project-labels.ts"
+import { type Locale } from "#/lib/locale.ts"
+import * as m from "#/paraglide/messages.js"
 import { Canvas, FabricObject, Rect } from "fabric"
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react"
 
@@ -85,7 +88,8 @@ export function applyInlineBoundLabelEdit(
   schema: LayoutSchema,
   elementId: string,
   content: string,
-  currentLabel: string
+  currentLabel: string,
+  locale: Locale = "en"
 ): LayoutSchema | null {
   const element = schema.elements.find((candidate) => candidate.id === elementId)
   if (element?.type !== "bound-text" || currentLabel === content) return null
@@ -99,7 +103,8 @@ export function applyInlineBoundLabelEdit(
               showLabel: content.trim().length > 0,
               label: content,
             },
-            content
+            content,
+            locale
           )
         : candidate
     ),
@@ -124,14 +129,14 @@ export function canvasToCanonicalGeometry(
 
 function elementName(element: LayoutElement) {
   const names: Record<LayoutElement["type"], string> = {
-    "bound-text": "Question text",
-    "static-text": "Static text",
-    "image-frame": "Image frame",
-    "gallery-frame": "Gallery",
-    rectangle: "Rectangle",
-    circle: "Circle",
-    line: "Line",
-    "decorative-image": "Decorative image",
+    "bound-text": m.ui_question_text(),
+    "static-text": m.ui_static_text(),
+    "image-frame": m.ui_image_frame(),
+    "gallery-frame": m.ui_gallery(),
+    rectangle: m.ui_rectangle(),
+    circle: m.ui_circle(),
+    line: m.ui_line(),
+    "decorative-image": m.ui_decorative_image(),
   }
   return names[element.type]
 }
@@ -270,6 +275,7 @@ export function LayoutCanvas({
   onChange,
   canvasRef,
   questions = [],
+  locale,
   previewSubmission,
   decorativeAssetUrl,
   showGuides = true,
@@ -281,6 +287,7 @@ export function LayoutCanvas({
   onSelect: (id: string | null) => void
   onChange: (schema: LayoutSchema) => void
   canvasRef?: RefObject<Canvas | null>
+  locale?: import("#/lib/locale.ts").Locale
   questions?: FormQuestion[]
   previewSubmission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
@@ -335,8 +342,13 @@ export function LayoutCanvas({
               candidate.type === "bound-text"
                 ? questions.find((item) => item.id === candidate.questionId)
                 : undefined
-            const label = candidate.type === "bound-text" ? boundTextLabel(candidate, question) : ""
-            const constrained = enforceMinimumTextBoxHeight({ ...candidate, geometry }, label)
+            const label =
+              candidate.type === "bound-text" ? boundTextLabel(candidate, question, locale) : ""
+            const constrained = enforceMinimumTextBoxHeight(
+              { ...candidate, geometry },
+              label,
+              locale
+            )
             if (constrained.geometry.height > geometry.height) {
               object.set({
                 scaleY: (object.scaleY ?? 1) * (constrained.geometry.height / geometry.height),
@@ -379,7 +391,8 @@ export function LayoutCanvas({
           ? source.content
           : boundTextLabel(
               source,
-              questions.find((candidate) => candidate.id === source.questionId)
+              questions.find((candidate) => candidate.id === source.questionId),
+              locale
             )
       )
       if (source.type === "static-text") {
@@ -451,7 +464,7 @@ export function LayoutCanvas({
       instance.current = null
       canvas.dispose()
     }
-  }, [canvasRef, questions, specification.mediaHeightMm, specification.mediaWidthMm, width])
+  }, [canvasRef, locale, questions, specification.mediaHeightMm, specification.mediaWidthMm, width])
 
   useEffect(() => {
     setDisplaySchema(schema)
@@ -483,6 +496,7 @@ export function LayoutCanvas({
   }, [questions, schema, selectedId, specification.mediaWidthMm, width])
 
   const pageContent: LayoutPageContent = {
+    locale,
     questions,
     submission: previewSubmission,
     decorativeAssetUrl,
@@ -509,8 +523,10 @@ export function LayoutCanvas({
             content,
             boundTextLabel(
               source,
-              questions.find((candidate) => candidate.id === source.questionId)
-            )
+              questions.find((candidate) => candidate.id === source.questionId),
+              locale
+            ),
+            locale
           )
         : applyInlineStaticTextEdit(schemaRef.current, editingElementId, content)
     if (!next) {
@@ -595,7 +611,11 @@ export function LayoutCanvas({
       />
       <canvas
         ref={element}
-        aria-label={`Visual DIN ${specification.format.toUpperCase()} ${specification.orientation} layout canvas`}
+        data-testid={`layout-canvas-${specification.format}-${specification.orientation}`}
+        aria-label={m.layout_canvas_label({
+          value0: specification.format.toUpperCase(),
+          value1: orientationLabel(specification.orientation),
+        })}
       />
       {editingElement && (
         <InlineTextEditor
@@ -608,7 +628,8 @@ export function LayoutCanvas({
               ? editingElement.content
               : boundTextLabel(
                   editingElement,
-                  questions.find((candidate) => candidate.id === editingElement.questionId)
+                  questions.find((candidate) => candidate.id === editingElement.questionId),
+                  locale
                 )
           }
           onCommit={commitInlineEdit}
@@ -641,8 +662,11 @@ export function LayoutCanvas({
               height: `${((specification.trimHeightMm - specification.safeMarginMm * 2) / specification.mediaHeightMm) * 100}%`,
             }}
           />
-          <div className="pointer-events-none absolute top-2 left-2 rounded bg-background/85 px-2 py-1 text-[10px] text-muted-foreground">
-            bleed · trim · safe
+          <div
+            data-testid="text-ui_bleed_trim_safe"
+            className="pointer-events-none absolute top-2 left-2 rounded bg-background/85 px-2 py-1 text-[10px] text-muted-foreground"
+          >
+            {m.ui_bleed_trim_safe()}{" "}
           </div>
         </>
       )}

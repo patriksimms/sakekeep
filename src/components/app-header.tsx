@@ -1,4 +1,9 @@
+import { captureAnalyticsEvent } from "#/lib/analytics.ts"
+import { useReaderLocale } from "#/lib/reader-locale.ts"
 import { Show, SignInButton, UserButton } from "@clerk/tanstack-react-start"
+import { getLocale, setLocale } from "#/paraglide/runtime.js"
+import * as m from "#/paraglide/messages.js"
+import { useRouterState } from "@tanstack/react-router"
 import { Link } from "@tanstack/react-router"
 import { BookHeartIcon, LaptopIcon, MoonIcon, SunIcon } from "lucide-react"
 
@@ -14,6 +19,8 @@ import {
 import { isDemoMode } from "#/lib/demo-mode.ts"
 
 export function AppHeader() {
+  const locale = useReaderLocale()
+  const isShare = useRouterState({ select: (state) => state.location.pathname.startsWith("/s/") })
   const { theme, setTheme } = useTheme()
   const ThemeIcon = theme === "dark" ? MoonIcon : theme === "light" ? SunIcon : LaptopIcon
   return (
@@ -28,21 +35,29 @@ export function AppHeader() {
           </span>
           Sakekeep
         </Link>
-        <nav aria-label="Primary" className="flex items-center gap-2">
+        <nav aria-label={m.ui_primary({}, { locale })} className="flex items-center gap-2">
           {isDemoMode ? (
-            <Link to="/projects" className={buttonVariants({ variant: "ghost" })}>
-              Projects
+            <Link
+              data-testid="link-projects"
+              to="/projects"
+              className={buttonVariants({ variant: "ghost" })}
+            >
+              {m.ui_projects({}, { locale })}{" "}
             </Link>
           ) : (
             <>
               <Show when="signed-in">
-                <Link to="/projects" className={buttonVariants({ variant: "ghost" })}>
-                  Projects
+                <Link
+                  data-testid="link-projects"
+                  to="/projects"
+                  className={buttonVariants({ variant: "ghost" })}
+                >
+                  {m.ui_projects({}, { locale })}{" "}
                 </Link>
               </Show>
               <Show when="signed-out">
                 <SignInButton mode="modal">
-                  <Button>Sign in</Button>
+                  <Button data-testid="button-sign-in">{m.ui_sign_in({}, { locale })}</Button>
                 </SignInButton>
               </Show>
               <Show when="signed-in">
@@ -50,25 +65,84 @@ export function AppHeader() {
               </Show>
             </>
           )}
+          {!isShare && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    data-testid="language-switcher"
+                    aria-label={m.language({}, { locale })}
+                  />
+                }
+              >
+                {getLocale() === "de" ? "Deutsch" : "English"}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    data-testid="language-de"
+                    onClick={() => {
+                      captureAnalyticsEvent("locale:changed", {
+                        previous_locale: getLocale(),
+                        locale: "de",
+                      })
+                      setLocale("de")
+                    }}
+                  >
+                    Deutsch
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    data-testid="language-en"
+                    onClick={() => {
+                      captureAnalyticsEvent("locale:changed", {
+                        previous_locale: getLocale(),
+                        locale: "en",
+                      })
+                      setLocale("en")
+                    }}
+                  >
+                    English
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="outline" size="icon" aria-label={`Theme: ${theme}`} />}
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={m.theme_label(
+                    {
+                      value0:
+                        theme === "system"
+                          ? m.ui_system({}, { locale })
+                          : theme === "dark"
+                            ? m.ui_dark({}, { locale })
+                            : m.ui_light({}, { locale }),
+                    },
+                    { locale }
+                  )}
+                />
+              }
             >
               <ThemeIcon />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setTheme("system")}>
+                <DropdownMenuItem data-testid="menuitem-system" onClick={() => setTheme("system")}>
                   <LaptopIcon />
-                  System
+                  {m.ui_system({}, { locale })}{" "}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("light")}>
+                <DropdownMenuItem data-testid="menuitem-light" onClick={() => setTheme("light")}>
                   <SunIcon />
-                  Light
+                  {m.ui_light({}, { locale })}{" "}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("dark")}>
+                <DropdownMenuItem data-testid="menuitem-dark" onClick={() => setTheme("dark")}>
                   <MoonIcon />
-                  Dark
+                  {m.ui_dark({}, { locale })}{" "}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>

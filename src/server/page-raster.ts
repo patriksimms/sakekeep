@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { PDFiumLibrary } from "@hyzyla/pdfium"
 import sharp from "sharp"
 
@@ -40,7 +41,7 @@ export async function* pageJpegs(pdf: Uint8Array, ppi = RASTER_PPI): AsyncGenera
     }
   } catch (error) {
     if (error instanceof HttpError) throw error
-    throw new HttpError(500, "The exported pages could not be rasterized to JPEG.")
+    throw new HttpError(500, m.raster_failed())
   } finally {
     library.destroy()
   }

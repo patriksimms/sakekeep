@@ -1,8 +1,9 @@
+import * as m from "#/paraglide/messages.js"
 import { type FormQuestion, type LayoutElement } from "./types.ts"
 
 export interface LayoutQuestionAction {
   elementType: Extract<LayoutElement["type"], "bound-text" | "image-frame" | "gallery-frame">
-  label: "Text" | "Image" | "Gallery"
+  label: string
 }
 
 export interface LayoutQuestionPaletteItem {
@@ -12,7 +13,7 @@ export interface LayoutQuestionPaletteItem {
 }
 
 export function questionPrompt(question: Pick<FormQuestion, "prompt"> | undefined): string {
-  return question?.prompt.trim() || "Untitled question"
+  return question?.prompt.trim() || m.ui_untitled_question()
 }
 
 export function boundQuestionPlaceholder(
@@ -27,7 +28,7 @@ export function boundQuestionLabel(
   questionId: string
 ): string {
   const question = questions.find((candidate) => candidate.id === questionId)
-  return question ? questionPrompt(question) : "Unbound element"
+  return question ? questionPrompt(question) : m.ui_unbound_element()
 }
 
 export function layoutQuestionPalette(
@@ -39,9 +40,9 @@ export function layoutQuestionPalette(
     actions:
       question.type === "images"
         ? [
-            { elementType: "image-frame", label: "Image" },
-            { elementType: "gallery-frame", label: "Gallery" },
+            { elementType: "image-frame", label: m.ui_image_399() },
+            { elementType: "gallery-frame", label: m.ui_gallery() },
           ]
-        : [{ elementType: "bound-text", label: "Text" }],
+        : [{ elementType: "bound-text", label: m.ui_text() }],
   }))
 }

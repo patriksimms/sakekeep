@@ -1,3 +1,4 @@
+import { problemMessage } from "./problem-message.ts"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -229,9 +230,12 @@ describe("book generation", () => {
     const problems = inspectStandalonePage("standalone:page", layout)
 
     expect(problems.map((problem) => problem.code)).toContain("text-overflow")
-    expect(problems.find((problem) => problem.code === "text-overflow")!.message).toContain(
-      layout.name
-    )
+    expect(
+      problemMessage(
+        problems.find((problem) => problem.code === "text-overflow")!,
+        "en"
+      )
+    ).toContain(layout.name)
   })
 
   it("re-pins covers after the pages were rearranged", () => {
@@ -385,30 +389,38 @@ describe("book generation", () => {
       false,
       "A memory is truncated on Response 1. It needs 4 lines at the configured 20 pt size, but only 1 line fits.",
     ],
-  ] as const)("describes %s overflow with its relevant constraint", (policy, blocking, message) => {
-    const layout = layoutFixture()
-    const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
-    if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
-    element.geometry = { ...element.geometry, width: 100, height: 8 }
-    element.text = {
-      ...element.text,
-      fontSize: 20,
-      minFontSize: 8,
-      lineHeight: 1,
-      overflow: policy,
-    }
-    const submission = submissionFixture(submissionIds[0]!, 1)
-    submission.answers.memory = "one\ntwo\nthree"
+  ] as const)(
+    "describes %s overflow with its relevant constraint",
+    (policy, blocking, _message) => {
+      const layout = layoutFixture()
+      const element = layout.schema.elements.find((candidate) => candidate.type === "bound-text")!
+      if (element.type !== "bound-text") throw new Error("Expected bound text fixture")
+      element.geometry = { ...element.geometry, width: 100, height: 8 }
+      element.text = {
+        ...element.text,
+        fontSize: 20,
+        minFontSize: 8,
+        lineHeight: 1,
+        overflow: policy,
+      }
+      const submission = submissionFixture(submissionIds[0]!, 1)
+      submission.answers.memory = "one\ntwo\nthree"
 
-    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
-      expect.objectContaining({
-        code: "text-overflow",
-        elementId: element.id,
-        blocking,
-        message,
-      })
-    )
-  })
+      expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+        expect.objectContaining({
+          code: "text-overflow",
+          elementId: element.id,
+          blocking,
+          params: expect.objectContaining({
+            name: "A memory",
+            policy,
+            requiredLines: 4,
+            availableLines: policy === "shrink" ? 2 : 1,
+          }),
+        })
+      )
+    }
+  )
 
   it("distinguishes a text bounding box that is too short for one line", () => {
     const layout = layoutFixture()
@@ -423,8 +435,13 @@ describe("book generation", () => {
 
     expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
       expect.objectContaining({
-        message:
-          "Best memory overflows on Response 1. Its text bounding box is too short for one line at the configured 20 pt size (needs 7.06 mm, has 5.00 mm).",
+        params: expect.objectContaining({
+          name: "Best memory",
+          location: 1,
+          availableLines: 0,
+          fontSize: 20,
+          heightMm: 5,
+        }),
       })
     )
   })
@@ -443,8 +460,12 @@ describe("book generation", () => {
     expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
       expect.objectContaining({
         code: "text-overflow",
-        message:
-          "A memory overflows on Response 1. It needs 2 lines at the configured 20 pt size, but only 1 line fits.",
+        params: expect.objectContaining({
+          name: "A memory",
+          requiredLines: 2,
+          availableLines: 1,
+          fontSize: 20,
+        }),
       })
     )
   })
@@ -540,11 +561,11 @@ describe("book generation", () => {
       []
     ).filter((problem) => problem.code === "text-overflow")
 
-    expect(problems.map((problem) => problem.message)).toEqual([
-      expect.stringContaining("A memory (text bounding box 1) overflows"),
-      expect.stringContaining("A memory (text bounding box 2) overflows"),
+    expect(problems.map((problem) => problemMessage(problem, "en"))).toEqual([
+      expect.stringContaining("A memory (text bounding box 1)"),
+      expect.stringContaining("A memory (text bounding box 2)"),
     ])
-    expect(new Set(problems.map((problem) => problem.message))).toHaveLength(2)
+    expect(new Set(problems.map((problem) => problemMessage(problem, "en")))).toHaveLength(2)
   })
 
   it("reports blocking low-resolution images and honors explicit overrides", () => {
@@ -663,8 +684,13 @@ describe("photo distribution problems", () => {
     expect(problems).toEqual([
       expect.objectContaining({
         blocking: false,
-        message:
-          '1 photo slot for "Photos" stays empty on Response 3. The layout has 5 photo slots for 4 uploaded photos.',
+        params: expect.objectContaining({
+          prompt: "Photos",
+          response: 3,
+          slotCount: 5,
+          photoCount: 4,
+          emptySlotCount: 1,
+        }),
       }),
     ])
   })
@@ -688,8 +714,13 @@ describe("photo distribution problems", () => {
     ).toEqual([
       expect.objectContaining({
         blocking: false,
-        message:
-          '2 photos for "Photos" are not shown on Response 2. The layout has 4 photo slots for 6 uploaded photos.',
+        params: expect.objectContaining({
+          prompt: "Photos",
+          response: 2,
+          slotCount: 4,
+          photoCount: 6,
+          unplacedPhotoCount: 2,
+        }),
       }),
     ])
     expect(blockingProblems(book)).toEqual([])
@@ -726,9 +757,9 @@ describe("photo distribution problems", () => {
       (problem) => problem.code === "photo-slot-mismatch"
     )
 
-    expect(problems.map((problem) => problem.message)).toEqual([
-      expect.stringContaining('1 photo for "Photos" is not shown'),
-      expect.stringContaining('1 photo slot for "Portraits" stays empty'),
+    expect(problems.map((problem) => problemMessage(problem, "en"))).toEqual([
+      expect.stringContaining('"Photos": 1 photos are not shown'),
+      expect.stringContaining('"Portraits": 0 photos are not shown and 1 slots stay empty'),
     ])
     expect(new Set(problems.map((problem) => problem.id))).toHaveLength(2)
   })

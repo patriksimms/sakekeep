@@ -242,3 +242,30 @@ describe("canonical text layout", () => {
     expect(enforceMinimumTextBoxHeight(narrow).geometry.height).toBe(minimum)
   })
 })
+
+describe("book-language hyphenation", () => {
+  it("breaks German compounds at syllable boundaries without changing English books", () => {
+    const word = "Geburtstagserinnerungen"
+    const settings = { ...DEFAULT_TEXT_SETTINGS, fontSize: 14, overflow: "flag" as const }
+    const german = layoutText([{ text: word }], 32, 100, settings, "de")
+    const english = layoutText([{ text: word }], 32, 100, settings, "en")
+    expect(german.fits).toBe(true)
+    expect(german.renderedLines.length).toBeGreaterThan(1)
+    expect(german.renderedLines[0]!.text.endsWith("-")).toBe(true)
+    expect(german.renderedLines.map((line) => line.text.replace(/-$/, "")).join("")).toBe(word)
+    expect(english.renderedLines.map((line) => line.text)).toEqual([word])
+    expect(english.fits).toBe(false)
+  })
+
+  it("preserves every word when a German compound starts after a partly filled line", () => {
+    const text = "Unsere Geburtstagserinnerungen bleiben erhalten"
+    const result = layoutText([{ text }], 35, 100, DEFAULT_TEXT_SETTINGS, "de")
+    expect(
+      result.renderedLines
+        .map((line) => (line.text.endsWith("-") ? line.text.slice(0, -1) : `${line.text} `))
+        .join("")
+        .trim()
+    ).toBe(text)
+    expect(result.fits).toBe(true)
+  })
+})

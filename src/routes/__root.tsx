@@ -1,3 +1,7 @@
+import * as m from "#/paraglide/messages.js"
+import { deDE, enUS } from "@clerk/localizations"
+import { loadPublicProject } from "#/lib/public-project.ts"
+import { getLocale } from "#/paraglide/runtime.js"
 import { ClerkProvider } from "@clerk/tanstack-react-start"
 import { shadcn } from "@clerk/ui/themes"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -17,7 +21,16 @@ import appCss from "../styles.css?url"
 const themeScript = `(function(){try{var t=localStorage.getItem('sakekeep-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.style.colorScheme=d?'dark':'light'}catch(e){}})()`
 
 export const Route = createRootRoute({
-  head: () => ({
+  beforeLoad: async ({ location }) => {
+    const token = /^\/s\/([^/]+)$/.exec(location.pathname)?.[1]
+    const publicState = token ? await loadPublicProject(token) : undefined
+    return {
+      publicState,
+      readerLocale:
+        publicState && publicState.status !== "unknown" ? publicState.bookLanguage : getLocale(),
+    }
+  },
+  head: ({ match }) => ({
     meta: [
       {
         charSet: "utf-8",
@@ -27,12 +40,14 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Sakekeep — stories worth keeping",
+        title: m.ui_sakekeep_stories_worth_keeping({}, { locale: match.context.readerLocale }),
       },
       {
         name: "description",
-        content:
-          "Create a shared friend book, collect anonymous stories, design pages, and export a print-ready PDF in standard DIN formats.",
+        content: m.ui_create_a_shared_friend_book_collect_anonymous_stories_design_page(
+          {},
+          { locale: match.context.readerLocale }
+        ),
       },
     ],
     links: [
@@ -64,6 +79,7 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { readerLocale } = Route.useRouteContext()
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -82,7 +98,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               href="#main-content"
               className="fixed top-2 left-2 z-50 -translate-y-20 rounded-lg bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
             >
-              Skip to content
+              {m.ui_skip_to_content({}, { locale: readerLocale })}{" "}
             </a>
             <div className="flex min-h-svh flex-col">
               <AppHeader />
@@ -98,13 +114,22 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     </>
   )
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={readerLocale} suppressHydrationWarning>
       <head>
         <HeadContent />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        {isDemoMode ? app : <ClerkProvider appearance={{ theme: shadcn }}>{app}</ClerkProvider>}
+        {isDemoMode ? (
+          app
+        ) : (
+          <ClerkProvider
+            localization={readerLocale === "de" ? deDE : enUS}
+            appearance={{ theme: shadcn }}
+          >
+            {app}
+          </ClerkProvider>
+        )}
       </body>
     </html>
   )

@@ -1,3 +1,6 @@
+import { projectStateLabel, bookStatusLabel } from "#/domain/project-labels.ts"
+import { getLocale } from "#/paraglide/runtime.js"
+import * as m from "#/paraglide/messages.js"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import {
@@ -77,11 +80,41 @@ const steps: Array<{
   label: string
   icon: typeof FileQuestionIcon
 }> = [
-  { value: "form", label: "Form", icon: FileQuestionIcon },
-  { value: "responses", label: "Responses", icon: InboxIcon },
-  { value: "layouts", label: "Layouts", icon: LayoutTemplateIcon },
-  { value: "book", label: "Book review", icon: BookOpenIcon },
-  { value: "export", label: "Export", icon: FileOutputIcon },
+  {
+    value: "form",
+    get label() {
+      return m.ui_form()
+    },
+    icon: FileQuestionIcon,
+  },
+  {
+    value: "responses",
+    get label() {
+      return m.ui_responses()
+    },
+    icon: InboxIcon,
+  },
+  {
+    value: "layouts",
+    get label() {
+      return m.ui_layouts()
+    },
+    icon: LayoutTemplateIcon,
+  },
+  {
+    value: "book",
+    get label() {
+      return m.ui_book_review()
+    },
+    icon: BookOpenIcon,
+  },
+  {
+    value: "export",
+    get label() {
+      return m.ui_export()
+    },
+    icon: FileOutputIcon,
+  },
 ]
 
 function ProjectWorkspace() {
@@ -146,14 +179,20 @@ function ProjectWorkspace() {
       <main id="main-content" className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
         <Empty className="min-h-80 border bg-card/80">
           <EmptyHeader>
-            <EmptyTitle>Project could not be loaded</EmptyTitle>
+            <EmptyTitle data-testid="heading-project-could-not-be-loaded">
+              {m.ui_project_could_not_be_loaded()}
+            </EmptyTitle>
             <EmptyDescription>
-              {projectQuery.error?.message ?? "The project does not exist."}
+              {projectQuery.error?.message ?? m.ui_the_project_does_not_exist()}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Link to="/projects" className={buttonVariants({ variant: "outline" })}>
-              Return to projects
+            <Link
+              data-testid="link-return-to-projects"
+              to="/projects"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              {m.ui_return_to_projects()}{" "}
             </Link>
           </EmptyContent>
         </Empty>
@@ -164,6 +203,7 @@ function ProjectWorkspace() {
   return (
     <main id="main-content" className="mx-auto max-w-[1540px] px-4 py-8 sm:px-6">
       <Link
+        data-testid="link-all-projects"
         to="/projects"
         className={buttonVariants({
           variant: "ghost",
@@ -171,7 +211,7 @@ function ProjectWorkspace() {
         })}
       >
         <ArrowLeftIcon data-icon="inline-start" />
-        All projects
+        {m.ui_all_projects()}{" "}
       </Link>
 
       <Card className="mb-6 bg-card/90">
@@ -184,9 +224,9 @@ function ProjectWorkspace() {
                   const updated = await projectApi.update(project.id, { title })
                   setProject(updated)
                   setEditingTitle(false)
-                  toast.success("Project renamed")
+                  toast.success(m.ui_project_renamed())
                 } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Rename failed")
+                  toast.error(error instanceof Error ? error.message : m.ui_rename_failed())
                 }
               }}
               className="flex max-w-xl gap-2"
@@ -194,23 +234,34 @@ function ProjectWorkspace() {
               <Input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                aria-label="Project title"
+                aria-label={m.ui_project_title()}
                 autoFocus
               />
-              <Button type="submit">Save</Button>
-              <Button type="button" variant="ghost" onClick={() => setEditingTitle(false)}>
-                Cancel
+              <Button data-testid="button-save" type="submit">
+                {m.ui_save()}
+              </Button>
+              <Button
+                data-testid="button-cancel"
+                type="button"
+                variant="ghost"
+                onClick={() => setEditingTitle(false)}
+              >
+                {m.ui_cancel()}{" "}
               </Button>
             </form>
           ) : (
             <>
-              <CardTitle className="flex items-center gap-2 text-3xl">
+              <CardTitle
+                data-testid="heading-rename-project"
+                className="flex items-center gap-2 text-3xl"
+              >
                 {project.title}
                 {!project.archivedAt && (
                   <Button
+                    data-testid="button-rename-project"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Rename project"
+                    aria-label={m.ui_rename_project()}
                     onClick={() => {
                       setTitle(project.title)
                       setEditingTitle(true)
@@ -221,8 +272,8 @@ function ProjectWorkspace() {
                 )}
               </CardTitle>
               <CardDescription>
-                {project.occasion || "No occasion added"} · Updated{" "}
-                {new Date(project.updatedAt).toLocaleString()}
+                {project.occasion || m.ui_no_occasion_added()} {m.ui_updated()}{" "}
+                {new Date(project.updatedAt).toLocaleString(getLocale())}
               </CardDescription>
             </>
           )}
@@ -230,15 +281,15 @@ function ProjectWorkspace() {
             {project.archivedAt && (
               <Badge variant="outline">
                 <ArchiveIcon data-icon="inline-start" />
-                Archived
+                {m.ui_archived()}{" "}
               </Badge>
             )}
-            <Badge className="capitalize">{project.state}</Badge>
+            <Badge className="capitalize">{projectStateLabel(project.state)}</Badge>
             <Badge
               variant={project.bookStatus === "stale" ? "destructive" : "secondary"}
               className="capitalize"
             >
-              Book {project.bookStatus.replace("-", " ")}
+              {m.ui_book()} {bookStatusLabel(project.bookStatus)}
             </Badge>
           </CardAction>
         </CardHeader>
@@ -246,84 +297,104 @@ function ProjectWorkspace() {
           <div className="flex gap-6 text-sm">
             <span>
               <strong className="text-lg">{project.submissionCount}</strong>{" "}
-              <span className="text-muted-foreground">responses</span>
+              <span className="text-muted-foreground">
+                {m.ui_responses_528({ count: project.submissionCount })}
+              </span>
             </span>
             <span>
               <strong className="text-lg">{project.layouts.length}</strong>{" "}
-              <span className="text-muted-foreground">layouts</span>
+              <span className="text-muted-foreground">
+                {m.ui_layouts_529({ count: project.layouts.length })}
+              </span>
             </span>
             <span>
               <strong className="text-lg">{project.book?.pages.length ?? 0}</strong>{" "}
-              <span className="text-muted-foreground">pages</span>
+              <span className="text-muted-foreground">
+                {m.ui_pages_530({ count: project.book?.pages.length ?? 0 })}
+              </span>
             </span>
           </div>
           <div className="flex items-center gap-2">
             {project.archivedAt ? (
               <Button
+                data-testid="button-unarchive-project"
                 variant="outline"
                 size="sm"
                 onClick={async () => {
                   try {
                     setProject(await projectApi.action(project.id, "unarchive"))
-                    toast.success("Project unarchived")
+                    toast.success(m.ui_project_unarchived())
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Unarchive failed")
+                    toast.error(error instanceof Error ? error.message : m.ui_unarchive_failed())
                   }
                 }}
               >
                 <ArchiveRestoreIcon data-icon="inline-start" />
-                Unarchive project
+                {m.ui_unarchive_project()}{" "}
               </Button>
             ) : (
               <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
+                <AlertDialogTrigger
+                  data-testid="button-archive-project"
+                  render={<Button variant="outline" size="sm" />}
+                >
                   <ArchiveIcon data-icon="inline-start" />
-                  Archive project
+                  {m.ui_archive_project()}{" "}
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Archive this project?</AlertDialogTitle>
+                    <AlertDialogTitle data-testid="heading-archive-this-project">
+                      {m.ui_archive_this_project()}
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
-                      The project keeps its current {project.state} state and every response,
-                      layout, and export. While archived it accepts no new submissions and no edits.
-                      You can unarchive it at any time.
+                      {m.ui_the_project_keeps_its_current()} {projectStateLabel(project.state)}{" "}
+                      {m.ui_state_and_every_response_layout_and_export_while_archived_it_acce()}{" "}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel data-testid="button-cancel">
+                      {m.ui_cancel()}
+                    </AlertDialogCancel>
                     <AlertDialogAction
+                      data-testid="button-archive-project"
                       onClick={async () => {
                         try {
                           setProject(await projectApi.action(project.id, "archive"))
-                          toast.success("Project archived")
+                          toast.success(m.ui_project_archived())
                         } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Archive failed")
+                          toast.error(
+                            error instanceof Error ? error.message : m.ui_archive_failed()
+                          )
                         }
                       }}
                     >
-                      Archive project
+                      {m.ui_archive_project()}{" "}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             )}
             <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="ghost" size="sm" />}>
+              <AlertDialogTrigger
+                data-testid="button-delete-project"
+                render={<Button variant="ghost" size="sm" />}
+              >
                 <Trash2Icon data-icon="inline-start" />
-                Delete project
+                {m.ui_delete_project()}{" "}
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this local project?</AlertDialogTitle>
+                  <AlertDialogTitle data-testid="heading-delete-this-local-project">
+                    {m.ui_delete_this_local_project()}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    The project, submissions, layouts, stored image masters, previews, and exports
-                    will be removed. Safe orphan cleanup retries any object-store failure. This
-                    cannot be undone.
+                    {m.ui_the_project_submissions_layouts_stored_image_masters_previews_and()}{" "}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
                   <AlertDialogAction
+                    data-testid="button-delete-everything"
                     variant="destructive"
                     onClick={async () => {
                       try {
@@ -331,14 +402,14 @@ function ProjectWorkspace() {
                         await queryClient.invalidateQueries({
                           queryKey: ["projects"],
                         })
-                        toast.success("Project deleted")
+                        toast.success(m.ui_project_deleted())
                         await navigate({ to: "/projects" })
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Delete failed")
+                        toast.error(error instanceof Error ? error.message : m.ui_delete_failed())
                       }
                     }}
                   >
-                    Delete everything
+                    {m.ui_delete_everything()}{" "}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -350,10 +421,11 @@ function ProjectWorkspace() {
       {project.archivedAt && (
         <Alert className="mb-6">
           <ArchiveIcon />
-          <AlertTitle>Archived on {new Date(project.archivedAt).toLocaleDateString()}</AlertTitle>
+          <AlertTitle>
+            {m.ui_archived_on()} {new Date(project.archivedAt).toLocaleDateString(getLocale())}
+          </AlertTitle>
           <AlertDescription>
-            Everything stays readable, but the share link reports a closed collection and edits are
-            rejected until you unarchive the project.
+            {m.ui_everything_stays_readable_but_the_share_link_reports_a_closed_col()}{" "}
           </AlertDescription>
         </Alert>
       )}
@@ -377,6 +449,7 @@ function ProjectWorkspace() {
         >
           {steps.map((item, index) => (
             <TabsTrigger
+              data-testid={`workspace-${item.value}`}
               key={item.value}
               value={item.value}
               className="min-w-fit flex-none px-3 py-2"

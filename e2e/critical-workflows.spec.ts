@@ -36,31 +36,27 @@ test.describe.serial("critical local prototype workflows", () => {
     })
     await expectAccessible(page)
 
-    await page.getByLabel("What should we call you in the book?").fill("Playwright Nora")
-    await page
-      .getByLabel("Which memory still makes you smile?")
-      .fill("A recovered draft with a local image.")
+    await page.getByTestId("answer-name").fill("Playwright Nora")
+    await page.getByTestId("answer-memory").fill("A recovered draft with a local image.")
     await page.getByRole("radio", { name: "Making chaos feel calm" }).click()
     await page.getByRole("checkbox", { name: "A little travel" }).click()
     await page.locator('input[type="file"]').setInputFiles(resolve("public/logo512.png"))
-    await expect(page.getByRole("button", { name: "Remove logo512.png" })).toBeVisible()
+    await expect(page.getByTestId("remove-file-logo512.png")).toBeVisible()
     await page.waitForTimeout(550)
     await page.reload()
 
-    await expect(page.getByText("Draft restored")).toBeVisible()
-    await expect(page.getByLabel("What should we call you in the book?")).toHaveValue(
-      "Playwright Nora"
-    )
+    await expect(page.getByTestId("text-ui_draft_restored")).toBeVisible()
+    await expect(page.getByTestId("answer-name")).toHaveValue("Playwright Nora")
     await expect(page.getByRole("radio", { name: "Making chaos feel calm" })).toBeChecked()
     await expect(page.getByRole("checkbox", { name: "A little travel" })).toBeChecked()
-    await expect(page.getByRole("button", { name: "Remove logo512.png" })).toBeVisible()
-    await expect(page.getByRole("checkbox", { name: /I agree that my answers/ })).not.toBeChecked()
+    await expect(page.getByTestId("remove-file-logo512.png")).toBeVisible()
+    await expect(page.getByTestId("contribution-consent")).not.toBeChecked()
 
-    await expect(page.getByRole("button", { name: "Submit once" })).toBeDisabled()
-    await page.getByRole("checkbox", { name: /I agree that my answers/ }).click()
-    await expect(page.getByRole("button", { name: "Submit once" })).toBeEnabled()
+    await expect(page.getByTestId("submit-contribution")).toBeDisabled()
+    await page.getByTestId("contribution-consent").click()
+    await expect(page.getByTestId("submit-contribution")).toBeEnabled()
 
-    await page.getByRole("button", { name: "Submit once" }).click()
+    await page.getByTestId("submit-contribution").click()
     await expect(page.getByText("Your response was submitted.")).toBeVisible()
     await page.screenshot({
       path: resolve(screenshots, "public-form-success-mobile.png"),
@@ -72,7 +68,7 @@ test.describe.serial("critical local prototype workflows", () => {
   test("public form has a usable desktop presentation", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.goto(`/s/${collectingToken}`)
-    await expect(page.getByRole("button", { name: "Submit once" })).toBeVisible()
+    await expect(page.getByTestId("submit-contribution")).toBeVisible()
     await page.screenshot({
       path: resolve(screenshots, "public-form-desktop.png"),
       fullPage: true,
@@ -107,7 +103,7 @@ test.describe.serial("critical local prototype workflows", () => {
       zone.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }))
     })
 
-    await expect(page.getByRole("button", { name: "Remove dropped.png" })).toBeVisible()
+    await expect(page.getByTestId("remove-file-dropped.png")).toBeVisible()
   })
 
   test("every route renders the legal footer and buttons show a pointer cursor", async ({
@@ -117,12 +113,12 @@ test.describe.serial("critical local prototype workflows", () => {
       await page.goto(path)
       const footer = page.getByRole("contentinfo")
       await expect(footer).toHaveCount(1)
-      await expect(footer.getByRole("link", { name: "Privacy" })).toBeVisible()
-      await expect(footer.getByRole("link", { name: "Imprint" })).toBeVisible()
+      await expect(footer.getByTestId("link-privacy")).toBeVisible()
+      await expect(footer.getByTestId("link-imprint")).toBeVisible()
     }
 
     await page.goto(`/s/${collectingToken}`)
-    const submit = page.getByRole("button", { name: "Submit once" })
+    const submit = page.getByTestId("submit-contribution")
     await expect(submit).toBeVisible()
     const cursors = await page.evaluate(() =>
       Array.from(document.querySelectorAll("button")).map((element) => ({
@@ -157,40 +153,40 @@ test.describe.serial("critical local prototype workflows", () => {
     await page.setViewportSize({ width: 1365, height: 900 })
     await page.goto("/projects")
     await expect(page.getByText("Lea’s farewell book")).toBeVisible()
-    await page.getByRole("button", { name: "New project" }).click()
-    await expect(page.getByRole("heading", { name: "Create a friend book" })).toBeVisible()
-    await page.getByLabel("Project name").fill("Playwright complete workflow")
-    await page.getByLabel("Occasion (optional)").fill("Acceptance verification")
+    await page.getByTestId("button-new-project").click()
+    await expect(page.getByTestId("heading-create-a-friend-book")).toBeVisible()
+    await page.getByTestId("project-title").fill("Playwright complete workflow")
+    await page.getByTestId("project-occasion").fill("Acceptance verification")
     const createdResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/projects") && response.request().method() === "POST"
     )
-    await page.getByRole("button", { name: "Create project" }).click()
+    await page.getByTestId("button-create-project").click()
     const projectId = ((await (await createdResponse).json()) as { id: string }).id
     await page.waitForURL(`/projects/${projectId}`)
 
     try {
-      await expect(page.getByRole("heading", { name: "Build the questionnaire" })).toBeVisible({
+      await expect(page.getByTestId("heading-build-the-questionnaire")).toBeVisible({
         timeout: 15_000,
       })
       const prompts = [
-        ["Single-line text", "Your name"],
-        ["Multiline text", "Share a memory"],
-        ["Radio buttons", "Choose one"],
-        ["Checkboxes", "Choose any"],
-        ["Image upload", "Add photos"],
+        ["single-line", "Your name"],
+        ["multiline", "Share a memory"],
+        ["radio", "Choose one"],
+        ["checkboxes", "Choose any"],
+        ["images", "Add photos"],
       ] as const
       for (const [type, prompt] of prompts) {
-        await page.getByRole("combobox").first().click()
-        await page.getByRole("option", { name: type }).click()
-        await page.getByRole("button", { name: `Add ${type.toLowerCase()}` }).click()
-        await page.getByLabel("Question").last().fill(prompt)
+        await page.getByTestId("combobox-question-type-to-add").click()
+        await page.getByTestId(`question-type-${type}`).click()
+        await page.getByTestId("button-add").click()
+        await page.getByTestId("question-prompt").last().fill(prompt)
       }
-      await expect(page.getByRole("status")).toContainText("Saved", {
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved", {
         timeout: 10_000,
       })
-      await page.getByRole("button", { name: "Move question up" }).last().click()
-      await expect(page.getByRole("status")).toContainText("Saved", {
+      await page.getByTestId("button-move-question-up").last().click()
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved", {
         timeout: 10_000,
       })
       await page.screenshot({
@@ -199,24 +195,17 @@ test.describe.serial("critical local prototype workflows", () => {
       })
       await expectAccessible(page)
 
-      await page.getByRole("button", { name: "Publish and create share link" }).click()
-      await expect(
-        page.getByRole("heading", { name: "Publish this form permanently?" })
-      ).toBeVisible()
-      await page.getByRole("button", { name: "Publish forever" }).click()
+      await page.getByTestId("button-publish-and-create-share-link").click()
+      await expect(page.getByTestId("heading-publish-this-form-permanently")).toBeVisible()
+      await page.getByTestId("button-publish-forever").click()
       await expect(page).toHaveURL(`/projects/${projectId}?tab=responses`)
-      await expect(page.getByRole("heading", { name: "Responses" })).toBeVisible()
+      await expect(page.getByTestId("heading-responses")).toBeVisible()
 
-      await page.getByRole("button", { name: "Lock collection" }).click()
-      await expect(
-        page.getByRole("heading", { name: "Lock collection permanently?" })
-      ).toBeVisible()
-      await page.getByRole("button", { name: "Lock collection", exact: true }).last().click()
+      await page.getByTestId("button-lock-collection").click()
+      await expect(page.getByTestId("heading-lock-collection-permanently")).toBeVisible()
+      await page.getByTestId("button-lock-collection").last().click()
       await expect(page).toHaveURL(`/projects/${projectId}?tab=layouts`)
-      await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
-        "aria-selected",
-        "true"
-      )
+      await expect(page.getByTestId("workspace-layouts")).toHaveAttribute("aria-selected", "true")
     } finally {
       await request.delete(`/api/projects/${projectId}`)
     }
@@ -272,10 +261,10 @@ test.describe.serial("critical local prototype workflows", () => {
       })
 
       await page.goto(`/projects/${projectId}?tab=layouts`)
-      await expect(page.getByRole("combobox", { name: "Page size" })).toContainText("A5")
-      await page.getByRole("combobox", { name: "Page size" }).click()
+      await expect(page.getByTestId("combobox-page-size")).toContainText("A5")
+      await page.getByTestId("combobox-page-size").click()
       await page.getByRole("option", { name: "A6" }).click()
-      await expect(page.getByLabel("Visual DIN A6 landscape layout canvas")).toBeVisible()
+      await expect(page.getByTestId("layout-canvas-a6-landscape")).toBeVisible()
 
       const resized = (await (await request.get(`/api/projects/${projectId}`)).json()) as Project
       expect(resized).toMatchObject({
@@ -286,19 +275,17 @@ test.describe.serial("critical local prototype workflows", () => {
       expect(resized.layouts).toHaveLength(2)
       expect(resized.layouts.every((layout) => layout.schema.trim.widthMm === 148)).toBe(true)
 
-      await page.getByRole("combobox", { name: "Page orientation" }).click()
-      await page.getByRole("option", { name: "portrait" }).click()
-      await expect(
-        page.getByRole("heading", { name: "Reset layouts and change orientation?" })
-      ).toBeVisible()
+      await page.getByTestId("combobox-page-orientation").click()
+      await page.getByTestId("orientation-portrait").click()
+      await expect(page.getByTestId("heading-reset-layouts-and-change-orientation")).toBeVisible()
       await expect(page.getByText("removes 2 layouts")).toBeVisible()
-      await page.getByRole("button", { name: "Cancel" }).click()
-      await expect(page.getByLabel("Visual DIN A6 landscape layout canvas")).toBeVisible()
+      await page.getByTestId("button-cancel").click()
+      await expect(page.getByTestId("layout-canvas-a6-landscape")).toBeVisible()
 
-      await page.getByRole("combobox", { name: "Page orientation" }).click()
-      await page.getByRole("option", { name: "portrait" }).click()
-      await page.getByRole("button", { name: "Reset layouts" }).click()
-      await expect(page.getByLabel("Visual DIN A6 portrait layout canvas")).toBeVisible()
+      await page.getByTestId("combobox-page-orientation").click()
+      await page.getByTestId("orientation-portrait").click()
+      await page.getByTestId("button-reset-layouts").click()
+      await expect(page.getByTestId("layout-canvas-a6-portrait")).toBeVisible()
       await expect(page.getByRole("tab", { name: "Layout 1" })).toHaveAttribute(
         "aria-selected",
         "true"
@@ -327,7 +314,7 @@ test.describe.serial("critical local prototype workflows", () => {
     test.setTimeout(60_000)
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.goto(`/projects/${closedProjectId}?tab=layouts`)
-    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    await expect(page.getByTestId("heading-page-layouts")).toBeVisible()
     const originalProject = (await (
       await request.get(`/api/projects/${closedProjectId}`)
     ).json()) as Project
@@ -338,19 +325,19 @@ test.describe.serial("critical local prototype workflows", () => {
       geometry,
     }))
     await expect(page.getByRole("tab", { name: "Warm quote", selected: true })).toBeVisible()
-    await expect(page.getByLabel("Visual DIN A5 landscape layout canvas")).toBeVisible()
-    await expect(page.getByRole("button", { name: /^Add text for / }).first()).toBeVisible()
-    await expect(page.getByRole("button", { name: /^Add image for / }).first()).toBeVisible()
-    await expect(page.getByRole("button", { name: /^Add gallery for / }).first()).toBeVisible()
-    for (const name of ["Add static text", "Add rectangle", "Add circle", "Add line"]) {
-      await expect(page.getByRole("button", { name })).toBeVisible()
+    await expect(page.getByTestId("layout-canvas-a5-landscape")).toBeVisible()
+    await expect(page.getByTestId("add-bound-text").first()).toBeVisible()
+    await expect(page.getByTestId("add-image-frame").first()).toBeVisible()
+    await expect(page.getByTestId("add-gallery-frame").first()).toBeVisible()
+    for (const type of ["static-text", "rectangle", "circle", "line"]) {
+      await expect(page.getByTestId(`add-${type}`)).toBeVisible()
     }
 
     const renderedCanvas = page.locator("canvas.upper-canvas")
-    const inspectorCard = page.locator('[data-slot="card"][aria-label="Inspector"]')
-    const deleteAction = inspectorCard.getByRole("button", { name: "Delete selected element" })
-    await expect(inspectorCard.getByRole("button", { name: "Undo" })).toBeVisible()
-    await expect(inspectorCard.getByRole("button", { name: "Redo" })).toBeVisible()
+    const inspectorCard = page.getByTestId("layout-inspector")
+    const deleteAction = inspectorCard.getByTestId("button-delete-selected-element")
+    await expect(inspectorCard.getByTestId("button-undo")).toBeVisible()
+    await expect(inspectorCard.getByTestId("button-redo")).toBeVisible()
     const clearSelection = async () => {
       const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
@@ -378,19 +365,17 @@ test.describe.serial("critical local prototype workflows", () => {
     await page
       .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
       .click()
-    await expect(page.getByText("Question binding")).toBeVisible()
-    await expect(page.getByText("Font family")).toBeVisible()
-    await expect(page.getByRole("combobox", { name: "Vertical text alignment" })).toBeVisible()
+    await expect(page.getByTestId("text-ui_question_binding")).toBeVisible()
+    await expect(page.getByTestId("text-ui_font_family")).toBeVisible()
+    await expect(page.getByTestId("combobox-vertical-text-alignment")).toBeVisible()
     await expect(deleteAction).toBeVisible()
-    await expect(
-      inspectorCard.getByRole("button", { name: "Align horizontal centre" })
-    ).toBeVisible()
+    await expect(inspectorCard.getByTestId("button-align-horizontal-centre")).toBeVisible()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
-    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    await page.getByTestId("layer-rectangle").click()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
     await clearSelection()
     await expect(
-      page.getByText("Select an element on the canvas or in the layers list.")
+      page.getByTestId("text-ui_select_an_element_on_the_canvas_or_in_the_layers_list")
     ).toBeVisible()
     await expect(deleteAction).toBeHidden()
     expect(await canvasDocumentBounds()).toEqual(tabletBounds)
@@ -402,18 +387,18 @@ test.describe.serial("critical local prototype workflows", () => {
 
     await page.setViewportSize({ width: 1365, height: 900 })
     await page.reload()
-    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    await expect(page.getByTestId("heading-page-layouts")).toBeVisible()
     const desktopBounds = await canvasDocumentBounds()
     expect(desktopBounds).not.toBeNull()
     await page
       .getByRole("button", { name: "Which memory still makes you smile?", exact: true })
       .click()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
-    await page.getByRole("button", { name: "Rectangle", exact: true }).click()
+    await page.getByTestId("layer-rectangle").click()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
     await clearSelection()
     await expect(
-      page.getByText("Select an element on the canvas or in the layers list.")
+      page.getByTestId("text-ui_select_an_element_on_the_canvas_or_in_the_layers_list")
     ).toBeVisible()
     await expect(deleteAction).toBeHidden()
     expect(await canvasDocumentBounds()).toEqual(desktopBounds)
@@ -458,7 +443,7 @@ test.describe.serial("critical local prototype workflows", () => {
       )
       expect(longLayoutResponse.ok()).toBe(true)
       await page.reload()
-      await expect(page.getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(31)
+      await expect(page.getByTestId("layer-rectangle")).toHaveCount(31)
       const layersViewport = layersCard.locator('[data-slot="scroll-area-viewport"]')
       const overflow = await layersViewport.evaluate((element) => ({
         clientHeight: element.clientHeight,
@@ -519,7 +504,7 @@ test.describe.serial("critical local prototype workflows", () => {
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto(`/projects/${closedProjectId}?tab=layouts`)
-    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    await expect(page.getByTestId("heading-page-layouts")).toBeVisible()
     const originalProject = (await (
       await request.get(`/api/projects/${closedProjectId}`)
     ).json()) as Project
@@ -527,18 +512,17 @@ test.describe.serial("critical local prototype workflows", () => {
       (layout) => layout.name === "Warm quote"
     ) as LayoutRecord
 
-    const photoPrompt = "Add one or two favourite photos"
     const mismatch = page.getByText(/photo slots? for up to/)
     await expect(mismatch).toHaveCount(0)
 
     try {
-      await page.getByRole("button", { name: `Add image for ${photoPrompt}` }).click()
+      await page.getByTestId("add-image-frame").click()
       await expect(mismatch).toHaveText("1 photo slot for up to 2 uploads")
 
-      await page.getByRole("button", { name: `Add image for ${photoPrompt}` }).click()
+      await page.getByTestId("add-image-frame").click()
       await expect(mismatch).toHaveCount(0)
 
-      await page.getByRole("button", { name: `Add gallery for ${photoPrompt}` }).click()
+      await page.getByTestId("add-gallery-frame").click()
       await expect(mismatch).toHaveText("6 photo slots for up to 2 uploads")
     } finally {
       const changedProject = (await (
@@ -564,7 +548,7 @@ test.describe.serial("critical local prototype workflows", () => {
     test.setTimeout(60_000)
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto(`/projects/${closedProjectId}?tab=layouts`)
-    await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+    await expect(page.getByTestId("heading-page-layouts")).toBeVisible()
 
     const originalProject = (await (
       await request.get(`/api/projects/${closedProjectId}`)
@@ -616,11 +600,11 @@ test.describe.serial("critical local prototype workflows", () => {
 
       await editLabel("warm-name")
       await page.keyboard.type("Name in this book")
-      await page.getByRole("heading", { name: "Page layouts" }).click()
+      await page.getByTestId("heading-page-layouts").click()
       await expect(page.locator('[data-layout-element-id="warm-name"] strong')).toHaveText(
         "Name in this book"
       )
-      await expect(page.getByRole("status")).toHaveText("Saved")
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved")
 
       await page
         .getByRole("button", { name: "What should we call you in the book?", exact: true })
@@ -661,7 +645,7 @@ test.describe.serial("critical local prototype workflows", () => {
       await nameLayer.click()
       await nameLayer.press("Enter")
       await page.keyboard.press("Backspace")
-      await page.getByRole("heading", { name: "Page layouts" }).click()
+      await page.getByTestId("heading-page-layouts").click()
       await expect(page.locator("[data-editor-empty-label]")).toHaveText("Add label…")
       await expect
         .poll(async () =>
@@ -671,7 +655,7 @@ test.describe.serial("critical local prototype workflows", () => {
             .then((lines) => lines.join(" "))
         )
         .toBe("{{ What should we call you in the book? }}")
-      await expect(page.getByRole("status")).toHaveText("Saved")
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved")
 
       const canvasBounds = await renderedCanvas.boundingBox()
       expect(canvasBounds).not.toBeNull()
@@ -679,7 +663,7 @@ test.describe.serial("critical local prototype workflows", () => {
         position: { x: canvasBounds!.width - 2, y: canvasBounds!.height - 2 },
       })
       await expect(
-        page.getByText("Select an element on the canvas or in the layers list.")
+        page.getByTestId("text-ui_select_an_element_on_the_canvas_or_in_the_layers_list")
       ).toBeVisible()
       await page.setViewportSize({ width: 1440, height: 1600 })
       await page.evaluate(() => window.scrollTo(0, 0))
@@ -687,9 +671,9 @@ test.describe.serial("critical local prototype workflows", () => {
         path: resolve("visual-artifacts/issues/42/after-inline-answer-label.png"),
       })
 
-      await page.getByRole("tab", { name: "4. Book review" }).click()
+      await page.getByTestId("workspace-book").click()
       await expect(page.locator("[data-editor-empty-label]")).toHaveCount(0)
-      await expect(page.getByText("Add label…", { exact: true })).toHaveCount(0)
+      await expect(page.getByTestId("text-ui_add_label")).toHaveCount(0)
     } finally {
       const changedProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)
@@ -725,22 +709,16 @@ test.describe.serial("critical local prototype workflows", () => {
 
     try {
       await page.goto(`/projects/${closedProjectId}?tab=layouts`)
-      await page.getByRole("button", { name: "New layout" }).click()
+      await page.getByTestId("button-new-layout").click()
 
-      await expect(page.getByRole("heading", { name: "Choose a background" })).toBeVisible()
-      await expect(page.getByRole("button", { name: "Create Blank background" })).toBeVisible()
-      await expect(
-        page.getByRole("button", { name: "Create Geometric collage background" })
-      ).toBeVisible()
-      await expect(
-        page.getByRole("button", { name: "Create Sunset arches background" })
-      ).toBeVisible()
-      await expect(
-        page.getByRole("button", { name: "Create Postcard frame background" })
-      ).toBeVisible()
+      await expect(page.getByTestId("heading-choose-a-background")).toBeVisible()
+      await expect(page.getByTestId("create-background-blank")).toBeVisible()
+      await expect(page.getByTestId("create-background-geometric-collage")).toBeVisible()
+      await expect(page.getByTestId("create-background-sunset-arches")).toBeVisible()
+      await expect(page.getByTestId("create-background-postcard-frame")).toBeVisible()
 
-      await page.getByRole("button", { name: "Create Geometric collage background" }).click()
-      await expect(page.getByRole("heading", { name: "Choose a background" })).not.toBeVisible()
+      await page.getByTestId("create-background-geometric-collage").click()
+      await expect(page.getByTestId("heading-choose-a-background")).not.toBeVisible()
       await expect(
         page.getByRole("tab", { name: "Geometric collage background", selected: true })
       ).toBeVisible()
@@ -749,8 +727,8 @@ test.describe.serial("critical local prototype workflows", () => {
       await expect(page.getByRole("combobox", { name: "Choose a layout" })).toHaveCount(0)
 
       await closeLayout.click()
-      await expect(page.getByRole("heading", { name: "Delete this layout?" })).toBeVisible()
-      await page.getByRole("button", { name: "Cancel" }).click()
+      await expect(page.getByTestId("heading-delete-this-layout")).toBeVisible()
+      await page.getByTestId("button-cancel").click()
 
       const project = (await (
         await request.get(`/api/projects/${closedProjectId}`)
@@ -772,7 +750,7 @@ test.describe.serial("critical local prototype workflows", () => {
 
       const previousLayout = project.layouts.at(-2)!
       await closeLayout.click()
-      await page.getByRole("button", { name: "Delete layout" }).click()
+      await page.getByTestId("button-delete-layout").click()
       await expect(
         page.getByRole("tab", { name: previousLayout.name, selected: true })
       ).toBeVisible()
@@ -799,7 +777,7 @@ test.describe.serial("critical local prototype workflows", () => {
 
     try {
       await page.goto(`/projects/${closedProjectId}?tab=layouts`)
-      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
+      await expect(page.getByTestId("heading-page-layouts")).toBeVisible()
       const canvas = page.locator("[data-layout-canvas]")
       const droppedTypes = [
         "bound-text",
@@ -854,7 +832,7 @@ test.describe.serial("critical local prototype workflows", () => {
         await expect(page.locator("[data-layer-row]")).toHaveCount(++layerCount)
       }
 
-      await expect(page.getByLabel("Choose decorative image")).toBeVisible()
+      await expect(page.getByTestId("decorative-image-file")).toBeVisible()
       await expect(
         page.locator(
           '[data-testid="editor-layout-elements"] img[src="/layout-decorative-placeholder.svg"]'
@@ -864,12 +842,12 @@ test.describe.serial("critical local prototype workflows", () => {
       const beforeInvalidDrop = await page.locator("[data-layer-row]").count()
       await page
         .locator('[data-palette-element-type="rectangle"]')
-        .dragTo(page.getByRole("heading", { name: "Page layouts" }))
+        .dragTo(page.getByTestId("heading-page-layouts"))
       await expect(page.locator("[data-layer-row]")).toHaveCount(beforeInvalidDrop)
 
-      await page.getByRole("button", { name: "Add static text" }).click()
-      await expect(page.getByLabel("Content")).toBeVisible()
-      await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+      await page.getByTestId("add-static-text").click()
+      await expect(page.getByTestId("static-text-content")).toBeVisible()
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved")
 
       let currentProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)
@@ -888,11 +866,11 @@ test.describe.serial("critical local prototype workflows", () => {
       expect(decorative.geometry.y + decorative.geometry.height).toBeLessThanOrEqual(151)
 
       await page.reload()
-      await expect(page.getByRole("heading", { name: "Page layouts" })).toBeVisible()
-      await page.getByRole("button", { name: "Decorative image", exact: true }).click()
-      await page.getByLabel("Choose decorative image").setInputFiles(resolve("public/logo512.png"))
-      await expect(page.getByRole("button", { name: "Remove image" })).toBeVisible()
-      await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+      await expect(page.getByTestId("heading-page-layouts")).toBeVisible()
+      await page.getByTestId("layer-decorative-image").click()
+      await page.getByTestId("decorative-image-file").setInputFiles(resolve("public/logo512.png"))
+      await expect(page.getByTestId("button-remove-image")).toBeVisible()
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved")
       currentProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)
       ).json()) as Project
@@ -903,9 +881,9 @@ test.describe.serial("critical local prototype workflows", () => {
       expect(withImage).toMatchObject({ geometry: decorative.geometry })
       expect(withImage).toHaveProperty("assetId")
 
-      await page.getByRole("button", { name: "Remove image" }).click()
-      await expect(page.getByLabel("Choose decorative image")).toBeVisible()
-      await expect(page.getByText("Saved", { exact: true })).toBeVisible()
+      await page.getByTestId("button-remove-image").click()
+      await expect(page.getByTestId("decorative-image-file")).toBeVisible()
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-save-state", "saved")
       currentProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)
       ).json()) as Project
@@ -945,43 +923,28 @@ test.describe.serial("critical local prototype workflows", () => {
 
   test("workspace tabs persist in the URL and browser history", async ({ page }) => {
     await page.goto(`/projects/${closedProjectId}?tab=layouts&source=bookmark`)
-    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    )
+    await expect(page.getByTestId("workspace-layouts")).toHaveAttribute("aria-selected", "true")
 
-    await page.getByRole("tab", { name: "4. Book review" }).click()
+    await page.getByTestId("workspace-book").click()
     await expect(page).toHaveURL(/tab=book/)
     await expect(page).toHaveURL(/source=bookmark/)
     await page.reload()
-    await expect(page.getByRole("tab", { name: "4. Book review" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    )
+    await expect(page.getByTestId("workspace-book")).toHaveAttribute("aria-selected", "true")
 
     await page.goBack()
-    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    )
+    await expect(page.getByTestId("workspace-layouts")).toHaveAttribute("aria-selected", "true")
     await page.goForward()
-    await expect(page.getByRole("tab", { name: "4. Book review" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    )
+    await expect(page.getByTestId("workspace-book")).toHaveAttribute("aria-selected", "true")
 
     await page.goto(`/projects/${closedProjectId}?tab=unknown`)
     await expect(page).toHaveURL(`/projects/${closedProjectId}?tab=layouts`)
-    await expect(page.getByRole("tab", { name: "3. Layouts" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    )
+    await expect(page.getByTestId("workspace-layouts")).toHaveAttribute("aria-selected", "true")
   })
 
   test("organizer reviews a current book and exports a verified PDF", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.goto(`/projects/${closedProjectId}`)
-    await page.getByRole("tab", { name: "4. Book review" }).click()
+    await page.getByTestId("workspace-book").click()
     await expect(page.getByText("0 blocking · 0 warnings")).toBeVisible()
     const pageTiles = page.getByTestId("book-page-tile")
     await expect(pageTiles).toHaveCount(3)
@@ -993,18 +956,18 @@ test.describe.serial("critical local prototype workflows", () => {
 
     await pageTiles.first().click()
     await expect(page).toHaveURL(/bookView=detail/)
-    await expect(page.getByRole("combobox", { name: "Page layout" })).toContainText("Warm quote")
+    await expect(page.getByTestId("combobox-page-layout")).toContainText("Warm quote")
     await expectAccessible(page)
 
-    await page.getByRole("tab", { name: "5. Export" }).click()
+    await page.getByTestId("workspace-export").click()
     const exportResponse = page.waitForResponse(
       (response) =>
         response.url().includes(`/${closedProjectId}/export`) &&
         response.request().method() === "POST"
     )
-    await page.getByRole("button", { name: "Export book" }).click()
+    await page.getByTestId("button-rendering-and-preflighting").click()
     expect((await exportResponse).status()).toBe(201)
-    await expect(page.getByText("Export complete")).toBeVisible()
+    await expect(page.getByTestId("heading-export-complete")).toBeVisible()
 
     // One export produces every format, so all four downloads have to resolve.
     for (const [name, contentType] of [
