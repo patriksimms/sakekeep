@@ -1,0 +1,1 @@
+{"book_language":"Book language","language":"Language","question":"Question","little_note":"A little note","response_count":[{"declarations":["input count","local countPlural = count: plural"],"selectors":["countPlural"],"match":{"countPlural=one":"{count} response","countPlural=other":"{count} responses"}}]}
