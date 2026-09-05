@@ -1575,11 +1575,13 @@ const Editor = forwardRef<
 })
 
 export function LayoutsPanel({
+  ref,
   project,
   onProjectChange,
 }: {
   project: Project
   onProjectChange: (project: Project) => void
+  ref?: React.Ref<Pick<EditorHandle, "flush">>
 }) {
   const [selectedId, setSelectedId] = useState(project.layouts[0]?.id ?? null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -1589,6 +1591,31 @@ export function LayoutsPanel({
   const [pendingOrientation, setPendingOrientation] = useState<PageOrientation | null>(null)
   const [editorEpoch, setEditorEpoch] = useState(0)
   const editorRef = useRef<EditorHandle>(null)
+  const pendingActions = useRef(new Set<Promise<void>>())
+  useImperativeHandle(
+    ref,
+    () => ({
+      flush: async () => {
+        let actionFailed = false
+        while (pendingActions.current.size) {
+          const results = await Promise.allSettled(pendingActions.current)
+          actionFailed ||= results.some((result) => result.status === "rejected")
+        }
+        if (actionFailed) return false
+        return (await editorRef.current?.flush()) ?? true
+      },
+    }),
+    []
+  )
+
+  // A tab switch must wait for layout creation, deletion and format changes as well as autosave.
+  const trackAction = (action: () => Promise<void>) => {
+    const request = action()
+    pendingActions.current.add(request)
+    const settled = () => pendingActions.current.delete(request)
+    void request.then(settled, settled)
+    return request
+  }
   const projectRef = useRef(project)
   projectRef.current = project
   const selected = project.layouts.find((layout) => layout.id === selectedId) ?? project.layouts[0]
@@ -1648,16 +1675,17 @@ export function LayoutsPanel({
     }
   }
 
-  async function runAfterEditorSave(action: () => Promise<void>) {
-    if (formatChanging || layoutChanging) return
-    setLayoutChanging(true)
-    try {
-      if ((await editorRef.current?.flush()) === false) return
-      await action()
-    } finally {
-      setLayoutChanging(false)
-    }
-  }
+  const runAfterEditorSave = (action: () => Promise<void>) =>
+    trackAction(async () => {
+      if (formatChanging || layoutChanging) return
+      setLayoutChanging(true)
+      try {
+        if ((await editorRef.current?.flush()) === false) return
+        await action()
+      } finally {
+        setLayoutChanging(false)
+      }
+    })
 
   const tabLayouts = orderedLayouts(project.layouts)
   const movable = reorderableLayouts(project.layouts)
@@ -1685,64 +1713,66 @@ export function LayoutsPanel({
     })
   }
 
-  const deleteSelectedLayout = async () => {
-    if (!selected || formatChanging || layoutChanging) return
+  const deleteSelectedLayout = () =>
+    trackAction(async () => {
+      if (!selected || formatChanging || layoutChanging) return
 
-    setLayoutChanging(true)
-    try {
-      await editorRef.current?.settle()
-      await projectApi.deleteLayout(project.id, selected.id)
-      editorRef.current?.discard()
-      const index = project.layouts.findIndex((layout) => layout.id === selected.id)
-      const remaining = orderedLayouts(
-        project.layouts.filter((layout) => layout.id !== selected.id)
-      ).map((layout, position) => ({ ...layout, position }))
-      setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
-      setEditorSaveState("saved")
-      updateLayouts(remaining)
-    } catch (error) {
-      void editorRef.current?.flush()
-      toast.error(error instanceof Error ? error.message : "Delete failed")
-    } finally {
-      setLayoutChanging(false)
-    }
-  }
+      setLayoutChanging(true)
+      try {
+        await editorRef.current?.settle()
+        await projectApi.deleteLayout(project.id, selected.id)
+        editorRef.current?.discard()
+        const index = project.layouts.findIndex((layout) => layout.id === selected.id)
+        const remaining = orderedLayouts(
+          project.layouts.filter((layout) => layout.id !== selected.id)
+        ).map((layout, position) => ({ ...layout, position }))
+        setSelectedId(remaining[Math.max(0, index - 1)]?.id ?? null)
+        setEditorSaveState("saved")
+        updateLayouts(remaining)
+      } catch (error) {
+        void editorRef.current?.flush()
+        toast.error(error instanceof Error ? error.message : "Delete failed")
+      } finally {
+        setLayoutChanging(false)
+      }
+    })
 
-  const changePageFormat = async (
+  const changePageFormat = (
     pageFormat: PageFormat,
     pageOrientation: PageOrientation,
     resetLayouts = false
-  ) => {
-    if (formatChanging || layoutChanging) return
-    setFormatChanging(true)
-    try {
-      if ((await editorRef.current?.flush()) === false) return
-      const updated = await projectApi.layoutAction<Project>(project.id, {
-        action: "set-page-format",
-        pageFormat,
-        pageOrientation,
-        resetLayouts,
-      })
-      onProjectChange(updated)
-      setSelectedId(
-        updated.layouts.some((layout) => layout.id === selectedId)
-          ? selectedId
-          : (updated.layouts[0]?.id ?? null)
-      )
-      setEditorEpoch((value) => value + 1)
-      captureAnalyticsEvent("layout_editor:page_format_changed", {
-        page_format: pageFormat,
-        page_orientation: pageOrientation,
-        layouts_reset: resetLayouts,
-      })
-      toast.success(`Page format changed to ${pageFormatLabel(pageFormat)} ${pageOrientation}`)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Page format change failed")
-    } finally {
-      setFormatChanging(false)
-      setPendingOrientation(null)
-    }
-  }
+  ) =>
+    trackAction(async () => {
+      if (formatChanging || layoutChanging) return
+      setFormatChanging(true)
+      try {
+        if ((await editorRef.current?.flush()) === false) return
+        const updated = await projectApi.layoutAction<Project>(project.id, {
+          action: "set-page-format",
+          pageFormat,
+          pageOrientation,
+          resetLayouts,
+        })
+        onProjectChange(updated)
+        setSelectedId(
+          updated.layouts.some((layout) => layout.id === selectedId)
+            ? selectedId
+            : (updated.layouts[0]?.id ?? null)
+        )
+        setEditorEpoch((value) => value + 1)
+        captureAnalyticsEvent("layout_editor:page_format_changed", {
+          page_format: pageFormat,
+          page_orientation: pageOrientation,
+          layouts_reset: resetLayouts,
+        })
+        toast.success(`Page format changed to ${pageFormatLabel(pageFormat)} ${pageOrientation}`)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Page format change failed")
+      } finally {
+        setFormatChanging(false)
+        setPendingOrientation(null)
+      }
+    })
 
   const workspaceDisabled = formatChanging || layoutChanging
   const formatControlsDisabled = workspaceDisabled || editorSaveState !== "saved"
