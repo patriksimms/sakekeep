@@ -211,42 +211,57 @@ test("settings, assignments, page order and standalone pages rebuild after savin
   }
 })
 
-test("review waits for a layout operation already in flight", async ({ page, request }) => {
-  const original = await getProject(request)
-  let release!: () => void
-  const held = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  let started = false
-  let generations = 0
-  await page.route(`**${api}/layouts`, async (route) => {
-    if (route.request().method() !== "POST") return route.continue()
-    started = true
-    await held
-    await route.continue()
-  })
-  page.on("request", (request) => {
-    if (request.url().endsWith(`${api}/book`) && request.method() === "POST") generations++
-  })
-  try {
-    await page.goto(`/projects/${id}?tab=layouts`)
-    await page.getByRole("button", { name: "Duplicate layout", exact: true }).click()
-    await expect.poll(() => started).toBe(true)
-    await page.getByRole("tab", { name: "4. Book review" }).click()
-    await expect(page.getByText("Updating book", { exact: true })).toBeVisible()
-    expect(generations).toBe(0)
-    release()
-    await expect(page.getByRole("combobox", { name: "Assignment mode" })).toBeEnabled()
-    expect(generations).toBe(1)
-    const saved = await getProject(request)
-    expect(saved.bookStatus).toBe("current")
-    expect(saved.layouts).toHaveLength(original.layouts.length + 1)
-  } finally {
-    release()
-    for (const layout of (await getProject(request)).layouts) {
-      if (!original.layouts.some((item) => item.id === layout.id))
-        await request.delete(`${api}/layouts/${layout.id}`)
+for (const failAction of [false, true]) {
+  test(`review waits for a layout operation${failAction ? " and handles rejection" : " already in flight"}`, async ({
+    page,
+    request,
+  }) => {
+    const original = await getProject(request)
+    let release!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let started = false
+    let generations = 0
+    await page.route(`**${api}/layouts`, async (route) => {
+      if (route.request().method() !== "POST") return route.continue()
+      started = true
+      await held
+      if (failAction)
+        return route.fulfill({ status: 503, json: { error: "Layout operation unavailable" } })
+      await route.continue()
+    })
+    page.on("request", (request) => {
+      if (request.url().endsWith(`${api}/book`) && request.method() === "POST") generations++
+    })
+    try {
+      await page.goto(`/projects/${id}?tab=layouts`)
+      await page.getByRole("button", { name: "Duplicate layout", exact: true }).click()
+      await expect.poll(() => started).toBe(true)
+      await page.getByRole("tab", { name: "4. Book review" }).click()
+      await expect(page.getByText("Updating book", { exact: true })).toBeVisible()
+      expect(generations).toBe(0)
+      release()
+      if (failAction) {
+        await expect(
+          page.getByText("Layout changes could not be saved.", { exact: false })
+        ).toBeVisible()
+        await expect(page.getByRole("combobox", { name: "Assignment mode" })).toBeDisabled()
+        expect(generations).toBe(0)
+        await page.getByRole("button", { name: "Retry", exact: true }).click()
+      }
+      await expect(page.getByRole("combobox", { name: "Assignment mode" })).toBeEnabled()
+      expect(generations).toBe(1)
+      const saved = await getProject(request)
+      expect(saved.bookStatus).toBe("current")
+      expect(saved.layouts).toHaveLength(original.layouts.length + (failAction ? 0 : 1))
+    } finally {
+      release()
+      for (const layout of (await getProject(request)).layouts) {
+        if (!original.layouts.some((item) => item.id === layout.id))
+          await request.delete(`${api}/layouts/${layout.id}`)
+      }
+      await request.post(`${api}/book`, { data: original.book!.settings })
     }
-    await request.post(`${api}/book`, { data: original.book!.settings })
-  }
-})
+  })
+}

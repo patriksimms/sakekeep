@@ -142,7 +142,11 @@ describe("automatic book generation", () => {
       saving = result.current.updateBook({ settings }, cause)
     })
     expect(result.current.busy).toBe(true)
-    await act(async () => result.current.updateBook({ settings: cycleSettings }, cause))
+    await act(async () => {
+      await expect(result.current.updateBook({ settings: cycleSettings }, cause)).rejects.toThrow(
+        "Wait for the current book update to finish."
+      )
+    })
     expect(updateBook).toHaveBeenCalledTimes(1)
     expect(generate).not.toHaveBeenCalled()
     await act(async () => {

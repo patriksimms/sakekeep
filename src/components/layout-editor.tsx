@@ -1596,7 +1596,12 @@ export function LayoutsPanel({
     ref,
     () => ({
       flush: async () => {
-        while (pendingActions.current.size) await Promise.all(pendingActions.current)
+        let actionFailed = false
+        while (pendingActions.current.size) {
+          const results = await Promise.allSettled(pendingActions.current)
+          actionFailed ||= results.some((result) => result.status === "rejected")
+        }
+        if (actionFailed) return false
         return (await editorRef.current?.flush()) ?? true
       },
     }),

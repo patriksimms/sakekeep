@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import type { GenerationSettings, Project } from "#/domain/types.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
@@ -34,7 +34,9 @@ export function useBookGeneration({
   const failure = useRef(false)
   const cause = useRef<RegenerationCause>("saved_inputs")
   const latest = useRef({ project, active, onProjectChange, beforeGenerate, onBusyChange })
-  latest.current = { project, active, onProjectChange, beforeGenerate, onBusyChange }
+  useLayoutEffect(() => {
+    latest.current = { project, active, onProjectChange, beforeGenerate, onBusyChange }
+  }, [project, active, onProjectChange, beforeGenerate, onBusyChange])
 
   const setWorking = useCallback((working: boolean) => {
     locked.current = working
@@ -112,7 +114,7 @@ export function useBookGeneration({
     input: Parameters<typeof projectApi.updateBook>[1],
     staleCause: RegenerationCause
   ) => {
-    if (locked.current) return
+    if (locked.current) throw new Error("Wait for the current book update to finish.")
     setWorking(true)
     try {
       const updated = await projectApi.updateBook(latest.current.project.id, input)
