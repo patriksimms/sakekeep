@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import sharp from "sharp"
 
 import { acceptedImageExtensions, acceptedImageMimeTypes } from "../domain/form"
@@ -32,7 +33,7 @@ export async function normalizeImage(
 
   const metadata = await oriented.metadata()
   if (!metadata.width || !metadata.height) {
-    throw new Error("The image has no usable dimensions.")
+    throw new Error(m.ui_the_image_has_no_usable_dimensions())
   }
 
   const hasAlpha = metadata.hasAlpha === true

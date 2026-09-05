@@ -66,6 +66,7 @@ function reviewProject(focalPoint?: { x: number; y: number }): Project {
     id: layout.projectId,
     title: "Test book",
     occasion: null,
+    bookLanguage: "en",
     state: "closed",
     formSchema: completeForm,
     formRevision: 1,

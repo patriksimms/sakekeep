@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import {
   AlertTriangleIcon,
   ArrowDownIcon,
@@ -73,11 +74,21 @@ import { ApiError, projectApi } from "#/lib/api.ts"
 type SaveState = "saved" | "unsaved" | "saving" | "failed"
 
 const typeLabels: Record<QuestionType, string> = {
-  "single-line": "Single-line text",
-  multiline: "Multiline text",
-  radio: "Radio buttons",
-  checkboxes: "Checkboxes",
-  images: "Image upload",
+  get "single-line"() {
+    return m.ui_single_line_text()
+  },
+  get multiline() {
+    return m.ui_multiline_text()
+  },
+  get radio() {
+    return m.ui_radio_buttons()
+  },
+  get checkboxes() {
+    return m.ui_checkboxes()
+  },
+  get images() {
+    return m.ui_image_upload()
+  },
 }
 
 function newQuestion(type: QuestionType): FormQuestion {
@@ -95,21 +106,26 @@ function newQuestion(type: QuestionType): FormQuestion {
     ...base,
     type,
     choices: [
-      { id: crypto.randomUUID(), label: "Option 1" },
-      { id: crypto.randomUUID(), label: "Option 2" },
+      { id: crypto.randomUUID(), label: m.ui_option_1() },
+      { id: crypto.randomUUID(), label: m.ui_option_2() },
     ],
   }
 }
 
 function SaveIndicator({ state }: { state: SaveState }) {
   const content = {
-    saved: { icon: CheckIcon, label: "Saved" },
-    unsaved: { icon: SaveIcon, label: "Unsaved changes" },
-    saving: { icon: LoaderCircleIcon, label: "Saving…" },
-    failed: { icon: XCircleIcon, label: "Save failed" },
+    saved: { icon: CheckIcon, label: m.ui_saved() },
+    unsaved: { icon: SaveIcon, label: m.ui_unsaved_changes() },
+    saving: { icon: LoaderCircleIcon, label: m.ui_saving() },
+    failed: { icon: XCircleIcon, label: m.ui_save_failed() },
   }[state]
   return (
-    <span role="status" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+    <span
+      data-testid="save-status"
+      data-save-state={state}
+      role="status"
+      className="flex items-center gap-1.5 text-sm text-muted-foreground"
+    >
       <content.icon
         aria-hidden="true"
         className={state === "saving" ? "animate-spin" : undefined}
@@ -150,7 +166,9 @@ function describeIssues(issues: ValidationIssue[]): string {
  */
 function describePublishIssue(issue: ValidationIssue): string {
   const index = questionIndexForIssue(issue)
-  return index === null ? issue.message : `Question ${index + 1}: ${issue.message}`
+  return index === null
+    ? issue.message
+    : m.question_issue({ value0: index + 1, value1: issue.message })
 }
 
 /** Adapt our plain message strings to the shape `FieldError` renders. */
@@ -186,40 +204,43 @@ function QuestionEditor({
   return (
     <Card className="bg-card/90" data-testid="question-card">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle data-testid="heading-untitled-question" className="flex items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-lg bg-muted font-sans text-xs">
             {index + 1}
           </span>
-          {question.prompt || "Untitled question"}
+          {question.prompt || m.ui_untitled_question()}
         </CardTitle>
         <CardDescription>{typeLabels[question.type]}</CardDescription>
         <CardAction className="flex items-center gap-1">
           <Button
+            data-testid="button-move-question-up"
             type="button"
             variant="ghost"
             size="icon-sm"
             onClick={() => onMove(-1)}
             disabled={index === 0}
-            aria-label="Move question up"
+            aria-label={m.ui_move_question_up()}
           >
             <ArrowUpIcon />
           </Button>
           <Button
+            data-testid="button-move-question-down"
             type="button"
             variant="ghost"
             size="icon-sm"
             onClick={() => onMove(1)}
             disabled={index === count - 1}
-            aria-label="Move question down"
+            aria-label={m.ui_move_question_down()}
           >
             <ArrowDownIcon />
           </Button>
           <Button
+            data-testid="button-delete-question"
             type="button"
             variant="ghost"
             size="icon-sm"
             onClick={onRemove}
-            aria-label="Delete question"
+            aria-label={m.ui_delete_question()}
           >
             <Trash2Icon />
           </Button>
@@ -228,12 +249,13 @@ function QuestionEditor({
       <CardContent>
         <FieldGroup>
           <Field data-invalid={promptErrors ? true : undefined}>
-            <FieldLabel htmlFor={`prompt-${question.id}`}>Question</FieldLabel>
+            <FieldLabel htmlFor={`prompt-${question.id}`}>{m.ui_question()}</FieldLabel>
             <Textarea
               id={`prompt-${question.id}`}
+              data-testid="question-prompt"
               value={question.prompt}
               onChange={(event) => update({ prompt: event.target.value })}
-              placeholder="What will you always remember about us?"
+              placeholder={m.ui_what_will_you_always_remember_about_us()}
               rows={2}
               maxLength={500}
               aria-invalid={promptErrors ? true : undefined}
@@ -247,13 +269,14 @@ function QuestionEditor({
               checked={question.required}
               onCheckedChange={(checked) => update({ required: checked === true })}
             />
-            <FieldLabel htmlFor={`required-${question.id}`}>Required answer</FieldLabel>
+            <FieldLabel htmlFor={`required-${question.id}`}>{m.ui_required_answer()}</FieldLabel>
           </Field>
 
           {(question.type === "single-line" || question.type === "multiline") && (
             <Field>
               <FieldLabel htmlFor={`limit-${question.id}`}>
-                Character limit <span className="text-muted-foreground">(optional)</span>
+                {m.ui_character_limit()}{" "}
+                <span className="text-muted-foreground">{m.ui_optional()}</span>
               </FieldLabel>
               <Input
                 id={`limit-${question.id}`}
@@ -268,7 +291,7 @@ function QuestionEditor({
                 }
               />
               <FieldDescription>
-                Positive values are enforced in the browser and on the server.
+                {m.ui_positive_values_are_enforced_in_the_browser_and_on_the_server()}{" "}
               </FieldDescription>
             </Field>
           )}
@@ -282,14 +305,14 @@ function QuestionEditor({
               />
               <FieldLabel htmlFor={`url-${question.id}`}>
                 <LinkIcon aria-hidden="true" />
-                Validate as an HTTP or HTTPS URL
+                {m.ui_validate_as_an_http_or_https_url()}{" "}
               </FieldLabel>
             </Field>
           )}
 
           {(question.type === "radio" || question.type === "checkboxes") && (
             <Field>
-              <FieldLabel>Ordered choices</FieldLabel>
+              <FieldLabel>{m.ui_ordered_choices()}</FieldLabel>
               <div className="flex flex-col gap-2">
                 {question.choices.map((choice, choiceIndex) => {
                   const choiceErrors = asErrors(issues?.choices.get(choiceIndex))
@@ -298,7 +321,7 @@ function QuestionEditor({
                       <div className="flex items-center gap-2">
                         <Input
                           value={choice.label}
-                          aria-label={`Choice ${choiceIndex + 1}`}
+                          aria-label={m.choice_number({ value0: choiceIndex + 1 })}
                           aria-invalid={choiceErrors ? true : undefined}
                           aria-describedby={choiceErrors ? `choice-error-${choice.id}` : undefined}
                           onChange={(event) =>
@@ -315,7 +338,7 @@ function QuestionEditor({
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Move choice ${choiceIndex + 1} up`}
+                          aria-label={m.move_choice_up({ value0: choiceIndex + 1 })}
                           disabled={choiceIndex === 0}
                           onClick={() => {
                             const choices = [...question.choices]
@@ -330,7 +353,7 @@ function QuestionEditor({
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Move choice ${choiceIndex + 1} down`}
+                          aria-label={m.move_choice_down({ value0: choiceIndex + 1 })}
                           disabled={choiceIndex === question.choices.length - 1}
                           onClick={() => {
                             const choices = [...question.choices]
@@ -345,7 +368,7 @@ function QuestionEditor({
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Delete choice ${choiceIndex + 1}`}
+                          aria-label={m.delete_choice({ value0: choiceIndex + 1 })}
                           disabled={question.choices.length <= 2}
                           onClick={() =>
                             update({
@@ -364,6 +387,7 @@ function QuestionEditor({
                 })}
               </div>
               <Button
+                data-testid="button-add-choice"
                 type="button"
                 variant="outline"
                 size="sm"
@@ -374,21 +398,21 @@ function QuestionEditor({
                       ...question.choices,
                       {
                         id: crypto.randomUUID(),
-                        label: `Option ${question.choices.length + 1}`,
+                        label: m.new_choice_label({ value0: question.choices.length + 1 }),
                       },
                     ],
                   })
                 }
               >
                 <PlusIcon data-icon="inline-start" />
-                Add choice
+                {m.ui_add_choice()}{" "}
               </Button>
             </Field>
           )}
 
           {question.type === "images" && (
             <Field>
-              <FieldLabel htmlFor={`max-images-${question.id}`}>Maximum images</FieldLabel>
+              <FieldLabel htmlFor={`max-images-${question.id}`}>{m.ui_maximum_images()}</FieldLabel>
               <Input
                 id={`max-images-${question.id}`}
                 type="number"
@@ -402,7 +426,7 @@ function QuestionEditor({
                 }
               />
               <FieldDescription>
-                JPEG, PNG, WebP, HEIF, and HEIC. Up to 15 MB per source image.
+                {m.ui_jpeg_png_webp_heif_and_heic_up_to_15_mb_per_source_image()}{" "}
               </FieldDescription>
             </Field>
           )}
@@ -411,8 +435,10 @@ function QuestionEditor({
         </FieldGroup>
       </CardContent>
       <CardFooter className="justify-between text-xs text-muted-foreground">
-        <span>Question ID: {question.id.slice(0, 8)}</span>
-        {question.required && <Badge variant="outline">Required</Badge>}
+        <span>
+          {m.ui_question_id()} {question.id.slice(0, 8)}
+        </span>
+        {question.required && <Badge variant="outline">{m.ui_required()}</Badge>}
       </CardFooter>
     </Card>
   )
@@ -485,7 +511,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       setSaveState("failed")
       const issues = validationIssuesFrom(error)
       setSaveIssues(issues)
-      toast.error(error instanceof Error ? error.message : "Autosave failed", {
+      toast.error(error instanceof Error ? error.message : m.ui_autosave_failed(), {
         description: issues.length > 0 ? describeIssues(issues) : undefined,
       })
     } finally {
@@ -534,45 +560,52 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-heading text-2xl">
-              {archived ? "Archived form" : "Published form"}
+            <h2 data-testid="heading-archived-form" className="font-heading text-2xl">
+              {archived ? m.ui_archived_form() : m.ui_published_form()}
             </h2>
             <p className="text-sm text-muted-foreground">
               {archived
-                ? "Unarchive the project to keep editing this form."
-                : "This revision is permanently frozen."}
+                ? m.ui_unarchive_the_project_to_keep_editing_this_form()
+                : m.ui_this_revision_is_permanently_frozen()}
             </p>
           </div>
           {/* An archived draft has no published revision to copy from. */}
           {project.state !== "draft" && (
             <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="outline" />}>
+              <AlertDialogTrigger
+                data-testid="button-duplicate-as-draft"
+                render={<Button variant="outline" />}
+              >
                 <CopyIcon data-icon="inline-start" />
-                Duplicate as draft
+                {m.ui_duplicate_as_draft()}{" "}
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Duplicate this project?</AlertDialogTitle>
+                  <AlertDialogTitle data-testid="heading-duplicate-this-project">
+                    {m.ui_duplicate_this_project()}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    The new draft copies the form and layouts, but never the share token or
-                    responses. This project remains unchanged.
+                    {m.ui_the_new_draft_copies_the_form_and_layouts_but_never_the_share_tok()}{" "}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
                   <AlertDialogAction
+                    data-testid="button-create-draft-copy"
                     onClick={async () => {
                       try {
                         const duplicate = await projectApi.action(project.id, "duplicate")
                         window.location.assign(`/projects/${duplicate.id}`)
                       } catch (error) {
                         toast.error(
-                          error instanceof Error ? error.message : "Could not duplicate project"
+                          error instanceof Error
+                            ? error.message
+                            : m.ui_could_not_duplicate_project()
                         )
                       }
                     }}
                   >
-                    Create draft copy
+                    {m.ui_create_draft_copy()}{" "}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -587,7 +620,8 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
                   {index + 1}. {question.prompt}
                 </CardTitle>
                 <CardDescription>
-                  {typeLabels[question.type]} · {question.required ? "Required" : "Optional"}
+                  {typeLabels[question.type]} ·{" "}
+                  {question.required ? m.ui_required() : m.ui_optional_165()}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -601,9 +635,11 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h2 className="font-heading text-2xl">Build the questionnaire</h2>
+          <h2 data-testid="heading-build-the-questionnaire" className="font-heading text-2xl">
+            {m.ui_build_the_questionnaire()}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Changes autosave with revision checks. Publishing freezes this form forever.
+            {m.ui_changes_autosave_with_revision_checks_publishing_freezes_this_for()}{" "}
           </p>
         </div>
         <SaveIndicator state={saveState} />
@@ -611,20 +647,28 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
 
       <Card className="bg-card/80">
         <CardHeader>
-          <CardTitle>Add a question</CardTitle>
+          <CardTitle data-testid="heading-add-a-question">{m.ui_add_a_question()}</CardTitle>
           <CardDescription>
-            Every documented answer type can be mixed and reordered.
+            {m.ui_every_documented_answer_type_can_be_mixed_and_reordered()}{" "}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row">
-          <Select value={addType} onValueChange={(value) => setAddType(value as QuestionType)}>
-            <SelectTrigger className="w-full sm:w-64" aria-label="Question type to add">
+          <Select
+            items={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
+            value={addType}
+            onValueChange={(value) => setAddType(value as QuestionType)}
+          >
+            <SelectTrigger
+              data-testid="combobox-question-type-to-add"
+              className="w-full sm:w-64"
+              aria-label={m.ui_question_type_to_add()}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
                 {Object.entries(typeLabels).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
+                  <SelectItem data-testid={`question-type-${value}`} key={value} value={value}>
                     {label}
                   </SelectItem>
                 ))}
@@ -632,6 +676,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
             </SelectContent>
           </Select>
           <Button
+            data-testid="button-add"
             type="button"
             onClick={() =>
               change({
@@ -645,16 +690,16 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
             ) : (
               <PlusIcon data-icon="inline-start" />
             )}
-            Add {typeLabels[addType].toLowerCase()}
+            {m.ui_add()} {typeLabels[addType].toLowerCase()}
           </Button>
         </CardContent>
       </Card>
 
       {form.questions.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
-          <p className="font-heading text-lg">The first page is still blank.</p>
+          <p className="font-heading text-lg">{m.ui_the_first_page_is_still_blank()}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add at least one valid question before publishing.
+            {m.ui_add_at_least_one_valid_question_before_publishing()}{" "}
           </p>
         </div>
       ) : (
@@ -694,9 +739,12 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       {grouped.form.length > 0 && (
         <Card className="border-destructive/50 bg-card/80">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
+            <CardTitle
+              data-testid="heading-this-form-could-not-be-saved"
+              className="flex items-center gap-2 text-destructive"
+            >
               <AlertTriangleIcon aria-hidden="true" />
-              This form could not be saved
+              {m.ui_this_form_could_not_be_saved()}{" "}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -715,9 +763,9 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       {issues.length > 0 && (
         <Card className="bg-card/80">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle data-testid="heading-before-you-publish" className="flex items-center gap-2">
               <AlertTriangleIcon aria-hidden="true" />
-              Before you publish
+              {m.ui_before_you_publish()}{" "}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -733,6 +781,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
       <div className="flex justify-end">
         <AlertDialog>
           <AlertDialogTrigger
+            data-testid="button-publish-and-create-share-link"
             render={
               <Button
                 size="lg"
@@ -745,30 +794,34 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
               />
             }
           >
-            Publish and create share link
+            {m.ui_publish_and_create_share_link()}{" "}
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Publish this form permanently?</AlertDialogTitle>
+              <AlertDialogTitle data-testid="heading-publish-this-form-permanently">
+                {m.ui_publish_this_form_permanently()}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                Publishing creates an unguessable public link and freezes this exact form revision.
-                You can duplicate the project later, but you cannot edit the published form.
+                {m.ui_publishing_creates_an_unguessable_public_link_and_freezes_this_ex()}{" "}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Keep editing</AlertDialogCancel>
+              <AlertDialogCancel data-testid="button-keep-editing">
+                {m.ui_keep_editing()}
+              </AlertDialogCancel>
               <AlertDialogAction
+                data-testid="button-publish-forever"
                 onClick={async () => {
                   try {
                     const updated = await projectApi.action(project.id, "publish")
                     onProjectChange(updated)
-                    toast.success("Form published")
+                    toast.success(m.ui_form_published())
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Publish failed")
+                    toast.error(error instanceof Error ? error.message : m.ui_publish_failed())
                   }
                 }}
               >
-                Publish forever
+                {m.ui_publish_forever()}{" "}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

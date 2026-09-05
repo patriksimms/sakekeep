@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { problemMessage } from "#/domain/problem-message.ts"
 import { blockingProblems } from "./generation"
 import { pageSpecification, type PageSpecification } from "./page-format.ts"
 import { type ExportReport, type GeneratedBook, type PreflightCheck } from "./types"
@@ -26,55 +28,58 @@ export function createPreflightReport(input: {
   const checks: PreflightCheck[] = [
     {
       id: "generation-current",
-      label: "Generated book is current",
+      label: m.ui_generated_book_is_current(),
       status: input.bookStatus === "current" ? "pass" : "fail",
       detail:
         input.bookStatus === "current"
-          ? "The rendered source matches the persisted generation."
-          : "Regenerate the complete book before export.",
+          ? m.ui_the_rendered_source_matches_the_persisted_generation()
+          : m.ui_regenerate_the_complete_book_before_export(),
     },
     {
       id: "blocking-problems",
-      label: "No blocking layout problems",
+      label: m.ui_no_blocking_layout_problems(),
       status: problems.length === 0 ? "pass" : blockingProblemsAccepted ? "warning" : "fail",
       detail:
         problems.length === 0
-          ? "No unresolved blocking problems were found."
+          ? m.ui_no_unresolved_blocking_problems_were_found()
           : blockingProblemsAccepted
-            ? `The organizer accepted ${problems.length} blocking problem(s) for this export.`
-            : `${problems.length} blocking problem(s) remain.`,
+            ? m.accepted_problem_count({ value0: problems.length })
+            : m.remaining_problem_count({ value0: problems.length }),
     },
     {
       id: "page-boxes",
-      label: "Page boxes and physical dimensions",
+      label: m.ui_page_boxes_and_physical_dimensions(),
       status: input.pageBoxesValid ? "pass" : "fail",
-      detail: `${specification.mediaWidthMm} × ${specification.mediaHeightMm} mm including 3 mm bleed.`,
+      detail: m.media_size_detail({
+        value0: specification.mediaWidthMm,
+        value1: specification.mediaHeightMm,
+      }),
     },
     {
       id: "page-count",
-      label: "Page count",
+      label: m.ui_page_count(),
       status: input.pageCount === input.book.pages.length ? "pass" : "fail",
-      detail: `${input.pageCount} individual page(s); no imposed spreads.`,
+      detail: m.page_count_detail({ value0: input.pageCount }),
     },
     {
       id: "fonts",
-      label: "Fonts embedded",
+      label: m.ui_fonts_embedded(),
       status: input.fontsEmbedded ? "pass" : "fail",
       detail: input.fontsEmbedded
-        ? "Bundled fonts are embedded in the PDF."
-        : "One or more fonts are not embedded.",
+        ? m.ui_bundled_fonts_are_embedded_in_the_pdf()
+        : m.ui_one_or_more_fonts_are_not_embedded(),
     },
     {
       id: "output-intent",
-      label: "Output intent",
+      label: m.ui_output_intent(),
       status: input.outputIntentEmbedded ? "pass" : "fail",
       detail: input.outputIntentEmbedded
-        ? "An ICC output intent is present."
-        : "The required ICC output intent is missing.",
+        ? m.ui_an_icc_output_intent_is_present()
+        : m.ui_the_required_icc_output_intent_is_missing(),
     },
     {
       id: "image-resolution",
-      label: "Effective image resolution",
+      label: m.ui_effective_image_resolution(),
       status: !input.assetResolutionMetadata
         ? "fail"
         : problems.some((problem) => problem.code === "image-blocking-resolution")
@@ -87,23 +92,23 @@ export function createPreflightReport(input: {
             ? "warning"
             : "pass",
       detail: input.assetResolutionMetadata
-        ? `${input.assetResolutionCount} placed raster asset(s) carry pixel dimensions, placed dimensions, and effective PPI metadata. Images below 300 PPI are reported; images below 150 PPI require an explicit recorded override.`
-        : "The PDF is missing machine-readable effective-resolution metadata.",
+        ? m.resolution_metadata_detail({ value0: input.assetResolutionCount })
+        : m.ui_the_pdf_is_missing_machine_readable_effective_resolution_metadata(),
     },
     {
       id: "empty-decorative-images",
-      label: "Decorative images selected",
+      label: m.ui_decorative_images_selected(),
       status: emptyDecorativeImages.length > 0 ? "warning" : "pass",
       detail:
         emptyDecorativeImages.length > 0
-          ? `${emptyDecorativeImages.length} empty decorative image placement(s) were omitted from the PDF.`
-          : "Every decorative image placement has an image selected.",
+          ? m.omitted_image_count({ value0: emptyDecorativeImages.length })
+          : m.ui_every_decorative_image_placement_has_an_image_selected(),
     },
   ]
 
   const overrides = input.book.settings.resolutionOverrides.map((assetId) => ({
     assetId,
-    reason: "Organizer explicitly accepted an image below the 150 effective PPI threshold.",
+    reason: m.ui_organizer_explicitly_accepted_an_image_below_the_150_effective_pp(),
   }))
 
   return {
@@ -129,8 +134,7 @@ export function createPreflightReport(input: {
       target: "PDF/X-4",
       structurallyVerified:
         input.fontsEmbedded && input.outputIntentEmbedded && input.pageBoxesValid,
-      limitation:
-        "The prototype performs structural PDF/X-4 checks but does not run an independent ISO 15930 conformance validator; see docs/PDF_PIPELINE.md.",
+      limitation: m.pdfx_limitation(),
     },
   }
 }
@@ -141,41 +145,45 @@ export function hasFailedPreflight(report: ExportReport): boolean {
 
 export function reportAsText(report: ExportReport): string {
   const lines = [
-    "Sakekeep print preflight report",
-    `Generated: ${report.generatedAt}`,
-    `Project: ${report.projectId}`,
-    `Source fingerprint: ${report.sourceFingerprint}`,
+    m.ui_sakekeep_print_preflight_report(),
+    m.report_generated({ value0: report.generatedAt }),
+    m.report_project({ value0: report.projectId }),
+    m.report_fingerprint({ value0: report.sourceFingerprint }),
     "",
-    "Specification",
+    m.ui_specification(),
     `- ${report.specification.standard}`,
-    `- Trim: ${report.specification.trimMm.join(" × ")} mm`,
-    `- Bleed: ${report.specification.bleedMm} mm`,
-    `- Media box: ${report.specification.mediaBoxMm.join(" × ")} mm`,
-    `- Safe margin: ${report.specification.safeMarginMm} mm`,
-    `- Print condition: ${report.specification.printCondition}`,
-    `- Printer marks: ${report.specification.marks ? "enabled" : "disabled"}`,
+    m.report_trim({ value0: report.specification.trimMm.join(" × ") }),
+    m.report_bleed({ value0: report.specification.bleedMm }),
+    m.report_media_box({ value0: report.specification.mediaBoxMm.join(" × ") }),
+    m.report_safe_margin({ value0: report.specification.safeMarginMm }),
+    m.report_print_condition({ value0: report.specification.printCondition }),
+    m.report_printer_marks({
+      value0: report.specification.marks ? m.report_enabled() : m.report_disabled(),
+    }),
     "",
-    "Checks",
+    m.ui_checks(),
     ...report.checks.map(
       (check) => `- [${check.status.toUpperCase()}] ${check.label}: ${check.detail}`
     ),
     "",
-    "Resolution overrides",
+    m.ui_resolution_overrides(),
     ...(report.overrides.length
       ? report.overrides.map((override) => `- ${override.assetId}: ${override.reason}`)
-      : ["- None"]),
+      : [m.ui_none()]),
     "",
-    "Accepted blocking problems",
+    m.ui_accepted_blocking_problems(),
     ...(report.ignoredProblems?.length
       ? report.ignoredProblems.map(
           (problem) =>
-            `- ${problem.pageId}${problem.elementId ? ` / ${problem.elementId}` : ""}: ${problem.message}`
+            `- ${problem.pageId}${problem.elementId ? ` / ${problem.elementId}` : ""}: ${problemMessage(problem)}`
         )
-      : ["- None"]),
+      : [m.ui_none()]),
     "",
     "PDF/X-4",
-    `- Structural checks: ${report.pdfx.structurallyVerified ? "passed" : "failed"}`,
-    `- Limitation: ${report.pdfx.limitation ?? "None"}`,
+    m.report_structural_checks({
+      value0: report.pdfx.structurallyVerified ? m.report_passed() : m.report_failed(),
+    }),
+    m.report_limitation({ value0: report.pdfx.limitation ?? m.ui_none_443() }),
   ]
   return `${lines.join("\n")}\n`
 }

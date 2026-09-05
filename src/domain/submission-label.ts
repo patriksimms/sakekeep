@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { type FormSchema, type SubmissionSummary } from "./types.ts"
 
 function normalizeFieldName(value: string) {
@@ -26,5 +27,5 @@ export function submissionLabel(form: FormSchema, submission: SubmissionSummary)
     const answer = submission.answers[question.id]
     if (typeof answer === "string" && answer.trim()) return answer.trim()
   }
-  return `Response ${submission.sequence}`
+  return m.response_label({ value0: submission.sequence })
 }

@@ -1,3 +1,15 @@
+import { captureAnalyticsEvent } from "#/lib/analytics.ts"
+import { getLocale } from "#/paraglide/runtime.js"
+import { isLocale } from "#/lib/locale.ts"
+import * as m from "#/paraglide/messages.js"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#/components/ui/select.tsx"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import {
@@ -49,23 +61,28 @@ export const Route = createFileRoute("/projects/")({
 })
 
 function statusLabel(state: "draft" | "collecting" | "closed") {
-  if (state === "collecting") return "Collecting"
-  if (state === "closed") return "Closed"
-  return "Draft"
+  if (state === "collecting") return m.ui_collecting()
+  if (state === "closed") return m.ui_closed()
+  return m.ui_draft()
 }
 
 function NewProjectDialog() {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
+  const [bookLanguage, setBookLanguage] = useState(getLocale)
   const [occasion, setOccasion] = useState("")
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const create = useMutation({
     mutationFn: projectApi.create,
     onSuccess: async (project) => {
+      captureAnalyticsEvent("project:created", {
+        book_language: project.bookLanguage,
+        ui_locale: getLocale(),
+      })
       await queryClient.invalidateQueries({ queryKey: ["projects"] })
       setOpen(false)
-      toast.success("Project created")
+      toast.success(m.ui_project_created())
       await navigate({
         to: "/projects/$projectId",
         params: { projectId: project.id },
@@ -76,31 +93,34 @@ function NewProjectDialog() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    create.mutate({ title, occasion: occasion || null })
+    create.mutate({ title, occasion: occasion || null, bookLanguage })
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
+      <DialogTrigger data-testid="button-new-project" render={<Button />}>
         <PlusIcon data-icon="inline-start" />
-        New project
+        {m.ui_new_project()}{" "}
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={submit} className="contents">
           <DialogHeader>
-            <DialogTitle>Create a friend book</DialogTitle>
+            <DialogTitle data-testid="heading-create-a-friend-book">
+              {m.ui_create_a_friend_book()}
+            </DialogTitle>
             <DialogDescription>
-              Start with a name and optional occasion. You can refine the form before publishing.
+              {m.ui_start_with_a_name_and_optional_occasion_you_can_refine_the_form_b()}{" "}
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="project-title">Project name</FieldLabel>
+              <FieldLabel htmlFor="project-title">{m.ui_project_name()}</FieldLabel>
               <Input
                 id="project-title"
+                data-testid="project-title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="Lea’s farewell book"
+                placeholder={m.ui_lea_s_farewell_book()}
                 maxLength={200}
                 required
                 autoFocus
@@ -108,24 +128,54 @@ function NewProjectDialog() {
             </Field>
             <Field>
               <FieldLabel htmlFor="project-occasion">
-                Occasion <span className="text-muted-foreground">(optional)</span>
+                {m.ui_occasion()} <span className="text-muted-foreground">{m.ui_optional()}</span>
               </FieldLabel>
               <Input
                 id="project-occasion"
+                data-testid="project-occasion"
                 value={occasion}
                 onChange={(event) => setOccasion(event.target.value)}
-                placeholder="Farewell · September 2026"
+                placeholder={m.ui_farewell_september_2026()}
                 maxLength={200}
               />
-              <FieldDescription>This helps you distinguish projects locally.</FieldDescription>
+              <FieldDescription>
+                {m.ui_this_helps_you_distinguish_projects_locally()}
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="book-language">{m.book_language()}</FieldLabel>
+              <Select
+                value={bookLanguage}
+                onValueChange={(value) => {
+                  if (isLocale(value)) setBookLanguage(value)
+                }}
+                items={[
+                  { value: "de", label: "Deutsch" },
+                  { value: "en", label: "English" },
+                ]}
+              >
+                <SelectTrigger id="book-language" data-testid="book-language">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="de">Deutsch</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <Button type="submit" disabled={create.isPending || !title.trim()}>
+            <Button
+              data-testid="button-create-project"
+              type="submit"
+              disabled={create.isPending || !title.trim()}
+            >
               {create.isPending && (
                 <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
               )}
-              Create project
+              {m.ui_create_project()}{" "}
             </Button>
           </DialogFooter>
         </form>
@@ -151,19 +201,27 @@ function ProjectsPage() {
       <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div className="flex max-w-2xl flex-col gap-2">
           <p className="text-sm font-semibold tracking-[0.16em] text-primary uppercase">
-            Organizer workspace
+            {m.ui_organizer_workspace()}{" "}
           </p>
-          <h1 className="font-heading text-4xl tracking-tight sm:text-5xl">Your projects</h1>
+          <h1
+            data-testid="heading-your-projects"
+            className="font-heading text-4xl tracking-tight sm:text-5xl"
+          >
+            {m.ui_your_projects()}
+          </h1>
           <p className="text-muted-foreground">
-            Everything here is stored in your local PostgreSQL and RustFS services. Do not use real
-            personal data in this prototype.
+            {m.ui_everything_here_is_stored_in_your_local_postgresql_and_rustfs_ser()}{" "}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {archivedCount > 0 && (
-            <Button variant="outline" onClick={() => setShowArchived((current) => !current)}>
+            <Button
+              data-testid="button-hide-archived"
+              variant="outline"
+              onClick={() => setShowArchived((current) => !current)}
+            >
               <ArchiveIcon data-icon="inline-start" />
-              {showArchived ? "Hide archived" : `Show archived (${archivedCount})`}
+              {showArchived ? m.ui_hide_archived() : m.show_archived({ value0: archivedCount })}
             </Button>
           )}
           <NewProjectDialog />
@@ -182,14 +240,17 @@ function ProjectsPage() {
             <EmptyMedia variant="icon">
               <BookHeartIcon />
             </EmptyMedia>
-            <EmptyTitle>Local services are not ready</EmptyTitle>
+            <EmptyTitle data-testid="heading-local-services-are-not-ready">
+              {m.ui_local_services_are_not_ready()}
+            </EmptyTitle>
             <EmptyDescription>
-              {projects.error.message} Run <code>bun run setup</code>, then retry.
+              {projects.error.message} {m.ui_run()} <code>bun run setup</code>
+              {m.ui_then_retry()}{" "}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button variant="outline" onClick={() => projects.refetch()}>
-              Retry
+            <Button data-testid="button-retry" variant="outline" onClick={() => projects.refetch()}>
+              {m.ui_retry()}{" "}
             </Button>
           </EmptyContent>
         </Empty>
@@ -199,10 +260,11 @@ function ProjectsPage() {
             <EmptyMedia variant="icon">
               <FolderPlusIcon />
             </EmptyMedia>
-            <EmptyTitle>No keepsakes yet</EmptyTitle>
+            <EmptyTitle data-testid="heading-no-keepsakes-yet">
+              {m.ui_no_keepsakes_yet()}
+            </EmptyTitle>
             <EmptyDescription>
-              Create a draft project, shape its questions, then publish a share link when it feels
-              right.
+              {m.ui_create_a_draft_project_shape_its_questions_then_publish_a_share_l()}{" "}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -216,7 +278,7 @@ function ProjectsPage() {
               key={project.id}
               to="/projects/$projectId"
               params={{ projectId: project.id }}
-              aria-label={`Open ${project.title} workspace`}
+              aria-label={m.open_project_workspace({ value0: project.title })}
               className="group/project-card rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <Card
@@ -228,12 +290,12 @@ function ProjectsPage() {
               >
                 <CardHeader>
                   <CardTitle className="text-xl">{project.title}</CardTitle>
-                  <CardDescription>{project.occasion || "No occasion added"}</CardDescription>
+                  <CardDescription>{project.occasion || m.ui_no_occasion_added()}</CardDescription>
                   <CardAction className="flex items-center gap-2">
                     {project.archivedAt && (
                       <Badge variant="outline">
                         <ArchiveIcon data-icon="inline-start" />
-                        Archived
+                        {m.ui_archived()}{" "}
                       </Badge>
                     )}
                     <Badge
@@ -250,13 +312,19 @@ function ProjectsPage() {
                 <CardContent className="mt-auto grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-2xl font-semibold">{project.submissionCount}</p>
-                    <p className="text-xs text-muted-foreground">responses</p>
+                    <p className="text-xs text-muted-foreground">
+                      {m.ui_responses_528({ count: project.submissionCount })}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium capitalize">
-                      {project.bookStatus.replace("-", " ")}
+                      {project.bookStatus === "not-generated"
+                        ? m.book_not_generated()
+                        : project.bookStatus === "current"
+                          ? m.book_current()
+                          : m.book_stale()}
                     </p>
-                    <p className="text-xs text-muted-foreground">book status</p>
+                    <p className="text-xs text-muted-foreground">{m.ui_book_status()}</p>
                   </div>
                 </CardContent>
                 <CardFooter>
@@ -266,8 +334,7 @@ function ProjectsPage() {
                       className: "ml-auto",
                     })}
                   >
-                    Open workspace
-                    <ArrowRightIcon data-icon="inline-end" />
+                    {m.ui_open_workspace()} <ArrowRightIcon data-icon="inline-end" />
                   </span>
                 </CardFooter>
               </Card>

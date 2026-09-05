@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { problemMessage } from "#/domain/problem-message.ts"
 import {
   AlertTriangleIcon,
   ArchiveIcon,
@@ -136,6 +138,7 @@ export function PagePreview({
           schema={layout.schema}
           content={{
             questions: project.formSchema.questions,
+            locale: project.bookLanguage,
             submission: submission ?? undefined,
             decorativeAssetUrl,
             photoFocus,
@@ -145,7 +148,7 @@ export function PagePreview({
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-xs text-destructive">
-          Missing source
+          {m.ui_missing_source()}{" "}
         </div>
       )}
       {showProblems && page.problems.length > 0 && (
@@ -172,23 +175,31 @@ function AddStandaloneDialog({
   const selected = layouts.find((layout) => layout.id === layoutId) ?? layouts[0]
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" disabled={layouts.length === 0} />}>
+      <DialogTrigger
+        data-testid="button-standalone-page"
+        render={<Button variant="outline" disabled={layouts.length === 0} />}
+      >
         <PlusIcon data-icon="inline-start" />
-        Standalone page
+        {m.ui_standalone_page()}{" "}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a standalone page</DialogTitle>
+          <DialogTitle data-testid="heading-add-a-standalone-page">
+            {m.ui_add_a_standalone_page()}
+          </DialogTitle>
           <DialogDescription>
-            Standalone pages carry no response. Design them in the layout editor, then place them
-            anywhere in the book.
+            {m.ui_standalone_pages_carry_no_response_design_them_in_the_layout_edit()}{" "}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field>
-            <FieldLabel>Layout</FieldLabel>
+            <FieldLabel>{m.ui_layout()}</FieldLabel>
             <Select value={selected?.id} onValueChange={(value) => value && setLayoutId(value)}>
-              <SelectTrigger className="w-full" aria-label="Standalone page layout">
+              <SelectTrigger
+                data-testid="combobox-standalone-page-layout"
+                className="w-full"
+                aria-label={m.ui_standalone_page_layout()}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -205,6 +216,7 @@ function AddStandaloneDialog({
         </FieldGroup>
         <DialogFooter>
           <Button
+            data-testid="button-add-page"
             disabled={!selected}
             onClick={() => {
               if (!selected) return
@@ -217,7 +229,7 @@ function AddStandaloneDialog({
               setOpen(false)
             }}
           >
-            Add page
+            {m.ui_add_page()}{" "}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -240,8 +252,10 @@ function ProblemList({
     return (
       <Alert>
         <BookOpenIcon />
-        <AlertTitle>No page problems</AlertTitle>
-        <AlertDescription>The generated pages are clear for automated preflight.</AlertDescription>
+        <AlertTitle>{m.ui_no_page_problems()}</AlertTitle>
+        <AlertDescription>
+          {m.ui_the_generated_pages_are_clear_for_automated_preflight()}
+        </AlertDescription>
       </Alert>
     )
   }
@@ -256,13 +270,14 @@ function ProblemList({
           className="rounded-lg border bg-card p-3 text-left hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:border-destructive aria-pressed:ring-1 aria-pressed:ring-destructive"
         >
           <span className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">{problem.message}</span>
+            <span className="text-sm font-medium">{problemMessage(problem)}</span>
             <Badge variant={problem.blocking ? "destructive" : "secondary"}>
-              {problem.blocking ? "Blocking" : "Warning"}
+              {problem.blocking ? m.ui_blocking() : m.ui_warning()}
             </Badge>
           </span>
           {problem.code === "image-blocking-resolution" && problem.assetId && (
             <Button
+              data-testid="button-record-resolution-override"
               type="button"
               variant="outline"
               size="sm"
@@ -272,7 +287,7 @@ function ProblemList({
                 onOverride(problem.assetId!)
               }}
             >
-              Record resolution override
+              {m.ui_record_resolution_override()}{" "}
             </Button>
           )}
         </button>
@@ -282,16 +297,18 @@ function ProblemList({
 }
 
 function pageCaption(page: BookPage, project: Project) {
-  return project.layouts.find((layout) => layout.id === page.layoutId)?.name ?? "Missing layout"
+  return (
+    project.layouts.find((layout) => layout.id === page.layoutId)?.name ?? m.ui_missing_layout()
+  )
 }
 
 function pageLabel(page: BookPage, project: Project) {
   const layout = project.layouts.find((candidate) => candidate.id === page.layoutId)
   if (page.kind === "standalone") {
-    return layout ? `${layoutRoleLabel(layout.role)}: ${layout.name}` : "Missing layout"
+    return layout ? `${layoutRoleLabel(layout.role)}: ${layout.name}` : m.ui_missing_layout()
   }
   const submission = project.submissions?.find((candidate) => candidate.id === page.submissionId)
-  return submission ? submissionLabel(project.formSchema, submission) : "Response ?"
+  return submission ? submissionLabel(project.formSchema, submission) : m.ui_response()
 }
 
 // The grid answers "does the book read well as a whole": every page at once, in order, captioned
@@ -318,7 +335,7 @@ function PageGrid({
               type="button"
               onClick={() => onOpenPage(page.id)}
               data-testid="book-page-tile"
-              aria-label={`Open page ${index + 1}, ${pageLabel(page, project)}`}
+              aria-label={m.open_book_page({ value0: index + 1, value1: pageLabel(page, project) })}
               className="group block w-full rounded-md text-left focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
             >
               <span className="relative block">
@@ -398,9 +415,9 @@ export function BookReview({
     return (
       <Alert>
         <ArchiveIcon />
-        <AlertTitle>This project is archived</AlertTitle>
+        <AlertTitle>{m.ui_this_project_is_archived()}</AlertTitle>
         <AlertDescription>
-          The generated book is frozen. Unarchive the project to regenerate or edit pages.
+          {m.ui_the_generated_book_is_frozen_unarchive_the_project_to_regenerate_()}{" "}
         </AlertDescription>
       </Alert>
     )
@@ -409,9 +426,9 @@ export function BookReview({
     return (
       <Alert>
         <BookOpenIcon />
-        <AlertTitle>Finish collection first</AlertTitle>
+        <AlertTitle>{m.ui_finish_collection_first()}</AlertTitle>
         <AlertDescription>
-          Generation uses the final ordered set of anonymous submissions.
+          {m.ui_generation_uses_the_final_ordered_set_of_anonymous_submissions()}{" "}
         </AlertDescription>
       </Alert>
     )
@@ -423,9 +440,11 @@ export function BookReview({
           <EmptyMedia variant="icon">
             <LayoutTemplateIcon />
           </EmptyMedia>
-          <EmptyTitle>Create a layout first</EmptyTitle>
+          <EmptyTitle data-testid="heading-create-a-layout-first">
+            {m.ui_create_a_layout_first()}
+          </EmptyTitle>
           <EmptyDescription>
-            At least one compatible layout is required to generate submission pages.
+            {m.ui_at_least_one_compatible_layout_is_required_to_generate_submission()}{" "}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -460,15 +479,15 @@ export function BookReview({
     setGenerating(true)
     try {
       const updated = await projectApi.generate(project.id, settings)
-      if (!updated) throw new Error("Generation returned no book.")
+      if (!updated) throw new Error(m.ui_generation_returned_no_book())
       replaceBook(updated, false)
       setSelectedId(updated.pages[0]?.id ?? null)
       setSelectedProblemId(null)
       setSelectedElementId(null)
       setFocusAssetId(null)
-      toast.success("Complete book generated")
+      toast.success(m.ui_complete_book_generated())
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Generation failed")
+      toast.error(error instanceof Error ? error.message : m.ui_generation_failed())
     } finally {
       setGenerating(false)
     }
@@ -481,7 +500,7 @@ export function BookReview({
       })
       replaceBook(updated, true)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Book update failed")
+      toast.error(error instanceof Error ? error.message : m.ui_book_update_failed())
     }
   }
 
@@ -512,7 +531,7 @@ export function BookReview({
             submissions: withPhotoFocalPoint(current.submissions ?? [], assetId, previous),
           })
         }
-        toast.error(error instanceof Error ? error.message : "Photo focus update failed")
+        toast.error(error instanceof Error ? error.message : m.ui_photo_focus_update_failed())
       })
     focalWriteQueue.current.set(assetId, queued)
     return queued
@@ -551,9 +570,11 @@ export function BookReview({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <h2 className="font-heading text-2xl">Generate and review</h2>
+          <h2 data-testid="heading-generate-and-review" className="font-heading text-2xl">
+            {m.ui_generate_and_review()}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            One submission creates exactly one page. Regeneration always rebuilds the complete book.
+            {m.ui_one_submission_creates_exactly_one_page_regeneration_always_rebui()}{" "}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -568,13 +589,13 @@ export function BookReview({
                 if (requested) changeView(requested, "toggle")
               }}
             >
-              <ToggleGroupItem value="grid" aria-label="All pages">
+              <ToggleGroupItem value="grid" aria-label={m.ui_all_pages()}>
                 <LayoutGridIcon data-icon="inline-start" />
-                All pages
+                {m.ui_all_pages()}{" "}
               </ToggleGroupItem>
-              <ToggleGroupItem value="detail" aria-label="Single page">
+              <ToggleGroupItem value="detail" aria-label={m.ui_single_page()}>
                 <SquareIcon data-icon="inline-start" />
-                Single page
+                {m.ui_single_page()}{" "}
               </ToggleGroupItem>
             </ToggleGroup>
           )}
@@ -585,7 +606,7 @@ export function BookReview({
             />
           )}
           <AlertDialog>
-            <AlertDialogTrigger render={<Button />}>
+            <AlertDialogTrigger data-testid="button-regenerate-complete-book" render={<Button />}>
               {generating ? (
                 <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
               ) : book ? (
@@ -593,23 +614,23 @@ export function BookReview({
               ) : (
                 <WandSparklesIcon data-icon="inline-start" />
               )}
-              {book ? "Regenerate complete book" : "Generate book"}
+              {book ? m.ui_regenerate_complete_book() : m.ui_generate_book()}
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {book ? "Regenerate every page?" : "Generate the book?"}
+                <AlertDialogTitle data-testid="heading-regenerate-every-page">
+                  {book ? m.ui_regenerate_every_page() : m.ui_generate_the_book()}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {book
-                    ? "All submission pages and problems are rebuilt. Valid manual assignments, page order, and standalone pages are preserved."
-                    : "Submission pages start in response order using the selected assignment mode."}
+                    ? m.ui_all_submission_pages_and_problems_are_rebuilt_valid_manual_assign()
+                    : m.ui_submission_pages_start_in_response_order_using_the_selected_assig()}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={generate}>
-                  {book ? "Regenerate all" : "Generate"}
+                <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
+                <AlertDialogAction data-testid="button-regenerate-all" onClick={generate}>
+                  {book ? m.ui_regenerate_all() : m.ui_generate()}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -619,15 +640,22 @@ export function BookReview({
 
       <Card className="bg-card/90">
         <CardHeader>
-          <CardTitle>Assignment settings</CardTitle>
+          <CardTitle data-testid="heading-assignment-settings">
+            {m.ui_assignment_settings()}
+          </CardTitle>
           <CardDescription>
-            Seeded random is reproducible for the same ordered inputs.
+            {m.ui_seeded_random_is_reproducible_for_the_same_ordered_inputs()}{" "}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <Field>
-            <FieldLabel>Mode</FieldLabel>
+            <FieldLabel>{m.ui_mode()}</FieldLabel>
             <Select
+              items={[
+                { value: "cycle", label: m.ui_cycle_ordered_layouts() },
+                { value: "seeded-random", label: m.ui_seeded_random() },
+                { value: "manual", label: m.ui_manual_assignments() },
+              ]}
               value={settings.mode}
               onValueChange={(mode) =>
                 setSettings({
@@ -636,20 +664,24 @@ export function BookReview({
                 })
               }
             >
-              <SelectTrigger className="w-full" aria-label="Assignment mode">
+              <SelectTrigger
+                data-testid="combobox-assignment-mode"
+                className="w-full"
+                aria-label={m.ui_assignment_mode()}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="cycle">Cycle ordered layouts</SelectItem>
-                  <SelectItem value="seeded-random">Seeded random</SelectItem>
-                  <SelectItem value="manual">Manual assignments</SelectItem>
+                  <SelectItem value="cycle">{m.ui_cycle_ordered_layouts()}</SelectItem>
+                  <SelectItem value="seeded-random">{m.ui_seeded_random()}</SelectItem>
+                  <SelectItem value="manual">{m.ui_manual_assignments()}</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="generation-seed">Random seed</FieldLabel>
+            <FieldLabel htmlFor="generation-seed">{m.ui_random_seed()}</FieldLabel>
             <Input
               id="generation-seed"
               value={settings.seed}
@@ -667,14 +699,16 @@ export function BookReview({
             <EmptyMedia variant="icon">
               <ShuffleIcon />
             </EmptyMedia>
-            <EmptyTitle>The book has not been generated</EmptyTitle>
+            <EmptyTitle data-testid="heading-the-book-has-not-been-generated">
+              {m.ui_the_book_has_not_been_generated()}
+            </EmptyTitle>
             <EmptyDescription>
-              Choose an assignment mode, then generate one persisted page per submission.
+              {m.ui_choose_an_assignment_mode_then_generate_one_persisted_page_per_su()}{" "}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={generate} disabled={generating}>
-              Generate now
+            <Button data-testid="button-generate-now" onClick={generate} disabled={generating}>
+              {m.ui_generate_now()}{" "}
             </Button>
           </EmptyContent>
         </Empty>
@@ -683,10 +717,9 @@ export function BookReview({
           {project.bookStatus === "stale" && (
             <Alert variant="destructive">
               <AlertTriangleIcon />
-              <AlertTitle>Stale preview</AlertTitle>
+              <AlertTitle>{m.ui_stale_preview()}</AlertTitle>
               <AlertDescription>
-                A rendering input changed. This preview remains visible, but final export is blocked
-                until complete regeneration.
+                {m.ui_a_rendering_input_changed_this_preview_remains_visible_but_final_()}{" "}
               </AlertDescription>
             </Alert>
           )}
@@ -694,11 +727,12 @@ export function BookReview({
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
-                  {problems.filter((problem) => problem.blocking).length} blocking ·{" "}
-                  {problems.filter((problem) => !problem.blocking).length} warnings
+                  {problems.filter((problem) => problem.blocking).length} {m.ui_blocking_59()}{" "}
+                  {problems.filter((problem) => !problem.blocking).length} {m.ui_warnings()}{" "}
                 </p>
                 {problems.length > 0 && (
                   <Button
+                    data-testid="button-review-problems"
                     variant="outline"
                     size="sm"
                     onClick={() => {
@@ -711,7 +745,7 @@ export function BookReview({
                       changeView("detail", "problem_shortcut")
                     }}
                   >
-                    Review problems
+                    {m.ui_review_problems()}{" "}
                   </Button>
                 )}
               </div>
@@ -731,8 +765,8 @@ export function BookReview({
             <div className="grid gap-5 xl:grid-cols-[250px_minmax(0,1fr)_320px]">
               <Card className="h-fit bg-card/90">
                 <CardHeader>
-                  <CardTitle>Page order</CardTitle>
-                  <CardDescription>Drag or use arrow buttons.</CardDescription>
+                  <CardTitle data-testid="heading-page-order">{m.ui_page_order()}</CardTitle>
+                  <CardDescription>{m.ui_drag_or_use_arrow_buttons()}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="max-h-[620px]">
@@ -765,8 +799,7 @@ export function BookReview({
                             </span>
                             {page.problems.length > 0 && (
                               <span className="text-xs text-destructive">
-                                {page.problems.length} problem
-                                {page.problems.length === 1 ? "" : "s"}
+                                {m.page_problem_count({ count: page.problems.length })}
                               </span>
                             )}
                           </button>
@@ -774,7 +807,7 @@ export function BookReview({
                             <Button
                               size="icon-xs"
                               variant="ghost"
-                              aria-label={`Move page ${index + 1} up`}
+                              aria-label={m.move_page_up({ value0: index + 1 })}
                               disabled={
                                 index === 0 ||
                                 isPinnedPage(page) ||
@@ -787,7 +820,7 @@ export function BookReview({
                             <Button
                               size="icon-xs"
                               variant="ghost"
-                              aria-label={`Move page ${index + 1} down`}
+                              aria-label={m.move_page_down({ value0: index + 1 })}
                               disabled={
                                 index === book.pages.length - 1 ||
                                 isPinnedPage(page) ||
@@ -818,21 +851,21 @@ export function BookReview({
                 {selected?.kind === "submission" && (
                   <Card className="mt-4 bg-card/90">
                     <CardHeader>
-                      <CardTitle>Photo focus</CardTitle>
+                      <CardTitle data-testid="heading-photo-focus">{m.ui_photo_focus()}</CardTitle>
                       <CardDescription>
-                        Drag a photo on the page to choose which part of it the frame keeps. Arrow
-                        keys nudge it, and Shift moves further. This does not make the book stale.
+                        {m.ui_drag_a_photo_on_the_page_to_choose_which_part_of_it_the_frame_kee()}{" "}
                       </CardDescription>
                       {focusPhoto && (
                         <CardAction>
                           <Button
+                            data-testid="button-reset"
                             size="sm"
                             variant="outline"
                             disabled={!focusPhoto.focalPoint}
                             onClick={() => void storeFocalPoint(focusPhoto.assetId, null)}
                           >
                             <Undo2Icon data-icon="inline-start" />
-                            Reset
+                            {m.ui_reset()}{" "}
                           </Button>
                         </CardAction>
                       )}
@@ -841,9 +874,9 @@ export function BookReview({
                       <p className="text-sm text-muted-foreground">
                         {focusPhoto
                           ? focusPhoto.focalPoint
-                            ? `${focusPhoto.name} is adjusted. Reset returns it to the layout's own focus.`
-                            : `${focusPhoto.name} still follows the layout's own focus.`
-                          : "Select a photo on the page to adjust it."}
+                            ? m.photo_focus_adjusted({ value0: focusPhoto.name })
+                            : m.photo_focus_inherited({ value0: focusPhoto.name })
+                          : m.ui_select_a_photo_on_the_page_to_adjust_it()}
                       </p>
                     </CardContent>
                   </Card>
@@ -851,9 +884,9 @@ export function BookReview({
                 {selected?.kind === "submission" && (
                   <Card className="mt-4 bg-card/90">
                     <CardHeader>
-                      <CardTitle>Page layout</CardTitle>
+                      <CardTitle data-testid="heading-page-layout">{m.ui_page_layout()}</CardTitle>
                       <CardDescription>
-                        An override becomes the stored manual assignment.
+                        {m.ui_an_override_becomes_the_stored_manual_assignment()}{" "}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -886,7 +919,11 @@ export function BookReview({
                           setFocusAssetId(null)
                         }}
                       >
-                        <SelectTrigger className="w-full" aria-label="Page layout">
+                        <SelectTrigger
+                          data-testid="combobox-page-layout"
+                          className="w-full"
+                          aria-label={m.ui_page_layout()}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -905,18 +942,21 @@ export function BookReview({
                 {selected?.kind === "standalone" && (
                   <Card className="mt-4 bg-card/90">
                     <CardHeader>
-                      <CardTitle>Standalone page</CardTitle>
+                      <CardTitle data-testid="heading-standalone-page">
+                        {m.ui_standalone_page()}
+                      </CardTitle>
                       <CardDescription>
                         {selectedLayout
                           ? `${selectedLayout.name} — ${layoutRoleLabel(selectedLayout.role)}`
-                          : "This page references a layout that no longer exists."}
+                          : m.ui_this_page_references_a_layout_that_no_longer_exists()}
                       </CardDescription>
                       {selectedLayout?.role === "static" && (
                         <CardAction>
                           <Button
+                            data-testid="button-delete-standalone-page"
                             size="icon-sm"
                             variant="ghost"
-                            aria-label="Delete standalone page"
+                            aria-label={m.ui_delete_standalone_page()}
                             onClick={() =>
                               void updatePages(book.pages.filter((page) => page.id !== selected.id))
                             }
@@ -929,15 +969,24 @@ export function BookReview({
                     <CardContent className="flex flex-col gap-3">
                       <p className="text-sm text-muted-foreground">
                         {selectedLayout && isCoverRole(selectedLayout.role)
-                          ? `The ${layoutRoleLabel(selectedLayout.role).toLowerCase()} always stays ${
-                              selectedLayout.role === "front-cover" ? "first" : "last"
-                            }. Delete its layout to remove the page.`
-                          : "Design this page in the layout editor; every change appears here after the next generation."}
+                          ? m.pinned_cover_explanation({
+                              value0: layoutRoleLabel(selectedLayout.role).toLowerCase(),
+                              value1:
+                                selectedLayout.role === "front-cover"
+                                  ? m.position_first()
+                                  : m.position_last(),
+                            })
+                          : m.ui_design_this_page_in_the_layout_editor_every_change_appears_here_a()}
                       </p>
                       {onEditLayouts && (
-                        <Button variant="outline" className="self-start" onClick={onEditLayouts}>
+                        <Button
+                          data-testid="button-open-in-layout-editor"
+                          variant="outline"
+                          className="self-start"
+                          onClick={onEditLayouts}
+                        >
                           <LayoutTemplateIcon data-icon="inline-start" />
-                          Open in layout editor
+                          {m.ui_open_in_layout_editor()}{" "}
                         </Button>
                       )}
                     </CardContent>
@@ -947,10 +996,10 @@ export function BookReview({
 
               <Card className="h-fit bg-card/90">
                 <CardHeader>
-                  <CardTitle>Problems</CardTitle>
+                  <CardTitle data-testid="heading-problems">{m.ui_problems()}</CardTitle>
                   <CardDescription>
-                    {problems.filter((problem) => problem.blocking).length} blocking ·{" "}
-                    {problems.filter((problem) => !problem.blocking).length} warnings
+                    {problems.filter((problem) => problem.blocking).length} {m.ui_blocking_59()}{" "}
+                    {problems.filter((problem) => !problem.blocking).length} {m.ui_warnings()}{" "}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -980,7 +1029,7 @@ export function BookReview({
                         })
                         replaceBook(updated, true)
                         toast.success(
-                          "Resolution override recorded; regenerate to re-run preflight"
+                          m.ui_resolution_override_recorded_regenerate_to_re_run_preflight()
                         )
                       }}
                     />

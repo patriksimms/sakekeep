@@ -1,3 +1,6 @@
+import { type Locale } from "#/lib/locale.ts"
+import germanHyphenation from "hyphen/de-1996"
+import * as m from "#/paraglide/messages.js"
 import { FONT_METRICS } from "./font-metrics.generated.ts"
 import { fontCut } from "./fonts.ts"
 import { POINT_TO_MM } from "./layout-rendering.ts"
@@ -51,11 +54,14 @@ export function textRunsForElement(
   element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
   question?: FormQuestion,
   answer?: SubmissionAnswer,
-  answerPlaceholder = ""
+  answerPlaceholder = "",
+  locale: Locale = "en"
 ): TextLayoutRun[] {
   if (element.type === "static-text") return [{ text: element.content }]
   const value = answer === undefined ? answerPlaceholder : answerText(answer, question)
-  const label = element.showLabel ? element.label?.trim() || question?.prompt || "Question" : ""
+  const label = element.showLabel
+    ? element.label?.trim() || question?.prompt || m.question({}, { locale })
+    : ""
   return [...(label ? [{ text: label, fontWeight: "bold" as const }] : []), { text: value }]
 }
 
@@ -73,7 +79,8 @@ function wrapRuns(
   runs: TextLayoutRun[],
   settings: TextSettings,
   size: number,
-  widthMm: number
+  widthMm: number,
+  locale: Locale
 ): TextLayoutLine[] {
   if (!runs.some((run) => run.text.trim())) return []
   const lines: TextLayoutLine[] = []
@@ -84,15 +91,51 @@ function wrapRuns(
       let line = ""
       for (const word of words) {
         const candidate = line ? `${line} ${word}` : word
-        if (textWidthMm(candidate, settings, weight, size) <= widthMm || !line) {
+        if (textWidthMm(candidate, settings, weight, size) <= widthMm) {
           line = candidate
         } else {
+          // Choose the last German syllable boundary that fits. The actual hyphen becomes
+          // part of the shared line, so the browser and PDF draw identical text.
+          let remainder = word
+          if (locale === "de") {
+            const parts = germanHyphenation.hyphenateSync(word).split("\u00ad")
+            while (parts.length > 1) {
+              let fitting = 0
+              for (let end = 1; end < parts.length; end += 1) {
+                const prefix = `${line ? `${line} ` : ""}${parts.slice(0, end).join("")}-`
+                if (textWidthMm(prefix, settings, weight, size) <= widthMm) fitting = end
+              }
+              if (!fitting) {
+                if (!line) break
+                lines.push({
+                  text: line,
+                  fontWeight: weight,
+                  widthMm: textWidthMm(line, settings, weight, size),
+                })
+                line = ""
+                continue
+              }
+              const prefix = `${line ? `${line} ` : ""}${parts.splice(0, fitting).join("")}-`
+              lines.push({
+                text: prefix,
+                fontWeight: weight,
+                widthMm: textWidthMm(prefix, settings, weight, size),
+              })
+              line = ""
+              if (textWidthMm(parts.join(""), settings, weight, size) <= widthMm) break
+            }
+            remainder = parts.join("")
+          }
+          if (!line) {
+            line = remainder
+            continue
+          }
           lines.push({
             text: line,
             fontWeight: weight,
             widthMm: textWidthMm(line, settings, weight, size),
           })
-          line = word
+          line = remainder
         }
       }
       lines.push({
@@ -126,9 +169,10 @@ function layoutAtSize(
   settings: TextSettings,
   size: number,
   widthMm: number,
-  heightMm: number
+  heightMm: number,
+  locale: Locale
 ) {
-  const lines = wrapRuns(runs, settings, size, widthMm)
+  const lines = wrapRuns(runs, settings, size, widthMm, locale)
   const lineHeightMm = size * POINT_TO_MM * settings.lineHeight
   const requiredHeightMm = lines.length * lineHeightMm
   return {
@@ -166,18 +210,19 @@ export function layoutText(
   runs: TextLayoutRun[],
   widthMm: number,
   heightMm: number,
-  settings: TextSettings
+  settings: TextSettings,
+  locale: Locale = "en"
 ): TextLayoutResult {
   let size = settings.fontSize
-  let layout = layoutAtSize(runs, settings, size, widthMm, heightMm)
+  let layout = layoutAtSize(runs, settings, size, widthMm, heightMm, locale)
   if (!layout.fits && settings.overflow === "shrink") {
     for (size = settings.fontSize - 0.5; size >= settings.minFontSize; size -= 0.5) {
-      layout = layoutAtSize(runs, settings, size, widthMm, heightMm)
+      layout = layoutAtSize(runs, settings, size, widthMm, heightMm, locale)
       if (layout.fits) break
     }
     if (size < settings.minFontSize) {
       size = settings.minFontSize
-      layout = layoutAtSize(runs, settings, size, widthMm, heightMm)
+      layout = layoutAtSize(runs, settings, size, widthMm, heightMm, locale)
     }
   }
 
@@ -251,33 +296,41 @@ export function minimumTextBoxHeight(
     text: TextSettings
   },
   labelText?: string,
-  policy: OverflowPolicy = element.text.overflow
+  policy: OverflowPolicy = element.text.overflow,
+  locale: Locale = "en"
 ) {
   const size = policy === "shrink" ? element.text.minFontSize : element.text.fontSize
   const runs: TextLayoutRun[] =
     element.type === "bound-text" && element.showLabel
       ? [
           {
-            text: labelText?.trim() || element.label?.trim() || "Question",
+            text: labelText?.trim() || element.label?.trim() || m.question({}, { locale }),
             fontWeight: "bold",
           },
           { text: "M" },
         ]
       : [{ text: "M" }]
-  return layoutText(runs, element.geometry.width, Number.POSITIVE_INFINITY, {
-    ...element.text,
-    fontSize: size,
-    minFontSize: size,
-    overflow: "flag",
-  }).requiredHeightMm
+  return layoutText(
+    runs,
+    element.geometry.width,
+    Number.POSITIVE_INFINITY,
+    {
+      ...element.text,
+      fontSize: size,
+      minFontSize: size,
+      overflow: "flag",
+    },
+    locale
+  ).requiredHeightMm
 }
 
 export function enforceMinimumTextBoxHeight<T extends LayoutElement>(
   element: T,
-  labelText?: string
+  labelText?: string,
+  locale: Locale = "en"
 ): T {
   if (element.type !== "bound-text" && element.type !== "static-text") return element
-  const minimumHeight = minimumTextBoxHeight(element, labelText)
+  const minimumHeight = minimumTextBoxHeight(element, labelText, element.text.overflow, locale)
   if (element.geometry.height >= minimumHeight) return element
   return {
     ...element,

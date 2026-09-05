@@ -4,7 +4,10 @@ import { z } from "zod"
 import { jsonError, readJson } from "#/server/http.ts"
 import { createProject, listProjects } from "#/server/repository.ts"
 
+import { localeSchema } from "#/lib/locale.ts"
+
 const createProjectSchema = z.object({
+  bookLanguage: localeSchema.default("de"),
   title: z.string().trim().min(1).max(200),
   occasion: z.string().trim().max(200).nullable().optional(),
 })

@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { createMiddleware } from "@tanstack/react-start"
 
 const PUBLIC_EXACT_PATHS = new Set([
@@ -51,7 +52,7 @@ export function signedOutResponse(request: Request): Response {
   const url = new URL(request.url)
   if (url.pathname.startsWith("/api/")) {
     return Response.json(
-      { error: "Authentication required." },
+      { error: m.ui_authentication_required() },
       {
         status: 401,
         headers: {
@@ -89,7 +90,7 @@ export const authorizationMiddleware = createMiddleware({ type: "request" }).ser
 
     const authenticate = (context as ClerkRequestContext | undefined)?.auth
     if (!authenticate) {
-      throw new Error("Clerk authentication context is unavailable.")
+      throw new Error(m.ui_clerk_authentication_context_is_unavailable())
     }
     const { isAuthenticated } = await authenticate({ treatPendingAsSignedOut: true })
     return authorizationResponse(request, isAuthenticated) ?? next()

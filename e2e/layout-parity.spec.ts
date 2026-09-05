@@ -241,7 +241,7 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
     )
   expect(editorOrder).toEqual(elementIds)
   expect(previewOrder).toEqual(elementIds)
-  await expect(page.getByText("bleed · trim · safe")).toHaveCount(0)
+  await expect(page.getByTestId("text-ui_bleed_trim_safe")).toHaveCount(0)
 
   await expect(editor).toHaveScreenshot("editor-layout-parity.png", {
     animations: "disabled",
@@ -320,4 +320,21 @@ test("text frames remain editable on the HTML layer", async ({ page }) => {
 
   await expect(inlineEditor).toHaveCount(0)
   await expect(staticText).toHaveText("Edited directly on the page")
+})
+
+test("German syllable breaks agree in the editor and book preview", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 620 })
+  await page.goto("/layout-parity?bookLanguage=de")
+  await page.evaluate(() => document.fonts.ready)
+  const editor = page.getByTestId("editor-layout-elements")
+  const preview = page.getByTestId("preview-layout-elements")
+  const lines = (surface: Locator) =>
+    surface.locator('[data-layout-element-id="static-heading"] span').allTextContents()
+  await expect.poll(() => lines(editor)).toEqual(await lines(preview))
+  const text = await lines(editor)
+  expect(text.length).toBeGreaterThan(1)
+  expect(text[0]).toContain("-")
+  expect(await pixelDifference(await editor.screenshot(), await preview.screenshot())).toBeLessThan(
+    0.025
+  )
 })

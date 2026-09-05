@@ -1,3 +1,6 @@
+import { projectStateLabel } from "#/domain/project-labels.ts"
+import { getLocale } from "#/paraglide/runtime.js"
+import * as m from "#/paraglide/messages.js"
 import {
   ArchiveIcon,
   CheckIcon,
@@ -56,20 +59,20 @@ import { Input } from "#/components/ui/input.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 
 function questionAnswerLabel(question: FormQuestion, answer: SubmissionAnswer | undefined) {
-  if (answer === undefined) return "No answer"
-  if (typeof answer === "string") return answer || "No answer"
+  if (answer === undefined) return m.ui_no_answer()
+  if (typeof answer === "string") return answer || m.ui_no_answer()
   if (question.type === "radio" || question.type === "checkboxes") {
     const labels = new Map(question.choices.map((choice) => [choice.id, choice.label]))
     return answer
       .filter((item): item is string => typeof item === "string")
-      .map((choice) => labels.get(choice) ?? "Unknown choice")
+      .map((choice) => labels.get(choice) ?? m.ui_unknown_choice())
       .join(", ")
   }
-  return `${answer.length} image${answer.length === 1 ? "" : "s"}`
+  return m.image_count({ value0: answer.length })
 }
 
 function editHistoryValue(value: string) {
-  return value.trim() ? value : "No answer"
+  return value.trim() ? value : m.ui_no_answer()
 }
 
 function Images({ answer }: { answer: SubmissionAnswer | undefined }) {
@@ -153,7 +156,7 @@ export function SubmissionsPanel({
     setIssues(nextIssues)
     if (nextIssues.length > 0) return
     if (Object.keys(changedAnswers()).length === 0) {
-      toast.info("Change at least one text answer")
+      toast.info(m.ui_change_at_least_one_text_answer())
       return
     }
     setConfirmingSubmission(submission)
@@ -163,28 +166,34 @@ export function SubmissionsPanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h2 className="font-heading text-2xl">Responses</h2>
+          <h2 data-testid="heading-responses" className="font-heading text-2xl">
+            {m.ui_responses()}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Responses remain in arrival order. Text answers can be corrected after collection
-            closes.
+            {m.ui_responses_remain_in_arrival_order_text_answers_can_be_corrected_a()}{" "}
           </p>
         </div>
-        <Button variant="outline" onClick={onRefresh}>
+        <Button data-testid="button-refresh" variant="outline" onClick={onRefresh}>
           <RefreshCwIcon data-icon="inline-start" />
-          Refresh
+          {m.ui_refresh()}{" "}
         </Button>
       </div>
 
       {project.state === "draft" ? (
         <Alert>
           <ClockIcon />
-          <AlertTitle>Publish when the questions are ready</AlertTitle>
-          <AlertDescription>The response inbox opens with the public share link.</AlertDescription>
+          <AlertTitle>{m.ui_publish_when_the_questions_are_ready()}</AlertTitle>
+          <AlertDescription>
+            {m.ui_the_response_inbox_opens_with_the_public_share_link()}
+          </AlertDescription>
         </Alert>
       ) : (
         <Card className="bg-card/90">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle
+              data-testid="heading-collection-is-paused-by-the-archive"
+              className="flex items-center gap-2"
+            >
               {project.archivedAt ? (
                 <ArchiveIcon aria-hidden="true" />
               ) : project.state === "collecting" ? (
@@ -193,17 +202,17 @@ export function SubmissionsPanel({
                 <LockIcon aria-hidden="true" />
               )}
               {project.archivedAt
-                ? "Collection is paused by the archive"
+                ? m.ui_collection_is_paused_by_the_archive()
                 : project.state === "collecting"
-                  ? "Collection is open"
-                  : "Collection is permanently closed"}
+                  ? m.ui_collection_is_open()
+                  : m.ui_collection_is_permanently_closed()}
             </CardTitle>
             <CardDescription>
               {project.archivedAt
-                ? "While archived, the share link reports a closed collection. Unarchive the project to reopen it in its current state."
+                ? m.ui_while_archived_the_share_link_reports_a_closed_collection_unarchi()
                 : project.state === "collecting"
-                  ? "New valid submissions are accepted through the unguessable link."
-                  : "The share link now returns a closed state and can never be reopened."}
+                  ? m.ui_new_valid_submissions_are_accepted_through_the_unguessable_link()
+                  : m.ui_the_share_link_now_returns_a_closed_state_and_can_never_be_reopen()}
             </CardDescription>
           </CardHeader>
           {project.shareUrl && (
@@ -212,12 +221,13 @@ export function SubmissionsPanel({
                 {project.shareUrl}
               </code>
               <Button
+                data-testid="button-copied"
                 variant="outline"
                 onClick={async () => {
                   await navigator.clipboard.writeText(project.shareUrl!)
                   setCopied(true)
                   setTimeout(() => setCopied(false), 1800)
-                  toast.success("Share link copied")
+                  toast.success(m.ui_share_link_copied())
                 }}
               >
                 {copied ? (
@@ -225,13 +235,14 @@ export function SubmissionsPanel({
                 ) : (
                   <CopyIcon data-icon="inline-start" />
                 )}
-                {copied ? "Copied" : "Copy link"}
+                {copied ? m.ui_copied() : m.ui_copy_link()}
               </Button>
               <Button
+                data-testid="button-open-form"
                 variant="outline"
                 render={<a href={project.shareUrl} target="_blank" rel="noreferrer" />}
               >
-                Open form
+                {m.ui_open_form()}{" "}
               </Button>
             </CardContent>
           )}
@@ -241,23 +252,23 @@ export function SubmissionsPanel({
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="bg-card/80">
           <CardHeader>
-            <CardDescription>Responses received</CardDescription>
+            <CardDescription>{m.ui_responses_received()}</CardDescription>
             <CardTitle className="text-4xl">{project.submissionCount}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="bg-card/80 sm:col-span-2">
           <CardHeader>
-            <CardDescription>Lifecycle</CardDescription>
+            <CardDescription>{m.ui_lifecycle()}</CardDescription>
             <CardTitle className="capitalize">{project.state}</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
             {(["draft", "collecting", "closed"] as const).map((state) => (
               <Badge
-                key={state}
+                key={projectStateLabel(state)}
                 variant={project.state === state ? "default" : "outline"}
                 className="capitalize"
               >
-                {state}
+                {projectStateLabel(state)}
               </Badge>
             ))}
           </CardContent>
@@ -270,9 +281,11 @@ export function SubmissionsPanel({
             <EmptyMedia variant="icon">
               <InboxIcon />
             </EmptyMedia>
-            <EmptyTitle>No responses yet</EmptyTitle>
+            <EmptyTitle data-testid="heading-no-responses-yet">
+              {m.ui_no_responses_yet()}
+            </EmptyTitle>
             <EmptyDescription>
-              Incoming responses will appear here without exposing contributor identity.
+              {m.ui_incoming_responses_will_appear_here_without_exposing_contributor_()}{" "}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -290,8 +303,8 @@ export function SubmissionsPanel({
                     {submissionLabel(project.formSchema, submission)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(submission.submittedAt).toLocaleString()}
-                    {submission.edits.length > 0 && " · Edited"}
+                    {new Date(submission.submittedAt).toLocaleString(getLocale())}
+                    {submission.edits.length > 0 && m.ui_edited()}
                   </span>
                 </span>
               </AccordionTrigger>
@@ -385,12 +398,13 @@ export function SubmissionsPanel({
                 </dl>
                 {submission.edits.length > 0 && (
                   <div className="border-t py-4">
-                    <h4 className="text-sm font-medium">Edit history</h4>
+                    <h4 className="text-sm font-medium">{m.ui_edit_history()}</h4>
                     <ol className="mt-3 grid gap-4">
                       {[...submission.edits].reverse().map((edit) => (
                         <li key={edit.id} className="border-l-2 pl-3 text-sm">
                           <p>
-                            {edit.editorName} · {new Date(edit.editedAt).toLocaleString()}
+                            {edit.editorName} ·{" "}
+                            {new Date(edit.editedAt).toLocaleString(getLocale())}
                           </p>
                           <dl className="mt-2 grid gap-2 text-muted-foreground">
                             {edit.changes.map((change) => {
@@ -400,7 +414,7 @@ export function SubmissionsPanel({
                               return (
                                 <div key={change.questionId}>
                                   <dt className="font-medium text-foreground">
-                                    {question?.prompt ?? "Removed question"}
+                                    {question?.prompt ?? m.ui_removed_question()}
                                   </dt>
                                   <dd className="whitespace-pre-wrap">
                                     <span className="line-through">
@@ -425,20 +439,30 @@ export function SubmissionsPanel({
                     {editStart?.submissionId === submission.id ? (
                       <>
                         <Button
+                          data-testid="button-cancel"
                           variant="ghost"
                           onClick={() => {
                             setEditStart(null)
                             setIssues([])
                           }}
                         >
-                          Cancel
+                          {m.ui_cancel()}{" "}
                         </Button>
-                        <Button onClick={() => reviewChanges(submission)}>Review changes</Button>
+                        <Button
+                          data-testid="button-review-changes"
+                          onClick={() => reviewChanges(submission)}
+                        >
+                          {m.ui_review_changes()}
+                        </Button>
                       </>
                     ) : (
-                      <Button variant="outline" onClick={() => startEditing(submission)}>
+                      <Button
+                        data-testid="button-edit-response"
+                        variant="outline"
+                        onClick={() => startEditing(submission)}
+                      >
                         <PencilIcon data-icon="inline-start" />
-                        Edit response
+                        {m.ui_edit_response()}{" "}
                       </Button>
                     )}
                   </div>
@@ -457,10 +481,11 @@ export function SubmissionsPanel({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Change this submitted response?</AlertDialogTitle>
+            <AlertDialogTitle data-testid="heading-change-this-submitted-response">
+              {m.ui_change_this_submitted_response()}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              You are changing content submitted by a contributor. Your changes and the original
-              answers will remain visible in the edit history.
+              {m.ui_you_are_changing_content_submitted_by_a_contributor_your_changes_()}{" "}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {confirmingSubmission && (
@@ -468,14 +493,17 @@ export function SubmissionsPanel({
               {Object.keys(changedAnswers()).map((questionId) => (
                 <li key={questionId}>
                   {project.formSchema.questions.find((question) => question.id === questionId)
-                    ?.prompt ?? "Removed question"}
+                    ?.prompt ?? m.ui_removed_question()}
                 </li>
               ))}
             </ul>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={saving}>Keep editing</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-keep-editing" disabled={saving}>
+              {m.ui_keep_editing()}
+            </AlertDialogCancel>
             <AlertDialogAction
+              data-testid="button-save-changes"
               variant="destructive"
               disabled={saving}
               onClick={async () => {
@@ -499,18 +527,20 @@ export function SubmissionsPanel({
                   setEditStart(null)
                   setConfirmingSubmission(null)
                   setIssues([])
-                  toast.success("Response updated")
+                  toast.success(m.ui_response_updated())
                 } catch (error) {
                   setConfirmingSubmission(null)
                   if (error instanceof ApiError && error.status === 409) setEditStart(null)
-                  toast.error(error instanceof Error ? error.message : "Response update failed")
+                  toast.error(
+                    error instanceof Error ? error.message : m.ui_response_update_failed()
+                  )
                 } finally {
                   setSaving(false)
                 }
               }}
             >
               {saving && <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />}
-              Save changes
+              {m.ui_save_changes()}{" "}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -519,38 +549,44 @@ export function SubmissionsPanel({
       {project.state === "collecting" && !project.archivedAt && (
         <div className="flex flex-col items-end gap-1.5">
           <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="outline" />}>
+            <AlertDialogTrigger
+              data-testid="button-lock-collection"
+              render={<Button variant="outline" />}
+            >
               <LockIcon data-icon="inline-start" />
-              Lock collection
+              {m.ui_lock_collection()}{" "}
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Lock collection permanently?</AlertDialogTitle>
+                <AlertDialogTitle data-testid="heading-lock-collection-permanently">
+                  {m.ui_lock_collection_permanently()}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  New submissions will be rejected immediately, including any contributor currently
-                  filling the form. Organizers can correct text answers after closing. This
-                  transition cannot be reversed.
+                  {m.ui_new_submissions_will_be_rejected_immediately_including_any_contri()}{" "}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Keep collecting</AlertDialogCancel>
+                <AlertDialogCancel data-testid="button-keep-collecting">
+                  {m.ui_keep_collecting()}
+                </AlertDialogCancel>
                 <AlertDialogAction
+                  data-testid="button-lock-collection"
                   onClick={async () => {
                     try {
                       const updated = await projectApi.action(project.id, "close")
                       onProjectChange(updated)
-                      toast.success("Collection locked permanently")
+                      toast.success(m.ui_collection_locked_permanently())
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Lock failed")
+                      toast.error(error instanceof Error ? error.message : m.ui_lock_failed())
                     }
                   }}
                 >
-                  Lock collection
+                  {m.ui_lock_collection()}{" "}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          <p className="text-xs text-muted-foreground">Stops new responses permanently</p>
+          <p className="text-xs text-muted-foreground">{m.ui_stops_new_responses_permanently()}</p>
         </div>
       )}
     </div>

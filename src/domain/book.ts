@@ -16,7 +16,7 @@ const problemSchema = z.object({
   pageId: z.string().min(1),
   elementId: z.string().optional(),
   assetId: z.string().optional(),
-  message: z.string().min(1),
+  params: z.record(z.string(), z.union([z.string(), z.number().finite(), z.boolean()])).default({}),
   blocking: z.boolean(),
 })
 

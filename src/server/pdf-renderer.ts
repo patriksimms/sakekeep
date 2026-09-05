@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { type Locale } from "#/lib/locale.ts"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { deflateSync } from "node:zlib"
@@ -81,7 +83,7 @@ interface AssetResolutionMetadata {
 
 function embeddedFont(fonts: EmbeddedFonts, cut: FontCut): PDFFont {
   const font = fonts[cut]
-  if (!font) throw new HttpError(500, `The font cut ${cut} was not embedded for this book.`)
+  if (!font) throw new HttpError(500, m.missing_font_cut({ value0: cut }))
   return font
 }
 
@@ -219,6 +221,7 @@ function drawFillerArt(input: {
 }
 
 function drawTextElement(input: {
+  locale?: Locale
   page: PDFPage
   fonts: EmbeddedFonts
   runs: TextLayoutRun[]
@@ -228,7 +231,13 @@ function drawTextElement(input: {
   specification: PageSpecification
 }) {
   if (!input.runs.some((run) => run.text.trim())) return
-  const layout = layoutText(input.runs, input.geometry.width, input.geometry.height, input.settings)
+  const layout = layoutText(
+    input.runs,
+    input.geometry.width,
+    input.geometry.height,
+    input.settings,
+    input.locale
+  )
   const size = layout.effectiveFontSize
   const width = pt(input.geometry.width)
   const lineHeight = pt(layout.lineHeightMm)
@@ -261,6 +270,7 @@ function drawTextElement(input: {
 }
 
 async function drawElement(input: {
+  locale?: Locale
   pdf: PDFDocument
   page: PDFPage
   pageId: string
@@ -287,12 +297,15 @@ async function drawElement(input: {
         ? input.form.questions.find((candidate) => candidate.id === element.questionId)
         : undefined
     drawTextElement({
+      locale: input.locale,
       page,
       fonts: input.fonts,
       runs: textRunsForElement(
         element,
         question,
-        element.type === "bound-text" ? input.submission?.answers[element.questionId] : undefined
+        element.type === "bound-text" ? input.submission?.answers[element.questionId] : undefined,
+        "",
+        input.locale
       ),
       settings: element.text,
       geometry,
@@ -607,6 +620,7 @@ async function embedFonts(pdf: PDFDocument, cuts: Set<FontCut>): Promise<Embedde
 }
 
 export interface BookRenderInput {
+  locale?: Locale
   book: GeneratedBook
   layouts: LayoutRecord[]
   submissions: SubmissionSummary[]
@@ -628,7 +642,7 @@ async function iccProfile(): Promise<Uint8Array> {
     if (error instanceof HttpError) throw error
     throw new HttpError(
       503,
-      "The verified PSO Coated v3 profile is missing. Run `bun run setup:icc` and try again."
+      m.ui_the_verified_pso_coated_v3_profile_is_missing_run_bun_run_setup_i()
     )
   }
 }
@@ -637,8 +651,8 @@ async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uin
   const icc = await iccProfile()
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
-  pdf.setTitle("Sakekeep friend book")
-  pdf.setCreator("Sakekeep local prototype")
+  pdf.setTitle(m.pdf_title({}, { locale: input.locale ?? "en" }))
+  pdf.setCreator("Sakekeep")
   pdf.setProducer("Sakekeep / pdf-lib")
   const layouts = new Map(input.layouts.map((layout) => [layout.id, layout]))
   const submissions = new Map(input.submissions.map((submission) => [submission.id, submission]))
@@ -669,6 +683,7 @@ async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uin
     const palette = fillerPalette(layout.schema)
     for (const element of layout.schema.elements) {
       await drawElement({
+        locale: input.locale,
         pdf,
         page,
         pageId: bookPage.id,
@@ -743,8 +758,8 @@ export async function* bookPagePdfs(
   const assetResolutions = assetResolutionsOf(source)
   for (let index = 0; index < source.getPageCount(); index += 1) {
     const single = await PDFDocument.create()
-    single.setTitle("Sakekeep friend book")
-    single.setCreator("Sakekeep local prototype")
+    single.setTitle(source.getTitle() ?? m.pdf_title({}, { locale: "en" }))
+    single.setCreator("Sakekeep")
     single.setProducer("Sakekeep / pdf-lib")
     const [page] = await single.copyPages(source, [index])
     single.addPage(page)

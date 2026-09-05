@@ -30,7 +30,9 @@
     "services:up": "docker compose up -d --wait",
     "services:down": "docker compose down",
     "health": "bun run scripts/health.ts",
-    "verify": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run test:e2e && bun run build && docker compose config --quiet && bun run scripts/check-production-compose.ts"
+    "verify": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run test:e2e && bun run build && docker compose config --quiet && bun run scripts/check-production-compose.ts",
+    "i18n:compile": "bun run scripts/compile-messages.ts",
+    "postinstall": "bun run i18n:compile"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",

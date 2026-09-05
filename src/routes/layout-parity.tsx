@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { type Canvas } from "fabric"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { PagePreview } from "#/components/book-review.tsx"
 import { LayoutCanvas } from "#/components/layout-canvas.tsx"
@@ -24,6 +24,7 @@ declare global {
 
 export const Route = createFileRoute("/layout-parity")({
   validateSearch: (search: Record<string, unknown>) => ({
+    bookLanguage: search.bookLanguage === "de" ? ("de" as const) : ("en" as const),
     orientation: search.orientation === "portrait" ? ("portrait" as const) : undefined,
   }),
   component: LayoutParityFixture,
@@ -170,6 +171,7 @@ const project: Project = {
   id: "parity-project",
   title: "Layout parity fixture",
   occasion: null,
+  bookLanguage: "en",
   state: "closed",
   formSchema: {
     version: FORM_SCHEMA_VERSION,
@@ -238,10 +240,31 @@ const portraitPage: SubmissionBookPage = {
 }
 
 function LayoutParityFixture() {
-  const { orientation } = Route.useSearch()
+  const { orientation, bookLanguage } = Route.useSearch()
   const isPortrait = orientation === "portrait"
-  const activeSchema = isPortrait ? portraitSchema : schema
-  const activeProject = isPortrait ? portraitProject : project
+  const activeSchema = useMemo(() => {
+    const base = isPortrait ? portraitSchema : schema
+    if (bookLanguage === "en") return base
+    return {
+      ...base,
+      elements: base.elements.map((element) =>
+        element.id === "static-heading" && element.type === "static-text"
+          ? {
+              ...element,
+              content: "Geburtstagserinnerungen",
+              geometry: { ...element.geometry, width: 32, height: 40 },
+              text: { ...element.text, fontSize: 14, overflow: "flag" as const },
+            }
+          : element
+      ),
+    }
+  }, [isPortrait, bookLanguage])
+  const baseProject = isPortrait ? portraitProject : project
+  const activeProject = {
+    ...baseProject,
+    bookLanguage,
+    layouts: baseProject.layouts.map((layout) => ({ ...layout, schema: activeSchema })),
+  }
   const activePage = isPortrait ? portraitPage : page
   const pageWidth = isPortrait ? 432 : 648
   const decorativeAssetUrl = () => "/layout-parity-decor.svg"
@@ -275,6 +298,7 @@ function LayoutParityFixture() {
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Fabric editor</h2>
           <LayoutCanvas
+            locale={bookLanguage}
             key={canvasKey}
             schema={editorSchema}
             width={pageWidth}

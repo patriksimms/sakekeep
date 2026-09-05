@@ -1121,3 +1121,49 @@ describe("export object reservations", () => {
     expect(await reservedKeys(keys)).toEqual([])
   })
 })
+
+describe("book language", () => {
+  it("defaults new projects to German, preserves explicit English and copies book language", async () => {
+    const german = await createProject({ title: "Erinnerungsbuch" })
+    const english = await createProject({ title: "English book", bookLanguage: "en" })
+    createdProjectIds.add(german.id)
+    createdProjectIds.add(english.id)
+    expect(german.bookLanguage).toBe("de")
+    expect((await getProject(english.id)).bookLanguage).toBe("en")
+    await updateProject({ projectId: german.id, formSchema: completeForm, expectedRevision: 0 })
+    await publishProject(german.id)
+    const token = shareTokenForProject(german.id)
+    expect(await findPublicProject(token)).toMatchObject({
+      status: "collecting",
+      bookLanguage: "de",
+    })
+    const copy = await duplicateProject(german.id)
+    createdProjectIds.add(copy.id)
+    expect(copy.bookLanguage).toBe("de")
+    await closeProject(german.id)
+    expect(await findPublicProject(token)).toMatchObject({ status: "closed", bookLanguage: "de" })
+  })
+
+  it("requires regeneration when a German book has an older layout engine", async () => {
+    const project = await createProject({ title: "Deutsche Trennung" })
+    createdProjectIds.add(project.id)
+    await updateProject({ projectId: project.id, formSchema: completeForm, expectedRevision: 0 })
+    await publishProject(project.id)
+    await closeProject(project.id)
+    await createLayout(project.id, "Titelseite", "blank", "front-cover")
+    const book = await generateProjectBook(project.id, {
+      mode: "cycle",
+      seed: "de",
+      manualAssignments: {},
+      resolutionOverrides: [],
+    })
+    expect(book.layoutEngineVersion).toBe(1)
+    await db
+      .update(books)
+      .set({ generatedBook: { ...book, layoutEngineVersion: 0 } })
+      .where(eq(books.projectId, project.id))
+    expect((await getProject(project.id)).bookStatus).toBe("stale")
+    await generateProjectBook(project.id, book.settings)
+    expect((await getProject(project.id)).bookStatus).toBe("current")
+  })
+})

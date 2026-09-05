@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { type Locale } from "#/lib/locale.ts"
 import {
   and,
   asc,
@@ -134,7 +136,7 @@ function shareUrl(projectId: string, state: string): string | null {
  */
 function assertNotArchived(project: { archivedAt: Date | null }): void {
   if (project.archivedAt) {
-    throw new HttpError(409, "This project is archived. Unarchive it before making changes.")
+    throw new HttpError(409, m.ui_this_project_is_archived_unarchive_it_before_making_changes())
   }
 }
 
@@ -152,6 +154,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
   return rows.map(({ project, submissionCount }) => ({
     id: project.id,
     title: project.title,
+    bookLanguage: project.bookLanguage,
     occasion: project.occasion,
     state: project.state,
     submissionCount,
@@ -220,7 +223,7 @@ async function convertLegacyStandalonePagesOf(projectId: string): Promise<boolea
 export async function getProject(projectId: string, includeSubmissions = false): Promise<Project> {
   await convertLegacyStandalonePagesOf(projectId)
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
-  if (!project) throw new HttpError(404, "Project not found.")
+  if (!project) throw new HttpError(404, m.ui_project_not_found())
 
   const [layoutRows, bookRows, submissionRows, submissionEditRows, focalPointRows, countRows] =
     await Promise.all([
@@ -272,13 +275,19 @@ export async function getProject(projectId: string, includeSubmissions = false):
   return {
     id: project.id,
     title: project.title,
+    bookLanguage: project.bookLanguage,
     occasion: project.occasion,
     state: project.state,
     formSchema: project.formSchema,
     formRevision: project.formRevision,
     shareUrl: shareUrl(project.id, project.state),
     submissionCount: countRows[0]?.value ?? 0,
-    bookStatus: project.bookStatus,
+    bookStatus:
+      project.bookLanguage === "de" &&
+      bookRows[0] &&
+      bookRows[0].generatedBook.layoutEngineVersion !== 1
+        ? "stale"
+        : project.bookStatus,
     pageFormat: project.pageFormat,
     pageOrientation: project.pageOrientation,
     layouts: layoutRows.map(layoutRecord),
@@ -310,10 +319,10 @@ export async function updateSubmissionTextAnswers(input: {
       .from(projects)
       .where(eq(projects.id, input.projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (project.state !== "closed") {
-      throw new HttpError(409, "Close collection before editing responses.")
+      throw new HttpError(409, m.ui_close_collection_before_editing_responses())
     }
 
     const [submission] = await tx
@@ -323,9 +332,12 @@ export async function updateSubmissionTextAnswers(input: {
         and(eq(submissions.id, input.submissionId), eq(submissions.projectId, input.projectId))
       )
       .for("update")
-    if (!submission) throw new HttpError(404, "Response not found.")
+    if (!submission) throw new HttpError(404, m.ui_response_not_found())
     if (submission.revision !== input.expectedRevision) {
-      throw new HttpError(409, "This response changed elsewhere. Refresh it before editing again.")
+      throw new HttpError(
+        409,
+        m.ui_this_response_changed_elsewhere_refresh_it_before_editing_again()
+      )
     }
 
     const questions = new Map(
@@ -335,21 +347,21 @@ export async function updateSubmissionTextAnswers(input: {
     for (const [questionId, newValue] of Object.entries(input.answers)) {
       const question = questions.get(questionId)
       if (!question || (question.type !== "single-line" && question.type !== "multiline")) {
-        throw new HttpError(422, "Only text answers can be edited.")
+        throw new HttpError(422, m.ui_only_text_answers_can_be_edited())
       }
       const storedValue = submission.answers[questionId]
       if (storedValue !== undefined && typeof storedValue !== "string") {
-        throw new HttpError(422, "The stored text answer is invalid and cannot be edited.")
+        throw new HttpError(422, m.ui_the_stored_text_answer_is_invalid_and_cannot_be_edited())
       }
       const previousValue = storedValue ?? ""
       if (previousValue !== newValue) changes.push({ questionId, previousValue, newValue })
     }
-    if (changes.length === 0) throw new HttpError(400, "Change at least one text answer.")
+    if (changes.length === 0) throw new HttpError(400, m.ui_change_at_least_one_text_answer_469())
 
     const updatedAnswers: SubmissionAnswers = { ...submission.answers, ...input.answers }
     const issues = validateEditedTextAnswers(project.formSchema, updatedAnswers)
     if (issues.length > 0) {
-      throw new HttpError(422, "Resolve the response errors and try again.", { issues })
+      throw new HttpError(422, m.ui_resolve_the_response_errors_and_try_again(), { issues })
     }
 
     await tx
@@ -375,18 +387,20 @@ export async function updateSubmissionTextAnswers(input: {
 }
 
 export async function createProject(input: {
+  bookLanguage?: Locale
   title: string
   occasion?: string | null
 }): Promise<Project> {
   const title = input.title.trim()
   if (!title || title.length > 200) {
-    throw new HttpError(400, "Project title must be between 1 and 200 characters.")
+    throw new HttpError(400, m.ui_project_title_must_be_between_1_and_200_characters())
   }
   const id = crypto.randomUUID()
   await db.insert(projects).values({
     id,
     title,
     occasion: input.occasion?.trim() || null,
+    bookLanguage: input.bookLanguage ?? "de",
     formSchema: emptyFormSchema(),
   })
   return getProject(id)
@@ -404,25 +418,25 @@ export async function updateProject(input: {
     .from(projects)
     .where(eq(projects.id, input.projectId))
     .limit(1)
-  if (!existing) throw new HttpError(404, "Project not found.")
+  if (!existing) throw new HttpError(404, m.ui_project_not_found())
   assertNotArchived(existing)
 
   if (input.formSchema) {
     if (existing.state !== "draft") {
-      throw new HttpError(409, "Published forms are permanently frozen.")
+      throw new HttpError(409, m.ui_published_forms_are_permanently_frozen())
     }
     if (input.expectedRevision === undefined) {
-      throw new HttpError(400, "Form autosave requires an expected revision.")
+      throw new HttpError(400, m.ui_form_autosave_requires_an_expected_revision())
     }
     const issues = validateFormForDraft(input.formSchema)
     if (issues.length > 0) {
-      throw new HttpError(422, "The form contains invalid configuration.", { issues })
+      throw new HttpError(422, m.ui_the_form_contains_invalid_configuration(), { issues })
     }
   }
 
   const title = input.title?.trim()
   if (title !== undefined && (!title || title.length > 200)) {
-    throw new HttpError(400, "Project title must be between 1 and 200 characters.")
+    throw new HttpError(400, m.ui_project_title_must_be_between_1_and_200_characters())
   }
 
   const condition =
@@ -449,7 +463,7 @@ export async function updateProject(input: {
     .where(condition)
     .returning({ id: projects.id })
   if (updated.length === 0) {
-    throw new HttpError(409, "A newer form revision was saved first. Reload before continuing.")
+    throw new HttpError(409, m.ui_a_newer_form_revision_was_saved_first_reload_before_continuing())
   }
   return getProject(input.projectId)
 }
@@ -461,14 +475,14 @@ export async function publishProject(projectId: string): Promise<Project> {
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (project.state !== "draft") {
-      throw new HttpError(409, "This project has already been published.")
+      throw new HttpError(409, m.ui_this_project_has_already_been_published())
     }
     const issues = validateFormForPublish(project.formSchema)
     if (issues.length > 0) {
-      throw new HttpError(422, "Resolve all form issues before publishing.", {
+      throw new HttpError(422, m.ui_resolve_all_form_issues_before_publishing(), {
         issues,
       })
     }
@@ -492,13 +506,13 @@ export async function closeProject(projectId: string): Promise<Project> {
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (project.state === "closed") {
-      throw new HttpError(409, "Collection is already permanently closed.")
+      throw new HttpError(409, m.ui_collection_is_already_permanently_closed())
     }
     if (project.state !== "collecting") {
-      throw new HttpError(409, "Publish the form before closing collection.")
+      throw new HttpError(409, m.ui_publish_the_form_before_closing_collection())
     }
     await tx
       .update(projects)
@@ -515,8 +529,8 @@ export async function archiveProject(projectId: string): Promise<Project> {
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
-    if (project.archivedAt) throw new HttpError(409, "This project is already archived.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
+    if (project.archivedAt) throw new HttpError(409, m.ui_this_project_is_already_archived())
     await tx
       .update(projects)
       .set({ archivedAt: new Date(), updatedAt: new Date() })
@@ -532,8 +546,8 @@ export async function unarchiveProject(projectId: string): Promise<Project> {
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
-    if (!project.archivedAt) throw new HttpError(409, "This project is not archived.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
+    if (!project.archivedAt) throw new HttpError(409, m.ui_this_project_is_not_archived())
     await tx
       .update(projects)
       .set({ archivedAt: null, updatedAt: new Date() })
@@ -546,14 +560,15 @@ export async function duplicateProject(projectId: string): Promise<Project> {
   const newId = crypto.randomUUID()
   await db.transaction(async (tx) => {
     const [source] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("share")
-    if (!source) throw new HttpError(404, "Project not found.")
+    if (!source) throw new HttpError(404, m.ui_project_not_found())
     if (source.state === "draft") {
-      throw new HttpError(409, "Only published or closed projects can be duplicated.")
+      throw new HttpError(409, m.ui_only_published_or_closed_projects_can_be_duplicated())
     }
     await tx.insert(projects).values({
       id: newId,
-      title: `${source.title} — copy`,
+      title: m.project_copy_title({ value0: source.title }),
       occasion: source.occasion,
+      bookLanguage: source.bookLanguage,
       formSchema: source.formSchema,
       pageFormat: source.pageFormat,
       pageOrientation: source.pageOrientation,
@@ -586,7 +601,7 @@ export async function deleteProject(projectId: string): Promise<void> {
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     const assetRows = await tx
       .select({
         objectKey: assets.objectKey,
@@ -760,13 +775,13 @@ async function assertCoverRoleFree(
     .where(and(eq(layouts.projectId, projectId), eq(layouts.role, role)))
     .limit(1)
   if (existing) {
-    throw new HttpError(409, `This project already has a ${layoutRoleLabel(role).toLowerCase()}.`)
+    throw new HttpError(409, m.duplicate_cover({ value0: layoutRoleLabel(role).toLowerCase() }))
   }
 }
 
 export async function createLayout(
   projectId: string,
-  name = "Untitled layout",
+  name: string = m.ui_untitled_layout(),
   backgroundPresetId: BackgroundPresetId = "blank",
   role: LayoutRole = "submission"
 ): Promise<LayoutRecord> {
@@ -776,10 +791,10 @@ export async function createLayout(
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (project.state !== "closed") {
-      throw new HttpError(409, "Close collection before authoring layouts.")
+      throw new HttpError(409, m.ui_close_collection_before_authoring_layouts())
     }
     if (isCoverRole(role)) await assertCoverRoleFree(tx, projectId, role)
     const [positionRow] = await tx
@@ -791,7 +806,7 @@ export async function createLayout(
       .values({
         id: crypto.randomUUID(),
         projectId,
-        name: name.trim() || "Untitled layout",
+        name: name.trim() || m.ui_untitled_layout(),
         position: (positionRow?.value ?? -1) + 1,
         role,
         schema: backgroundSchema(backgroundPresetId, project.pageFormat, project.pageOrientation),
@@ -819,7 +834,7 @@ export async function updateLayout(input: {
   if (input.schema) {
     const parsed = layoutSchemaValidator.safeParse(input.schema)
     if (!parsed.success) {
-      throw new HttpError(422, "The canonical layout schema is invalid.", {
+      throw new HttpError(422, m.ui_the_canonical_layout_schema_is_invalid(), {
         issues: parsed.error.issues,
       })
     }
@@ -830,7 +845,7 @@ export async function updateLayout(input: {
       .from(projects)
       .where(eq(projects.id, input.projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (input.schema) {
       const specification = pageSpecification(project.pageFormat, project.pageOrientation)
@@ -838,13 +853,13 @@ export async function updateLayout(input: {
         input.schema.trim.widthMm !== specification.trimWidthMm ||
         input.schema.trim.heightMm !== specification.trimHeightMm
       ) {
-        throw new HttpError(409, "The layout uses a different project page format. Reload it.")
+        throw new HttpError(409, m.ui_the_layout_uses_a_different_project_page_format_reload_it())
       }
     }
     const [updated] = await tx
       .update(layouts)
       .set({
-        ...(input.name !== undefined ? { name: input.name.trim() || "Untitled layout" } : {}),
+        ...(input.name !== undefined ? { name: input.name.trim() || m.ui_untitled_layout() } : {}),
         ...(input.schema ? { schema: input.schema } : {}),
         revision: sql`${layouts.revision} + 1`,
         updatedAt: new Date(),
@@ -858,7 +873,10 @@ export async function updateLayout(input: {
       )
       .returning()
     if (!updated) {
-      throw new HttpError(409, "A newer layout revision was saved first. Reload before continuing.")
+      throw new HttpError(
+        409,
+        m.ui_a_newer_layout_revision_was_saved_first_reload_before_continuing()
+      )
     }
     await tx
       .update(projects)
@@ -879,13 +897,13 @@ export async function duplicateLayout(projectId: string, layoutId: string): Prom
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     const [source] = await tx
       .select()
       .from(layouts)
       .where(and(eq(layouts.id, layoutId), eq(layouts.projectId, projectId)))
-    if (!source) throw new HttpError(404, "Layout not found.")
+    if (!source) throw new HttpError(404, m.ui_layout_not_found())
     const [positionRow] = await tx
       .select({ value: max(layouts.position) })
       .from(layouts)
@@ -895,7 +913,7 @@ export async function duplicateLayout(projectId: string, layoutId: string): Prom
       .values({
         id: crypto.randomUUID(),
         projectId,
-        name: `${source.name} — copy`,
+        name: m.layout_copy_title({ value0: source.name }),
         position: (positionRow?.value ?? -1) + 1,
         // A project holds one cover per side, so a copy of a cover becomes a standalone page.
         role: isCoverRole(source.role) ? "static" : source.role,
@@ -924,7 +942,7 @@ export async function reorderLayouts(
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     const current = await tx
       .select()
@@ -937,7 +955,7 @@ export async function reorderLayouts(
       new Set(layoutIds).size !== layoutIds.length ||
       movable.some((layout) => !layoutIds.includes(layout.id))
     ) {
-      throw new HttpError(422, "Layout order must contain every reorderable layout once.")
+      throw new HttpError(422, m.ui_layout_order_must_contain_every_reorderable_layout_once())
     }
     // Covers keep their pinned place; positions are rewritten in presentation order.
     const orderedIds = [
@@ -980,13 +998,13 @@ export async function deleteLayout(projectId: string, layoutId: string): Promise
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     const deleted = await tx
       .delete(layouts)
       .where(and(eq(layouts.id, layoutId), eq(layouts.projectId, projectId)))
       .returning({ id: layouts.id })
-    if (deleted.length === 0) throw new HttpError(404, "Layout not found.")
+    if (deleted.length === 0) throw new HttpError(404, m.ui_layout_not_found())
     const remaining = await tx
       .select()
       .from(layouts)
@@ -1026,10 +1044,10 @@ export async function setProjectPageFormat(input: {
       .from(projects)
       .where(eq(projects.id, input.projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (project.state !== "closed") {
-      throw new HttpError(409, "Close collection before choosing a page format.")
+      throw new HttpError(409, m.ui_close_collection_before_choosing_a_page_format())
     }
     if (
       project.pageFormat === input.pageFormat &&
@@ -1049,17 +1067,15 @@ export async function setProjectPageFormat(input: {
 
     if (orientationChanged) {
       if (currentLayouts.length > 0 && !input.resetLayouts) {
-        throw new HttpError(
-          409,
-          `Changing orientation resets ${currentLayouts.length} layout${currentLayouts.length === 1 ? "" : "s"}.`,
-          { layoutCount: currentLayouts.length }
-        )
+        throw new HttpError(409, m.orientation_reset_count({ value0: currentLayouts.length }), {
+          layoutCount: currentLayouts.length,
+        })
       }
       await tx.delete(layouts).where(eq(layouts.projectId, input.projectId))
       await tx.insert(layouts).values({
         id: crypto.randomUUID(),
         projectId: input.projectId,
-        name: "Layout 1",
+        name: m.ui_layout_1(),
         position: 0,
         schema: emptyLayoutSchema(input.pageFormat, input.pageOrientation),
       })
@@ -1102,10 +1118,10 @@ export async function generateProjectBook(
       .from(projects)
       .where(eq(projects.id, projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (project.state !== "closed") {
-      throw new HttpError(409, "Close collection before generating a book.")
+      throw new HttpError(409, m.ui_close_collection_before_generating_a_book())
     }
     const layoutRows = await tx
       .select()
@@ -1121,6 +1137,7 @@ export async function generateProjectBook(
     const book = generateBook({
       projectId,
       form: project.formSchema,
+      locale: project.bookLanguage,
       submissions: submissionRows.map((submission) => submissionSummary(submission)),
       layouts: layoutRows.map(layoutRecord),
       settings,
@@ -1164,14 +1181,14 @@ export async function updateProjectBook(input: {
       .from(projects)
       .where(eq(projects.id, input.projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     const [book] = await tx
       .select()
       .from(books)
       .where(eq(books.projectId, input.projectId))
       .for("update")
-    if (!book) throw new HttpError(409, "Generate the book first.")
+    if (!book) throw new HttpError(409, m.ui_generate_the_book_first())
     const layoutRows = input.pages
       ? await tx.select().from(layouts).where(eq(layouts.projectId, input.projectId))
       : []
@@ -1183,7 +1200,7 @@ export async function updateProjectBook(input: {
         new Set(book.generatedBook.pages.map((page) => page.id))
       )
       if (issues.length > 0) {
-        throw new HttpError(422, `A page ${issues[0]!.reason}.`, { issues })
+        throw new HttpError(422, m.invalid_book_page({ value0: issues[0]!.reason }), { issues })
       }
     }
     const updated: GeneratedBook = {
@@ -1224,9 +1241,10 @@ export interface PendingAsset {
 
 export async function findPublicProject(token: string): Promise<
   | { status: "unknown" }
-  | { status: "closed" }
+  | { status: "closed"; bookLanguage: Locale }
   | {
       status: "collecting"
+      bookLanguage: Locale
       projectId: string
       title: string
       formSchema: FormSchema
@@ -1238,11 +1256,13 @@ export async function findPublicProject(token: string): Promise<
     .where(eq(projects.shareTokenHash, shareTokenHash(token)))
     .limit(1)
   if (!project) return { status: "unknown" }
-  if (project.state !== "collecting" || project.archivedAt) return { status: "closed" }
+  if (project.state !== "collecting" || project.archivedAt)
+    return { status: "closed", bookLanguage: project.bookLanguage }
   return {
     status: "collecting",
     projectId: project.id,
     title: project.title,
+    bookLanguage: project.bookLanguage,
     formSchema: project.formSchema,
   }
 }
@@ -1274,7 +1294,13 @@ export async function createSubmissionRecord(input: {
       .where(eq(projects.id, input.projectId))
       .for("update")
     if (!project || project.state !== "collecting" || project.archivedAt) {
-      throw new HttpError(409, "Collection is closed. This response was not saved.")
+      throw new HttpError(
+        409,
+        m.ui_collection_is_closed_this_response_was_not_saved(
+          {},
+          { locale: project?.bookLanguage ?? "de" }
+        )
+      )
     }
     const [existing] = await tx
       .select()
@@ -1350,7 +1376,7 @@ export async function createSubmissionRecord(input: {
 
 export async function getAsset(assetId: string): Promise<typeof assets.$inferSelect> {
   const [asset] = await db.select().from(assets).where(eq(assets.id, assetId)).limit(1)
-  if (!asset) throw new HttpError(404, "Asset not found.")
+  if (!asset) throw new HttpError(404, m.ui_asset_not_found())
   return asset
 }
 
@@ -1376,7 +1402,7 @@ export async function setAssetFocalPoint(input: {
       .from(projects)
       .where(eq(projects.id, input.projectId))
       .for("update")
-    if (!project) throw new HttpError(404, "Project not found.")
+    if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     const updated = await tx
       .update(assets)
@@ -1389,7 +1415,7 @@ export async function setAssetFocalPoint(input: {
         )
       )
       .returning({ id: assets.id })
-    if (updated.length === 0) throw new HttpError(404, "Asset not found.")
+    if (updated.length === 0) throw new HttpError(404, m.ui_asset_not_found())
   })
 }
 
@@ -1406,10 +1432,10 @@ export async function createDecorativeAssetRecord(input: {
   height: number
 }): Promise<typeof assets.$inferSelect> {
   const [project] = await db.select().from(projects).where(eq(projects.id, input.projectId))
-  if (!project) throw new HttpError(404, "Project not found.")
+  if (!project) throw new HttpError(404, m.ui_project_not_found())
   assertNotArchived(project)
   if (project.state !== "closed") {
-    throw new HttpError(409, "Close collection before authoring layouts.")
+    throw new HttpError(409, m.ui_close_collection_before_authoring_layouts())
   }
   const [asset] = await db
     .insert(assets)
@@ -1460,7 +1486,7 @@ export async function recordExport(input: {
     if (owned.length !== objectKeys.length) {
       throw new HttpError(
         409,
-        "The exported files were cleaned up before the export was recorded. Export again."
+        m.ui_the_exported_files_were_cleaned_up_before_the_export_was_recorded()
       )
     }
     await tx.insert(exportsTable).values({ id, ...input })
@@ -1470,6 +1496,6 @@ export async function recordExport(input: {
 
 export async function getExport(exportId: string) {
   const [record] = await db.select().from(exportsTable).where(eq(exportsTable.id, exportId))
-  if (!record) throw new HttpError(404, "Export not found.")
+  if (!record) throw new HttpError(404, m.ui_export_not_found())
   return record
 }
