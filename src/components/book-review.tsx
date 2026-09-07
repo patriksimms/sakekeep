@@ -970,7 +970,7 @@ export function BookReview({
                       <p className="text-sm text-muted-foreground">
                         {selectedLayout && isCoverRole(selectedLayout.role)
                           ? m.pinned_cover_explanation({
-                              value0: layoutRoleLabel(selectedLayout.role).toLowerCase(),
+                              value0: layoutRoleLabel(selectedLayout.role),
                               value1:
                                 selectedLayout.role === "front-cover"
                                   ? m.position_first()

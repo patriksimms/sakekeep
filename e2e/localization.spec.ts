@@ -15,6 +15,12 @@ test("organizer preference persists while contributor language follows its book"
   await expect(page.getByTestId("heading-your-projects")).toHaveText("Deine Projekte")
   await page.getByTestId("button-new-project").click()
   await expect(page.getByTestId("book-language")).toContainText("Deutsch")
+  await page.getByTestId("book-language").click()
+  await page.getByTestId("book-language-en").click()
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("heading-create-a-friend-book")).toHaveCount(0)
+  await page.getByTestId("button-new-project").click()
+  await expect(page.getByTestId("book-language")).toContainText("Deutsch")
   await page.getByTestId("project-title").fill("Deutsches Erinnerungsbuch")
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/api/projects") && r.request().method() === "POST"
@@ -63,5 +69,27 @@ test("organizer preference persists while contributor language follows its book"
     ).toBe("en")
   } finally {
     await request.delete(`/api/projects/${project.id}`)
+  }
+})
+
+test("submission edit validation follows each request locale", async ({ request }) => {
+  for (const locale of ["en", "de", "en"]) {
+    const response = await request.patch(
+      "/api/projects/11111111-1111-4111-8111-111111111111/submissions/00000000-0000-4000-8000-000000000000",
+      {
+        headers: { Cookie: `PARAGLIDE_LOCALE=${locale}` },
+        data: { expectedRevision: 0, answers: {} },
+      }
+    )
+    expect(response.status()).toBe(422)
+    expect((await response.json()).details.issues).toEqual([
+      {
+        path: "answers",
+        message:
+          locale === "de"
+            ? "Ändere mindestens eine Textantwort."
+            : "Change at least one text answer.",
+      },
+    ])
   }
 })

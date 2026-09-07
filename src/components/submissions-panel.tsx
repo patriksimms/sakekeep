@@ -259,7 +259,7 @@ export function SubmissionsPanel({
         <Card className="bg-card/80 sm:col-span-2">
           <CardHeader>
             <CardDescription>{m.ui_lifecycle()}</CardDescription>
-            <CardTitle className="capitalize">{project.state}</CardTitle>
+            <CardTitle className="capitalize">{projectStateLabel(project.state)}</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
             {(["draft", "collecting", "closed"] as const).map((state) => (

@@ -285,15 +285,20 @@ function validateText(
     })
   }
   if (question.type === "single-line" && question.validateUrl && answer.trim()) {
+    let url: URL
     try {
-      const url = new URL(answer)
-      if (url.protocol !== "http:" && url.protocol !== "https:") {
-        throw new Error(m.ui_unsupported_url_protocol({}, { locale }))
-      }
+      url = new URL(answer)
     } catch {
       issues.push({
         path: `answers.${question.id}`,
         message: m.ui_enter_a_valid_http_or_https_url({}, { locale }),
+      })
+      return
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      issues.push({
+        path: `answers.${question.id}`,
+        message: m.ui_unsupported_url_protocol({}, { locale }),
       })
     }
   }

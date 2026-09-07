@@ -23,7 +23,27 @@
   "problem_overflow": "{name} läuft auf {location} über. Benötigt werden {required} Zeilen bei {size} pt, Platz ist für {available}.",
   "problem_truncated": "{name} wird auf {location} gekürzt. Benötigt werden {required} Zeilen bei {size} pt, Platz ist für {available}.",
   "problem_short_box": "{name}: Der Textrahmen auf {location} ist zu niedrig für eine Zeile bei {size} pt. Benötigt: {needed} mm, vorhanden: {height} mm.",
-  "problem_photo_slots": "Beitrag {response}, „{prompt}“: {unplaced} Fotos werden nicht gezeigt, {empty} Plätze bleiben leer. Das Layout hat {slots} Plätze für {photos} hochgeladene Fotos.",
+  "problem_photo_slots": [
+    {
+      "declarations": [
+        "input response",
+        "input prompt",
+        "input unplaced",
+        "input empty",
+        "input slots",
+        "input photos",
+        "local missing = unplaced: plural",
+        "local vacant = empty: plural"
+      ],
+      "selectors": ["missing", "vacant"],
+      "match": {
+        "missing=one, vacant=one": "Beitrag {response}, „{prompt}“: {unplaced} Foto wird nicht gezeigt, {empty} Platz bleibt leer. Fotoplätze: {slots}. Hochgeladene Fotos: {photos}.",
+        "missing=one, vacant=other": "Beitrag {response}, „{prompt}“: {unplaced} Foto wird nicht gezeigt, {empty} Plätze bleiben leer. Fotoplätze: {slots}. Hochgeladene Fotos: {photos}.",
+        "missing=other, vacant=one": "Beitrag {response}, „{prompt}“: {unplaced} Fotos werden nicht gezeigt, {empty} Platz bleibt leer. Fotoplätze: {slots}. Hochgeladene Fotos: {photos}.",
+        "missing=other, vacant=other": "Beitrag {response}, „{prompt}“: {unplaced} Fotos werden nicht gezeigt, {empty} Plätze bleiben leer. Fotoplätze: {slots}. Hochgeladene Fotos: {photos}."
+      }
+    }
+  ],
   "problem_legacy": "Erstelle das Buch neu, um Details zu diesem Problem zu sehen: {code}.",
   "pdf_title": "Sakekeep Freundebuch",
   "ui_primary": "Hauptnavigation",
@@ -268,7 +288,6 @@
   "ui_layers": "Ebenen",
   "ui_topmost_first": "Oberste zuerst",
   "ui_add_an_element_from_the_toolbar": "Füge ein Element aus der Werkzeugleiste hinzu.",
-  "ui_pages_carry_no_response_so_only_static_elements_can_be_placed_on_": "enthalten keinen Beitrag. Auf ihnen sind nur statische Elemente möglich.",
   "ui_inspector": "Eigenschaften",
   "ui_undo": "Rückgängig",
   "ui_redo": "Wiederholen",
@@ -538,8 +557,6 @@
   "ui_unarchive_project": "Archivierung aufheben",
   "ui_archive_project": "Projekt archivieren",
   "ui_archive_this_project": "Dieses Projekt archivieren?",
-  "ui_the_project_keeps_its_current": "Das Projekt behält seinen aktuellen",
-  "ui_state_and_every_response_layout_and_export_while_archived_it_acce": "Zustand und alle Beiträge, Layouts und Exporte. Während der Archivierung sind keine neuen Beiträge oder Änderungen möglich. Du kannst die Archivierung jederzeit aufheben.",
   "ui_project_archived": "Projekt archiviert",
   "ui_archive_failed": "Archivierung fehlgeschlagen",
   "ui_delete_project": "Projekt löschen",
@@ -857,5 +874,8 @@
   "export_jpeg_description": "Bilder mit 300 PPI und Beschnitt für Vorschauen und Fotoabzüge.",
   "character_limit_range": "Gib eine ganze Zahl von 1 bis 100000 ein.",
   "image_limit_range": "Wähle eine ganze Zahl von 1 bis 10.",
-  "invalid_question": "Prüfe die Einstellungen der Frage."
+  "invalid_question": "Prüfe die Einstellungen der Frage.",
+  "standalone_layout_hint": "{role} enthält keinen Beitrag. Auf ihr sind nur statische Elemente möglich.",
+  "archive_confirmation": "Das Projekt behält den Status „{state}“ und alle Beiträge, Layouts und Exporte. Während der Archivierung sind keine neuen Beiträge oder Änderungen möglich. Du kannst die Archivierung jederzeit aufheben.",
+  "check_warning": "Warnung"
 }

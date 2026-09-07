@@ -298,7 +298,13 @@ export function ExportPanel({ project }: { project: Project }) {
                           : "destructive"
                     }
                   >
-                    {check.status}
+                    {
+                      {
+                        pass: m.report_passed(),
+                        fail: m.report_failed(),
+                        warning: m.check_warning(),
+                      }[check.status]
+                    }
                   </Badge>
                 </div>
               ))}

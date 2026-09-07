@@ -97,7 +97,13 @@ function NewProjectDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen && !open) setBookLanguage(getLocale())
+        setOpen(nextOpen)
+      }}
+    >
       <DialogTrigger data-testid="button-new-project" render={<Button />}>
         <PlusIcon data-icon="inline-start" />
         {m.ui_new_project()}{" "}
@@ -159,8 +165,12 @@ function NewProjectDialog() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="de">Deutsch</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem data-testid="book-language-de" value="de">
+                      Deutsch
+                    </SelectItem>
+                    <SelectItem data-testid="book-language-en" value="en">
+                      English
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>

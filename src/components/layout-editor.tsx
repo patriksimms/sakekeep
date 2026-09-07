@@ -1378,7 +1378,7 @@ const Editor = forwardRef<
                               key={action.elementType}
                               label={action.label}
                               addLabel={m.add_question_element({
-                                value0: action.label.toLowerCase(),
+                                value0: action.label,
                                 value1: item.prompt,
                               })}
                               icon={
@@ -1401,8 +1401,7 @@ const Editor = forwardRef<
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {layoutRoleLabel(layout.role)}{" "}
-                {m.ui_pages_carry_no_response_so_only_static_elements_can_be_placed_on_()}{" "}
+                {m.standalone_layout_hint({ role: layoutRoleLabel(layout.role) })}{" "}
               </p>
             )}
             <div className="flex flex-wrap items-center gap-1.5">

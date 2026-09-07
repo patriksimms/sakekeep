@@ -23,7 +23,27 @@
   "problem_overflow": "{name} overflows on {location}. It needs {required} lines at {size} pt, but only {available} fit.",
   "problem_truncated": "{name} is truncated on {location}. It needs {required} lines at {size} pt, but only {available} fit.",
   "problem_short_box": "{name}: the text bounding box on {location} is too short for one line at {size} pt. Needs {needed} mm, has {height} mm.",
-  "problem_photo_slots": "Response {response}, \"{prompt}\": {unplaced} photos are not shown and {empty} slots stay empty. The layout has {slots} slots for {photos} uploaded photos.",
+  "problem_photo_slots": [
+    {
+      "declarations": [
+        "input response",
+        "input prompt",
+        "input unplaced",
+        "input empty",
+        "input slots",
+        "input photos",
+        "local missing = unplaced: plural",
+        "local vacant = empty: plural"
+      ],
+      "selectors": ["missing", "vacant"],
+      "match": {
+        "missing=one, vacant=one": "Response {response}, \"{prompt}\": {unplaced} photo is not shown and {empty} slot stays empty. Photo slots: {slots}. Uploaded photos: {photos}.",
+        "missing=one, vacant=other": "Response {response}, \"{prompt}\": {unplaced} photo is not shown and {empty} slots stay empty. Photo slots: {slots}. Uploaded photos: {photos}.",
+        "missing=other, vacant=one": "Response {response}, \"{prompt}\": {unplaced} photos are not shown and {empty} slot stays empty. Photo slots: {slots}. Uploaded photos: {photos}.",
+        "missing=other, vacant=other": "Response {response}, \"{prompt}\": {unplaced} photos are not shown and {empty} slots stay empty. Photo slots: {slots}. Uploaded photos: {photos}."
+      }
+    }
+  ],
   "problem_legacy": "Regenerate the book to see details for this {code} problem.",
   "pdf_title": "Sakekeep friend book",
   "ui_primary": "Primary",
@@ -268,7 +288,6 @@
   "ui_layers": "Layers",
   "ui_topmost_first": "Topmost first",
   "ui_add_an_element_from_the_toolbar": "Add an element from the toolbar.",
-  "ui_pages_carry_no_response_so_only_static_elements_can_be_placed_on_": "pages carry no response, so only static elements can be placed on them.",
   "ui_inspector": "Inspector",
   "ui_undo": "Undo",
   "ui_redo": "Redo",
@@ -538,8 +557,6 @@
   "ui_unarchive_project": "Unarchive project",
   "ui_archive_project": "Archive project",
   "ui_archive_this_project": "Archive this project?",
-  "ui_the_project_keeps_its_current": "The project keeps its current",
-  "ui_state_and_every_response_layout_and_export_while_archived_it_acce": "state and every response, layout, and export. While archived it accepts no new submissions and no edits. You can unarchive it at any time.",
   "ui_project_archived": "Project archived",
   "ui_archive_failed": "Archive failed",
   "ui_delete_project": "Delete project",
@@ -706,7 +723,7 @@
       "selectors": ["number"],
       "match": {
         "number=one": "The organizer accepted {value0} blocking problem for this export.",
-        "number=other": "The organizer accepted {value0} blocking problem(s) for this export."
+        "number=other": "The organizer accepted {value0} blocking problems for this export."
       }
     }
   ],
@@ -716,7 +733,7 @@
       "selectors": ["number"],
       "match": {
         "number=one": "{value0} blocking problem remains.",
-        "number=other": "{value0} blocking problem(s) remain."
+        "number=other": "{value0} blocking problems remain."
       }
     }
   ],
@@ -857,5 +874,8 @@
   "export_jpeg_description": "300 PPI images with bleed, for previews and photo prints.",
   "character_limit_range": "Enter a whole number from 1 to 100000.",
   "image_limit_range": "Choose a whole number from 1 to 10.",
-  "invalid_question": "Check the question settings."
+  "invalid_question": "Check the question settings.",
+  "standalone_layout_hint": "{role} carries no response. Only static elements can be placed on it.",
+  "archive_confirmation": "The project keeps its current state ({state}) and every response, layout, and export. While archived it accepts no new submissions and no edits. You can unarchive it at any time.",
+  "check_warning": "Warning"
 }

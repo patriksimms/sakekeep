@@ -758,8 +758,8 @@ describe("photo distribution problems", () => {
     )
 
     expect(problems.map((problem) => problemMessage(problem, "en"))).toEqual([
-      expect.stringContaining('"Photos": 1 photos are not shown'),
-      expect.stringContaining('"Portraits": 0 photos are not shown and 1 slots stay empty'),
+      expect.stringContaining('"Photos": 1 photo is not shown'),
+      expect.stringContaining('"Portraits": 0 photos are not shown and 1 slot stays empty'),
     ])
     expect(new Set(problems.map((problem) => problem.id))).toHaveLength(2)
   })

@@ -347,8 +347,7 @@ function ProjectWorkspace() {
                       {m.ui_archive_this_project()}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      {m.ui_the_project_keeps_its_current()} {projectStateLabel(project.state)}{" "}
-                      {m.ui_state_and_every_response_layout_and_export_while_archived_it_acce()}{" "}
+                      {m.archive_confirmation({ state: projectStateLabel(project.state) })}{" "}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

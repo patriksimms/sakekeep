@@ -4,12 +4,34 @@ import { paraglideMiddleware } from "#/paraglide/server.js"
 import * as m from "#/paraglide/messages.js"
 import { runtimeLocale } from "#/test/locale.ts"
 import { problemMessage } from "#/domain/problem-message.ts"
-import { validateFormForDraft } from "#/domain/form.ts"
+import { validateFormForDraft, validateSubmission } from "#/domain/form.ts"
 import { localeSchema } from "./locale.ts"
 
 afterEach(() => overwriteGetLocale(() => "en"))
 
 describe("locale scopes", () => {
+  it("keeps unsupported URL protocols distinct from malformed URLs in the book language", () => {
+    const form = {
+      version: 1 as const,
+      questions: [
+        {
+          id: "website",
+          type: "single-line" as const,
+          prompt: "Website",
+          required: false,
+          validateUrl: true,
+        },
+      ],
+    }
+    expect(validateSubmission(form, { website: "https://example.com" }, [], "de")).toEqual([])
+    expect(validateSubmission(form, { website: "ftp://example.com" }, [], "de")).toEqual([
+      { path: "answers.website", message: "Nicht unterstütztes URL-Protokoll" },
+    ])
+    expect(validateSubmission(form, { website: "not a URL" }, [], "en")).toEqual([
+      { path: "answers.website", message: "Enter a valid HTTP or HTTPS URL." },
+    ])
+  })
+
   it("localizes invalid numeric question settings at validation time", () => {
     for (const locale of ["de", "en"] as const) {
       overwriteGetLocale(() => locale)

@@ -775,7 +775,7 @@ async function assertCoverRoleFree(
     .where(and(eq(layouts.projectId, projectId), eq(layouts.role, role)))
     .limit(1)
   if (existing) {
-    throw new HttpError(409, m.duplicate_cover({ value0: layoutRoleLabel(role).toLowerCase() }))
+    throw new HttpError(409, m.duplicate_cover({ value0: layoutRoleLabel(role) }))
   }
 }
 

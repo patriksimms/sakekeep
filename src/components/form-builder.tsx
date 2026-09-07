@@ -1,3 +1,4 @@
+import { type Locale } from "#/lib/locale.ts"
 import * as m from "#/paraglide/messages.js"
 import {
   AlertTriangleIcon,
@@ -91,7 +92,7 @@ const typeLabels: Record<QuestionType, string> = {
   },
 }
 
-function newQuestion(type: QuestionType): FormQuestion {
+function newQuestion(type: QuestionType, locale: Locale): FormQuestion {
   const base = {
     id: crypto.randomUUID(),
     prompt: "",
@@ -106,8 +107,8 @@ function newQuestion(type: QuestionType): FormQuestion {
     ...base,
     type,
     choices: [
-      { id: crypto.randomUUID(), label: m.ui_option_1() },
-      { id: crypto.randomUUID(), label: m.ui_option_2() },
+      { id: crypto.randomUUID(), label: m.ui_option_1({}, { locale }) },
+      { id: crypto.randomUUID(), label: m.ui_option_2({}, { locale }) },
     ],
   }
 }
@@ -177,6 +178,7 @@ function asErrors(messages: string[] | undefined) {
 }
 
 interface QuestionEditorProps {
+  locale: Locale
   question: FormQuestion
   index: number
   count: number
@@ -187,6 +189,7 @@ interface QuestionEditorProps {
 }
 
 function QuestionEditor({
+  locale,
   question,
   index,
   count,
@@ -398,7 +401,10 @@ function QuestionEditor({
                       ...question.choices,
                       {
                         id: crypto.randomUUID(),
-                        label: m.new_choice_label({ value0: question.choices.length + 1 }),
+                        label: m.new_choice_label(
+                          { value0: question.choices.length + 1 },
+                          { locale }
+                        ),
                       },
                     ],
                   })
@@ -681,7 +687,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
             onClick={() =>
               change({
                 ...form,
-                questions: [...form.questions, newQuestion(addType)],
+                questions: [...form.questions, newQuestion(addType, project.bookLanguage)],
               })
             }
           >
@@ -690,7 +696,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
             ) : (
               <PlusIcon data-icon="inline-start" />
             )}
-            {m.ui_add()} {typeLabels[addType].toLowerCase()}
+            {m.ui_add()} {typeLabels[addType]}
           </Button>
         </CardContent>
       </Card>
@@ -706,6 +712,7 @@ export function FormBuilder({ project, onProjectChange }: FormBuilderProps) {
         <div className="grid gap-4">
           {form.questions.map((question, index) => (
             <QuestionEditor
+              locale={project.bookLanguage}
               key={question.id}
               question={question}
               index={index}
