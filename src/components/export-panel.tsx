@@ -43,7 +43,13 @@ import { pageSpecification } from "#/domain/page-format.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
 
-export function ExportPanel({ project }: { project: Project }) {
+export function ExportPanel({
+  project,
+  bookBusy = false,
+}: {
+  project: Project
+  bookBusy?: boolean
+}) {
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const [marks, setMarks] = useState(false)
   const [allowBlockingProblems, setAllowBlockingProblems] = useState(false)
@@ -135,7 +141,7 @@ export function ExportPanel({ project }: { project: Project }) {
           <AlertTriangleIcon />
           <AlertTitle>Export blocked by stale output</AlertTitle>
           <AlertDescription>
-            Return to Book review and regenerate the complete book.
+            Return to Book review to update the book automatically.
           </AlertDescription>
         </Alert>
       ) : blocking > 0 && allowBlockingProblems ? (
@@ -223,7 +229,9 @@ export function ExportPanel({ project }: { project: Project }) {
         <CardFooter className="justify-end">
           {blocking > 0 && allowBlockingProblems ? (
             <AlertDialog>
-              <AlertDialogTrigger render={<Button size="lg" disabled={!ready || exporting} />}>
+              <AlertDialogTrigger
+                render={<Button size="lg" disabled={!ready || exporting || bookBusy} />}
+              >
                 {exporting ? (
                   <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
                 ) : (
@@ -247,7 +255,7 @@ export function ExportPanel({ project }: { project: Project }) {
               </AlertDialogContent>
             </AlertDialog>
           ) : (
-            <Button size="lg" disabled={!ready || exporting} onClick={exportBook}>
+            <Button size="lg" disabled={!ready || exporting || bookBusy} onClick={exportBook}>
               {exporting ? (
                 <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
               ) : (

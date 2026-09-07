@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { useState } from "react"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -13,6 +14,7 @@ import {
 } from "#/test/fixtures.ts"
 
 const updateBook = vi.fn()
+const generate = vi.fn()
 
 vi.mock("#/lib/api.ts", async () => {
   const actual = await vi.importActual<typeof import("#/lib/api.ts")>("#/lib/api.ts")
@@ -21,13 +23,17 @@ vi.mock("#/lib/api.ts", async () => {
     projectApi: {
       ...actual.projectApi,
       updateBook: (...args: unknown[]) => updateBook(...args),
+      generate: (...args: unknown[]) => generate(...args),
     },
   }
 })
 
 const { BookReview } = await import("./book-review.tsx")
 
-beforeEach(() => updateBook.mockReset())
+beforeEach(() => {
+  updateBook.mockReset()
+  generate.mockReset()
+})
 
 afterEach(cleanup)
 
@@ -243,4 +249,94 @@ describe("book review page grid", () => {
       .join(" ")
     expect(renderedLines).toContain(project.submissions![0]!.answers.memory)
   })
+})
+
+it("records a resolution override and automatically replaces its blocking preview", async () => {
+  const layout = layoutFixture()
+  const submission = submissionFixture("10000000-0000-4000-8000-000000000001", 1)
+  const pageId = `submission:${submission.id}`
+  const assetId = "20000000-0000-4000-8000-000000000001"
+  const initial = {
+    id: layout.projectId,
+    state: "closed",
+    archivedAt: null,
+    formSchema: completeForm,
+    layouts: [layout],
+    submissions: [submission],
+    bookStatus: "current",
+    book: {
+      projectId: layout.projectId,
+      settings: cycleSettings,
+      pages: [
+        {
+          id: pageId,
+          kind: "submission",
+          submissionId: submission.id,
+          layoutId: layout.id,
+          problems: [
+            {
+              id: "resolution",
+              code: "image-blocking-resolution",
+              pageId,
+              assetId,
+              blocking: true,
+              message: "Photo resolution is too low",
+            },
+          ],
+        },
+      ],
+      sourceFingerprint: "old",
+      generatedAt: "",
+      updatedAt: "",
+    },
+  } as Project
+  const settings = { ...cycleSettings, resolutionOverrides: [assetId] }
+  updateBook.mockResolvedValue({ ...initial.book!, settings })
+  generate.mockResolvedValue({
+    ...initial.book!,
+    settings,
+    pages: initial.book!.pages.map((page) => ({ ...page, problems: [] })),
+  })
+  function Review() {
+    const [project, setProject] = useState(initial)
+    return <BookReview project={project} onProjectChange={setProject} view="detail" />
+  }
+  render(<Review />)
+  fireEvent.click(screen.getByRole("button", { name: "Record resolution override" }))
+  await waitFor(() => expect(screen.getByText("No page problems")).toBeTruthy())
+  expect(updateBook).toHaveBeenCalledExactlyOnceWith(initial.id, { settings })
+  expect(generate).toHaveBeenCalledExactlyOnceWith(initial.id, settings)
+})
+
+it("keeps the stored preview and retry available after the last layout is deleted", async () => {
+  const project: Project = {
+    id: "project",
+    title: "Book",
+    occasion: null,
+    formRevision: 1,
+    shareUrl: null,
+    submissionCount: 0,
+    pageFormat: "a5",
+    pageOrientation: "landscape",
+    createdAt: "",
+    updatedAt: "",
+    state: "closed",
+    archivedAt: null,
+    formSchema: completeForm,
+    layouts: [],
+    bookStatus: "stale",
+    book: {
+      projectId: "project",
+      settings: cycleSettings,
+      pages: [{ id: "standalone:old", kind: "standalone", layoutId: "deleted", problems: [] }],
+      sourceFingerprint: "old",
+      generatedAt: "",
+      updatedAt: "",
+    },
+  }
+  generate.mockRejectedValue(new Error("Create a layout before generating."))
+  render(<BookReview project={project} onProjectChange={() => undefined} />)
+  await screen.findByRole("button", { name: "Retry" })
+  expect(screen.getByTestId("page-preview")).toBeTruthy()
+  expect(screen.getByText("Create a layout before generating.")).toBeTruthy()
 })

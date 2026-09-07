@@ -12,7 +12,7 @@ import {
   PencilIcon,
   Trash2Icon,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { BookReview } from "#/components/book-review.tsx"
@@ -97,6 +97,20 @@ function ProjectWorkspace() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [title, setTitle] = useState("")
 
+  const layoutsRef = useRef<{ flush: () => Promise<boolean> }>(null)
+  const [bookBusy, setBookBusy] = useState(false)
+  const beforeGenerate = useCallback(async () => {
+    if ((await layoutsRef.current?.flush()) === false) {
+      queryClient.setQueryData<Project>(["project", projectId], (current) =>
+        current?.book ? { ...current, bookStatus: "stale" } : current
+      )
+      throw new Error(
+        "Layout changes could not be saved. Return to Layouts to save them, then retry."
+      )
+    }
+    return queryClient.getQueryData<Project>(["project", projectId])!
+  }, [projectId, queryClient])
+
   const project = projectQuery.data
   useEffect(() => {
     if (!project) return
@@ -174,7 +188,7 @@ function ProjectWorkspace() {
         All projects
       </Link>
 
-      <Card className="mb-6 bg-card/90">
+      <Card className="mb-6 bg-card/90" inert={bookBusy}>
         <CardHeader>
           {editingTitle ? (
             <form
@@ -359,6 +373,7 @@ function ProjectWorkspace() {
       )}
 
       <Tabs
+        key={project.id}
         value={search.tab ?? defaultWorkspaceStep(project.state)}
         onValueChange={(value) => {
           void navigate({
@@ -389,21 +404,24 @@ function ProjectWorkspace() {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="form">
+        <TabsContent value="form" inert={bookBusy}>
           <FormBuilder project={project} onProjectChange={setProject} />
         </TabsContent>
-        <TabsContent value="responses">
+        <TabsContent value="responses" inert={bookBusy}>
           <SubmissionsPanel
             project={project}
             onProjectChange={setProject}
             onRefresh={() => void projectQuery.refetch()}
           />
         </TabsContent>
-        <TabsContent value="layouts">
-          <LayoutsPanel project={project} onProjectChange={setProject} />
+        <TabsContent value="layouts" keepMounted inert={bookBusy}>
+          <LayoutsPanel ref={layoutsRef} project={project} onProjectChange={setProject} />
         </TabsContent>
-        <TabsContent value="book">
+        <TabsContent value="book" keepMounted>
           <BookReview
+            active={(search.tab ?? defaultWorkspaceStep(project.state)) === "book"}
+            beforeGenerate={beforeGenerate}
+            onBusyChange={setBookBusy}
             project={project}
             onProjectChange={setProject}
             view={search.bookView ?? "grid"}
@@ -428,7 +446,7 @@ function ProjectWorkspace() {
           />
         </TabsContent>
         <TabsContent value="export">
-          <ExportPanel project={project} />
+          <ExportPanel project={project} bookBusy={bookBusy} />
         </TabsContent>
       </Tabs>
     </main>
