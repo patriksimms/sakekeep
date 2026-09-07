@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { type Canvas } from "fabric"
 import { useEffect, useMemo, useRef, useState } from "react"
 
@@ -19,6 +19,7 @@ declare global {
   interface Window {
     __sakekeepLayoutParityCanvas?: Canvas | null
     __sakekeepRemountLayoutParityCanvas?: () => void
+    __sakekeepSetCanvasLocale?: (locale: "de" | "en") => void
   }
 }
 
@@ -271,15 +272,22 @@ function LayoutParityFixture() {
   const canvasRef = useRef<Canvas | null>(null)
   const [editorSchema, setEditorSchema] = useState(activeSchema)
   const [canvasKey, setCanvasKey] = useState(0)
+  const [canvasLocale, setCanvasLocale] = useState<"de" | "en">()
+
+  useEffect(() => {
+    setEditorSchema(activeSchema)
+  }, [activeSchema])
 
   useEffect(() => {
     Object.defineProperty(window, "__sakekeepLayoutParityCanvas", {
       configurable: true,
       get: () => canvasRef.current,
     })
+    window.__sakekeepSetCanvasLocale = setCanvasLocale
     window.__sakekeepRemountLayoutParityCanvas = () => setCanvasKey((value) => value + 1)
     return () => {
       delete window.__sakekeepLayoutParityCanvas
+      delete window.__sakekeepSetCanvasLocale
       delete window.__sakekeepRemountLayoutParityCanvas
     }
   }, [])
@@ -291,14 +299,20 @@ function LayoutParityFixture() {
         <p className="text-sm text-muted-foreground">
           {isPortrait
             ? "A5 portrait decorative background, rendered by the editor and book preview."
-            : "Fixed schema, content, assets, fonts, viewport, and reduced motion."}
+            : "Fixed schema, content, assets, fonts, viewport, and reduced motion."}{" "}
+          <Link to="/layout-parity" search={{ orientation, bookLanguage: "de" }}>
+            Deutsch
+          </Link>{" "}
+          <Link to="/layout-parity" search={{ orientation, bookLanguage: "en" }}>
+            English
+          </Link>
         </p>
       </div>
       <div className="grid grid-cols-2 gap-6" data-testid="layout-parity-fixture">
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Fabric editor</h2>
           <LayoutCanvas
-            locale={bookLanguage}
+            locale={canvasLocale ?? bookLanguage}
             key={canvasKey}
             schema={editorSchema}
             width={pageWidth}

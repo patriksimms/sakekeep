@@ -93,3 +93,19 @@ test("submission edit validation follows each request locale", async ({ request 
     ])
   }
 })
+
+test.describe("German base locale", () => {
+  test.use({ locale: "fr-FR", extraHTTPHeaders: { "Accept-Language": "fr-FR" } })
+
+  test("uses German without a supported preference or locale cookie", async ({ page, context }) => {
+    expect((await context.cookies()).some((cookie) => cookie.name === "PARAGLIDE_LOCALE")).toBe(
+      false
+    )
+    await page.goto("/projects")
+    await expect(page.getByText("Lea’s farewell book")).toBeVisible()
+    await expect(page.getByTestId("heading-your-projects")).toHaveText("Deine Projekte")
+    await expect(page.locator("html")).toHaveAttribute("lang", "de")
+    await page.getByTestId("button-new-project").click()
+    await expect(page.getByTestId("book-language")).toContainText("Deutsch")
+  })
+})

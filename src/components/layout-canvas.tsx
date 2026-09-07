@@ -493,7 +493,7 @@ export function LayoutCanvas({
       }
     }
     canvas.requestRenderAll()
-  }, [questions, schema, selectedId, specification.mediaWidthMm, width])
+  }, [locale, questions, schema, selectedId, specification.mediaWidthMm, width])
 
   const pageContent: LayoutPageContent = {
     locale,

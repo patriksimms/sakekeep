@@ -318,8 +318,10 @@ test("text frames remain editable on the HTML layer", async ({ page }) => {
 
 test("German syllable breaks agree in the editor and book preview", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" })
-  await page.setViewportSize({ width: 1440, height: 620 })
-  await page.goto("/layout-parity?bookLanguage=de")
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto("/layout-parity")
+  await page.getByRole("link", { name: "Deutsch", exact: true }).click()
+  await expect(page).toHaveURL(/bookLanguage=de/)
   const editor = page.getByTestId("editor-layout-elements")
   const preview = page.getByTestId("preview-layout-elements")
   await expect(editor).toBeVisible()
@@ -331,9 +333,35 @@ test("German syllable breaks agree in the editor and book preview", async ({ pag
   const text = await lines(editor)
   expect(text.length).toBeGreaterThan(1)
   expect(text[0]).toContain("-")
+  await expect(editor).toBeInViewport({ ratio: 1 })
+  await expect(preview).toBeInViewport({ ratio: 1 })
   const editorImage = await editor.screenshot()
   const previewImage = await preview.screenshot()
   await test.info().attach("editor", { body: editorImage, contentType: "image/png" })
   await test.info().attach("preview", { body: previewImage, contentType: "image/png" })
   expect(await pixelDifference(editorImage, previewImage)).toBeLessThan(0.025)
+})
+
+test("locale changes keep Fabric layout elements interactive", async ({ page }) => {
+  await page.goto("/layout-parity")
+  await expect
+    .poll(() => page.evaluate(() => window.__sakekeepLayoutParityCanvas?.getObjects().length), {
+      timeout: 15_000,
+    })
+    .toBe(elementIds.length)
+  for (const locale of ["de", "en"] as const) {
+    await page.evaluate((locale) => window.__sakekeepSetCanvasLocale?.(locale), locale)
+    await expect
+      .poll(() => page.evaluate(() => window.__sakekeepLayoutParityCanvas?.getObjects().length))
+      .toBe(elementIds.length)
+    await expectInteractionsToMatchHtml(page)
+    const heading = page
+      .getByTestId("editor-layout-elements")
+      .locator('[data-layout-element-id="static-heading"]')
+    await heading.dblclick({ force: true })
+    await expect(
+      page.locator('[data-layout-inline-editor="true"][data-layout-element-id="static-heading"]')
+    ).toBeVisible()
+    await page.keyboard.press("Escape")
+  }
 })

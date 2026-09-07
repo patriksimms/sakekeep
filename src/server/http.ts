@@ -1,7 +1,15 @@
 import * as m from "#/paraglide/messages.js"
 import { z } from "zod"
+import de from "zod/v4/locales/de.js"
+import en from "zod/v4/locales/en.js"
+import { getLocale } from "#/paraglide/runtime.js"
 
 import { captureServerException } from "#/server/error-tracking.ts"
+
+const validationLocales = { de: de(), en: en() }
+// Resolve inside the callback so concurrent requests keep their own language.
+// Schema-specific messages retain precedence over these default Zod messages.
+z.config({ localeError: (issue) => validationLocales[getLocale()].localeError(issue) })
 
 export class HttpError extends Error {
   constructor(
