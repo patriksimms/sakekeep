@@ -80,13 +80,22 @@ describe("automatic book generation", () => {
   it("waits for layout saves, uses their settings, and generates only once under StrictMode", async () => {
     const saved = fixture()
     saved.book!.settings = { ...cycleSettings, seed: "saved seed" }
+    saved.layouts = saved.layouts.map((layout) => ({
+      ...layout,
+      name: "Saved layout",
+      revision: layout.revision + 1,
+    }))
     const flush = deferred<Project>()
-    const { result } = mount({ ...saved, bookStatus: "current" }, () => flush.promise)
+    const { result } = mount(
+      { ...saved, layouts: [layoutFixture()], bookStatus: "current" },
+      () => flush.promise
+    )
     expect(result.current.busy).toBe(true)
     expect(generate).not.toHaveBeenCalled()
     await act(async () => flush.resolve(saved))
     await waitFor(() => expect(result.current.project.bookStatus).toBe("current"))
     expect(generate).toHaveBeenCalledExactlyOnceWith(saved.id, saved.book!.settings)
+    expect(result.current.project.layouts).toEqual(saved.layouts)
     expect(capture).toHaveBeenCalledWith(
       "book_review:regeneration_success",
       expect.objectContaining({ trigger: "review_open", duration_ms: expect.any(Number) })

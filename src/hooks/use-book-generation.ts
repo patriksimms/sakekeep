@@ -70,7 +70,7 @@ export function useBookGeneration({
         const updated = await projectApi.generate(saved.id, settings ?? saved.book!.settings)
         if (!updated) throw new Error("Generation returned no book.")
         latest.current.onProjectChange({
-          ...latest.current.project,
+          ...saved,
           book: updated,
           bookStatus: "current",
         })
