@@ -21,9 +21,18 @@ let client: PostHog | undefined
 let desiredUserId: string | undefined
 let userKnown = false
 
+type RegenerationProperties = {
+  trigger: "review_open" | "book_change" | "retry"
+  stale_cause: import("#/hooks/use-book-generation.ts").RegenerationCause
+}
+
 interface AnalyticsEvents {
   "locale:changed": { previous_locale: Locale; locale: Locale }
   "project:created": { book_language: Locale; ui_locale: Locale }
+  "book_review:regeneration_attempt": RegenerationProperties
+  "book_review:regeneration_success": RegenerationProperties & { duration_ms: number }
+  "book_review:regeneration_failure": RegenerationProperties & { duration_ms: number }
+  "book_review:regeneration_retry": Pick<RegenerationProperties, "stale_cause">
   "responses:edit_saved": {
     changed_answer_count: number
     previous_edit_count: number

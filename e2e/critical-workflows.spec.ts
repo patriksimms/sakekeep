@@ -674,8 +674,9 @@ test.describe.serial("critical local prototype workflows", () => {
       })
 
       await page.getByTestId("workspace-book").click()
-      await expect(page.locator("[data-editor-empty-label]")).toHaveCount(0)
-      await expect(page.getByTestId("text-ui_add_label")).toHaveCount(0)
+      const review = page.getByRole("tabpanel", { name: "4. Book review" })
+      await expect(review.locator("[data-editor-empty-label]")).toHaveCount(0)
+      await expect(review.getByTestId("text-ui_add_label")).toHaveCount(0)
     } finally {
       const changedProject = (await (
         await request.get(`/api/projects/${closedProjectId}`)

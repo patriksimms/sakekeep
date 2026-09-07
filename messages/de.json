@@ -877,5 +877,11 @@
   "invalid_question": "Prüfe die Einstellungen der Frage.",
   "standalone_layout_hint": "{role} enthält keinen Beitrag. Auf ihr sind nur statische Elemente möglich.",
   "archive_confirmation": "Das Projekt behält den Status „{state}“ und alle Beiträge, Layouts und Exporte. Während der Archivierung sind keine neuen Beiträge oder Änderungen möglich. Du kannst die Archivierung jederzeit aufheben.",
-  "check_warning": "Warnung"
+  "check_warning": "Warnung",
+  "book_automatic_updates": "Nach der ersten Erstellung aktualisieren gespeicherte Änderungen das Buch automatisch.",
+  "book_updating": "Buch wird aktualisiert",
+  "book_update_preview": "Deine Vorschau bleibt sichtbar. Nach der Aktualisierung kannst du Seiten bearbeiten und das Buch exportieren.",
+  "book_return_to_update": "Kehre zur Buchprüfung zurück, um das Buch automatisch zu aktualisieren.",
+  "book_wait_for_update": "Warte, bis die aktuelle Buchaktualisierung abgeschlossen ist.",
+  "book_layout_save_failed": "Layoutänderungen konnten nicht gespeichert werden. Kehre zu den Layouts zurück, speichere sie und versuche es erneut."
 }

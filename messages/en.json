@@ -877,5 +877,11 @@
   "invalid_question": "Check the question settings.",
   "standalone_layout_hint": "{role} carries no response. Only static elements can be placed on it.",
   "archive_confirmation": "The project keeps its current state ({state}) and every response, layout, and export. While archived it accepts no new submissions and no edits. You can unarchive it at any time.",
-  "check_warning": "Warning"
+  "check_warning": "Warning",
+  "book_automatic_updates": "After the first generation, saved changes update the book automatically.",
+  "book_updating": "Updating book",
+  "book_update_preview": "Your preview stays visible. Page edits and export will be available when the update finishes.",
+  "book_return_to_update": "Return to Book review to update the book automatically.",
+  "book_wait_for_update": "Wait for the current book update to finish.",
+  "book_layout_save_failed": "Layout changes could not be saved. Return to Layouts to save them, then retry."
 }

@@ -44,7 +44,13 @@ import { pageSpecification } from "#/domain/page-format.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { projectApi } from "#/lib/api.ts"
 
-export function ExportPanel({ project }: { project: Project }) {
+export function ExportPanel({
+  project,
+  bookBusy = false,
+}: {
+  project: Project
+  bookBusy?: boolean
+}) {
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const [marks, setMarks] = useState(false)
   const [allowBlockingProblems, setAllowBlockingProblems] = useState(false)
@@ -139,9 +145,7 @@ export function ExportPanel({ project }: { project: Project }) {
         <Alert variant="destructive">
           <AlertTriangleIcon />
           <AlertTitle>{m.ui_export_blocked_by_stale_output()}</AlertTitle>
-          <AlertDescription>
-            {m.ui_return_to_book_review_and_regenerate_the_complete_book()}{" "}
-          </AlertDescription>
+          <AlertDescription>{m.book_return_to_update()}</AlertDescription>
         </Alert>
       ) : blocking > 0 && allowBlockingProblems ? (
         <Alert>
@@ -222,7 +226,7 @@ export function ExportPanel({ project }: { project: Project }) {
             <AlertDialog>
               <AlertDialogTrigger
                 data-testid="button-rendering-and-preflighting"
-                render={<Button size="lg" disabled={!ready || exporting} />}
+                render={<Button size="lg" disabled={!ready || exporting || bookBusy} />}
               >
                 {exporting ? (
                   <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
@@ -252,7 +256,7 @@ export function ExportPanel({ project }: { project: Project }) {
             <Button
               data-testid="button-rendering-and-preflighting"
               size="lg"
-              disabled={!ready || exporting}
+              disabled={!ready || exporting || bookBusy}
               onClick={exportBook}
             >
               {exporting ? (

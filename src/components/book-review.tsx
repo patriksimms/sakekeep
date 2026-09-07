@@ -12,7 +12,6 @@ import {
   LayoutGridIcon,
   LoaderCircleIcon,
   PlusIcon,
-  RefreshCwIcon,
   ShuffleIcon,
   SquareIcon,
   Trash2Icon,
@@ -96,6 +95,7 @@ import { pinCoverPages } from "#/domain/generation.ts"
 import { submissionLabel } from "#/domain/submission-label.ts"
 import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
+import { useBookGeneration, type RegenerationCause } from "#/hooks/use-book-generation.ts"
 import { projectApi } from "#/lib/api.ts"
 import { pageSpecification } from "#/domain/page-format.ts"
 
@@ -166,9 +166,11 @@ export function PagePreview({
 function AddStandaloneDialog({
   layouts,
   onAdd,
+  disabled,
 }: {
   layouts: LayoutRecord[]
   onAdd: (page: StandaloneBookPage) => void
+  disabled: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [layoutId, setLayoutId] = useState(layouts[0]?.id ?? "")
@@ -177,7 +179,7 @@ function AddStandaloneDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         data-testid="button-standalone-page"
-        render={<Button variant="outline" disabled={layouts.length === 0} />}
+        render={<Button variant="outline" disabled={disabled || layouts.length === 0} />}
       >
         <PlusIcon data-icon="inline-start" />
         {m.ui_standalone_page()}{" "}
@@ -217,7 +219,7 @@ function AddStandaloneDialog({
         <DialogFooter>
           <Button
             data-testid="button-add-page"
-            disabled={!selected}
+            disabled={disabled || !selected}
             onClick={() => {
               if (!selected) return
               onAdd({
@@ -242,11 +244,13 @@ function ProblemList({
   onSelect,
   onOverride,
   selectedProblemId,
+  readOnly,
 }: {
   problems: PageProblem[]
   onSelect: (problem: PageProblem) => void
   onOverride: (assetId: string) => void
   selectedProblemId?: string
+  readOnly: boolean
 }) {
   if (problems.length === 0) {
     return (
@@ -279,6 +283,7 @@ function ProblemList({
             <Button
               data-testid="button-record-resolution-override"
               type="button"
+              disabled={readOnly}
               variant="outline"
               size="sm"
               className="mt-2"
@@ -372,6 +377,9 @@ function PageGrid({
 }
 
 export function BookReview({
+  active = true,
+  beforeGenerate,
+  onBusyChange,
   project,
   onProjectChange,
   view = "grid",
@@ -379,6 +387,9 @@ export function BookReview({
   onEditLayouts,
 }: {
   project: Project
+  active?: boolean
+  beforeGenerate?: () => Promise<Project>
+  onBusyChange?: (busy: boolean) => void
   onProjectChange: (project: Project) => void
   view?: BookView
   onViewChange?: (view: BookView) => void
@@ -395,7 +406,36 @@ export function BookReview({
   const [selectedId, setSelectedId] = useState<string | null>(project.book?.pages[0]?.id ?? null)
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null)
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null)
-  const [generating, setGenerating] = useState(false)
+  const {
+    busy: generating,
+    error: generationError,
+    updateBook,
+    generateInitial,
+    retry,
+  } = useBookGeneration({
+    project,
+    active,
+    onProjectChange,
+    beforeGenerate,
+    onBusyChange,
+  })
+  const readOnly = generating || project.bookStatus === "stale"
+  const generate = () => void generateInitial(settings)
+  const saveBook = async (
+    input: Parameters<typeof projectApi.updateBook>[1],
+    cause: RegenerationCause
+  ) => {
+    try {
+      await updateBook(input, cause)
+    } catch (error) {
+      setSettings(projectRef.current.book?.settings ?? defaultSettings)
+      toast.error(error instanceof Error ? error.message : m.ui_book_update_failed())
+    }
+  }
+  const updateSettings = (next: GenerationSettings, cause: RegenerationCause) => {
+    setSettings(next)
+    if (project.book) void saveBook({ settings: next }, cause)
+  }
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [focusDrafts, setFocusDrafts] = useState<Record<string, FocalPoint>>({})
   const [focusAssetId, setFocusAssetId] = useState<string | null>(null)
@@ -410,6 +450,9 @@ export function BookReview({
   useEffect(() => {
     if (project.book) setSettings(project.book.settings)
   }, [project.book])
+
+  // Keep the generation job alive across tabs without rendering every hidden page.
+  if (!active) return null
 
   if (project.archivedAt) {
     return (
@@ -433,7 +476,7 @@ export function BookReview({
       </Alert>
     )
   }
-  if (project.layouts.length === 0) {
+  if (project.layouts.length === 0 && !project.book) {
     return (
       <Empty className="min-h-72 border">
         <EmptyHeader>
@@ -468,41 +511,8 @@ export function BookReview({
     onViewChange?.(next)
   }
 
-  const replaceBook = (updated: GeneratedBook, stale: boolean) =>
-    onProjectChange({
-      ...project,
-      book: updated,
-      bookStatus: stale ? "stale" : "current",
-    })
-
-  const generate = async () => {
-    setGenerating(true)
-    try {
-      const updated = await projectApi.generate(project.id, settings)
-      if (!updated) throw new Error(m.ui_generation_returned_no_book())
-      replaceBook(updated, false)
-      setSelectedId(updated.pages[0]?.id ?? null)
-      setSelectedProblemId(null)
-      setSelectedElementId(null)
-      setFocusAssetId(null)
-      toast.success(m.ui_complete_book_generated())
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : m.ui_generation_failed())
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const updatePages = async (nextPages: BookPage[]) => {
-    try {
-      const updated = await projectApi.updateBook(project.id, {
-        pages: nextPages,
-      })
-      replaceBook(updated, true)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : m.ui_book_update_failed())
-    }
-  }
+  const updatePages = (nextPages: BookPage[], cause: RegenerationCause = "page_order") =>
+    saveBook({ pages: nextPages }, cause)
 
   const submissions = project.submissions ?? []
 
@@ -556,7 +566,7 @@ export function BookReview({
     isCoverRole(project.layouts.find((layout) => layout.id === page.layoutId)?.role ?? "submission")
 
   const reorder = (pageId: string, targetId: string) => {
-    if (!book || pageId === targetId) return
+    if (readOnly || !book || pageId === targetId) return
     const next = [...book.pages]
     const sourceIndex = next.findIndex((page) => page.id === pageId)
     const targetIndex = next.findIndex((page) => page.id === targetId)
@@ -573,9 +583,7 @@ export function BookReview({
           <h2 data-testid="heading-generate-and-review" className="font-heading text-2xl">
             {m.ui_generate_and_review()}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            {m.ui_one_submission_creates_exactly_one_page_regeneration_always_rebui()}{" "}
-          </p>
+          <p className="text-sm text-muted-foreground">{m.book_automatic_updates()}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {book && (
@@ -601,40 +609,46 @@ export function BookReview({
           )}
           {book && (
             <AddStandaloneDialog
+              disabled={readOnly}
               layouts={project.layouts.filter((layout) => layout.role === "static")}
-              onAdd={(page) => void updatePages([...book.pages, page])}
+              onAdd={(page) => void updatePages([...book.pages, page], "standalone_page")}
             />
           )}
-          <AlertDialog>
-            <AlertDialogTrigger data-testid="button-regenerate-complete-book" render={<Button />}>
-              {generating ? (
-                <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
-              ) : book ? (
-                <RefreshCwIcon data-icon="inline-start" />
-              ) : (
-                <WandSparklesIcon data-icon="inline-start" />
-              )}
-              {book ? m.ui_regenerate_complete_book() : m.ui_generate_book()}
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle data-testid="heading-regenerate-every-page">
-                  {book ? m.ui_regenerate_every_page() : m.ui_generate_the_book()}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {book
-                    ? m.ui_all_submission_pages_and_problems_are_rebuilt_valid_manual_assign()
-                    : m.ui_submission_pages_start_in_response_order_using_the_selected_assig()}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
-                <AlertDialogAction data-testid="button-regenerate-all" onClick={generate}>
-                  {book ? m.ui_regenerate_all() : m.ui_generate()}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {!book && (
+            <AlertDialog>
+              <AlertDialogTrigger
+                data-testid="button-regenerate-complete-book"
+                render={<Button disabled={generating} />}
+              >
+                {generating ? (
+                  <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <WandSparklesIcon data-icon="inline-start" />
+                )}
+                {m.ui_generate_book()}
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle data-testid="heading-regenerate-every-page">
+                    {m.ui_generate_the_book()}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {m.ui_submission_pages_start_in_response_order_using_the_selected_assig()}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
+                  <AlertDialogAction
+                    data-testid="button-regenerate-all"
+                    onClick={generate}
+                    disabled={generating}
+                  >
+                    {m.ui_generate()}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -656,13 +670,11 @@ export function BookReview({
                 { value: "seeded-random", label: m.ui_seeded_random() },
                 { value: "manual", label: m.ui_manual_assignments() },
               ]}
+              disabled={readOnly}
               value={settings.mode}
-              onValueChange={(mode) =>
-                setSettings({
-                  ...settings,
-                  mode: mode as GenerationSettings["mode"],
-                })
-              }
+              onValueChange={(mode) => {
+                if (mode) updateSettings({ ...settings, mode }, "assignment_mode")
+              }}
             >
               <SelectTrigger
                 data-testid="combobox-assignment-mode"
@@ -687,11 +699,37 @@ export function BookReview({
               value={settings.seed}
               maxLength={200}
               onChange={(event) => setSettings({ ...settings, seed: event.target.value })}
-              disabled={settings.mode !== "seeded-random"}
+              onBlur={() => {
+                if (project.book && settings.seed !== project.book.settings.seed) {
+                  updateSettings(settings, "random_seed")
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur()
+              }}
+              disabled={readOnly || settings.mode !== "seeded-random"}
             />
           </Field>
         </CardContent>
       </Card>
+
+      {generationError && (
+        <Alert variant="destructive">
+          <AlertTriangleIcon />
+          <AlertTitle>{m.ui_book_update_failed()}</AlertTitle>
+          <AlertDescription>
+            {generationError}
+            <Button
+              variant="outline"
+              className="self-start"
+              disabled={generating}
+              onClick={book ? retry : generate}
+            >
+              {m.ui_retry()}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {!book ? (
         <Empty className="min-h-72 border">
@@ -714,13 +752,11 @@ export function BookReview({
         </Empty>
       ) : (
         <>
-          {project.bookStatus === "stale" && (
-            <Alert variant="destructive">
-              <AlertTriangleIcon />
-              <AlertTitle>{m.ui_stale_preview()}</AlertTitle>
-              <AlertDescription>
-                {m.ui_a_rendering_input_changed_this_preview_remains_visible_but_final_()}{" "}
-              </AlertDescription>
+          {!generationError && (generating || project.bookStatus === "stale") && (
+            <Alert aria-live="polite">
+              <LoaderCircleIcon className="animate-spin" />
+              <AlertTitle>{m.book_updating()}</AlertTitle>
+              <AlertDescription>{m.book_update_preview()}</AlertDescription>
             </Alert>
           )}
           {view === "grid" ? (
@@ -774,7 +810,7 @@ export function BookReview({
                       {book.pages.map((page, index) => (
                         <li
                           key={page.id}
-                          draggable={!isPinnedPage(page)}
+                          draggable={!readOnly && !isPinnedPage(page)}
                           onDragStart={() => setDraggedId(page.id)}
                           onDragOver={(event: DragEvent) => event.preventDefault()}
                           onDrop={() => {
@@ -809,6 +845,7 @@ export function BookReview({
                               variant="ghost"
                               aria-label={m.move_page_up({ value0: index + 1 })}
                               disabled={
+                                readOnly ||
                                 index === 0 ||
                                 isPinnedPage(page) ||
                                 isPinnedPage(book.pages[index - 1]!)
@@ -822,6 +859,7 @@ export function BookReview({
                               variant="ghost"
                               aria-label={m.move_page_down({ value0: index + 1 })}
                               disabled={
+                                readOnly ||
                                 index === book.pages.length - 1 ||
                                 isPinnedPage(page) ||
                                 isPinnedPage(book.pages[index + 1]!)
@@ -845,7 +883,9 @@ export function BookReview({
                     project={project}
                     className="w-full"
                     selectedElementId={selectedElementId ?? undefined}
-                    photoFocus={selected.kind === "submission" ? photoFocus : undefined}
+                    photoFocus={
+                      !readOnly && selected.kind === "submission" ? photoFocus : undefined
+                    }
                   />
                 )}
                 {selected?.kind === "submission" && (
@@ -861,7 +901,7 @@ export function BookReview({
                             data-testid="button-reset"
                             size="sm"
                             variant="outline"
-                            disabled={!focusPhoto.focalPoint}
+                            disabled={readOnly || !focusPhoto.focalPoint}
                             onClick={() => void storeFocalPoint(focusPhoto.assetId, null)}
                           >
                             <Undo2Icon data-icon="inline-start" />
@@ -891,29 +931,31 @@ export function BookReview({
                     </CardHeader>
                     <CardContent>
                       <Select
+                        disabled={readOnly}
                         items={assignableLayouts.map((layout) => ({
                           label: layout.name,
                           value: layout.id,
                         }))}
                         value={selected.layoutId}
-                        onValueChange={async (layoutId) => {
-                          const manualAssignments = {
-                            ...book.settings.manualAssignments,
-                            [selected.submissionId]: layoutId,
-                          }
-                          const nextPages = book.pages.map((page) =>
-                            page.id === selected.id && page.kind === "submission"
-                              ? { ...page, layoutId }
-                              : page
-                          )
-                          const updated = await projectApi.updateBook(project.id, {
-                            pages: nextPages,
-                            settings: {
-                              ...book.settings,
-                              manualAssignments,
+                        onValueChange={(layoutId) => {
+                          if (!layoutId) return
+                          void saveBook(
+                            {
+                              pages: book.pages.map((page) =>
+                                page.id === selected.id && page.kind === "submission"
+                                  ? { ...page, layoutId }
+                                  : page
+                              ),
+                              settings: {
+                                ...book.settings,
+                                manualAssignments: {
+                                  ...book.settings.manualAssignments,
+                                  [selected.submissionId]: layoutId,
+                                },
+                              },
                             },
-                          })
-                          replaceBook(updated, true)
+                            "manual_assignment"
+                          )
                           setSelectedProblemId(null)
                           setSelectedElementId(null)
                           setFocusAssetId(null)
@@ -957,8 +999,12 @@ export function BookReview({
                             size="icon-sm"
                             variant="ghost"
                             aria-label={m.ui_delete_standalone_page()}
+                            disabled={readOnly}
                             onClick={() =>
-                              void updatePages(book.pages.filter((page) => page.id !== selected.id))
+                              void updatePages(
+                                book.pages.filter((page) => page.id !== selected.id),
+                                "standalone_page"
+                              )
                             }
                           >
                             <Trash2Icon />
@@ -1005,6 +1051,7 @@ export function BookReview({
                 <CardContent>
                   <ScrollArea className="max-h-[620px] pr-2">
                     <ProblemList
+                      readOnly={readOnly}
                       problems={problems}
                       selectedProblemId={selectedProblemId ?? undefined}
                       onSelect={(problem) => {
@@ -1017,19 +1064,17 @@ export function BookReview({
                         setSelectedProblemId(problem.id)
                         setSelectedElementId(problem.elementId ?? null)
                       }}
-                      onOverride={async (assetId) => {
-                        const nextSettings = {
-                          ...book.settings,
-                          resolutionOverrides: Array.from(
-                            new Set([...book.settings.resolutionOverrides, assetId])
-                          ),
-                        }
-                        const updated = await projectApi.updateBook(project.id, {
-                          settings: nextSettings,
-                        })
-                        replaceBook(updated, true)
-                        toast.success(
-                          m.ui_resolution_override_recorded_regenerate_to_re_run_preflight()
+                      onOverride={(assetId) => {
+                        void saveBook(
+                          {
+                            settings: {
+                              ...book.settings,
+                              resolutionOverrides: Array.from(
+                                new Set([...book.settings.resolutionOverrides, assetId])
+                              ),
+                            },
+                          },
+                          "resolution_override"
                         )
                       }}
                     />
