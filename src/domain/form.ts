@@ -56,15 +56,22 @@ function buildFormValidator(requireText: boolean) {
     required: z.boolean(),
   })
 
+  const characterLimitSchema = z
+    .number()
+    .refine((value) => Number.isInteger(value) && value >= 1 && value <= 100_000, {
+      error: () => m.character_limit_range(),
+    })
+    .optional()
+
   const singleLineQuestion = baseQuestion.extend({
     type: z.literal("single-line"),
-    characterLimit: z.number().int().positive().max(100_000).optional(),
+    characterLimit: characterLimitSchema,
     validateUrl: z.boolean().optional(),
   })
 
   const multilineQuestion = baseQuestion.extend({
     type: z.literal("multiline"),
-    characterLimit: z.number().int().positive().max(100_000).optional(),
+    characterLimit: characterLimitSchema,
   })
 
   const choiceQuestion = baseQuestion.extend({
@@ -82,15 +89,15 @@ function buildFormValidator(requireText: boolean) {
 
   const imageQuestion = baseQuestion.extend({
     type: z.literal("images"),
-    maxImages: z.number().int().min(1).max(10),
+    maxImages: z.number().refine((value) => Number.isInteger(value) && value >= 1 && value <= 10, {
+      error: () => m.image_limit_range(),
+    }),
   })
 
-  const questionSchema = z.union([
-    singleLineQuestion,
-    multilineQuestion,
-    choiceQuestion,
-    imageQuestion,
-  ])
+  const questionSchema = z.union(
+    [singleLineQuestion, multilineQuestion, choiceQuestion, imageQuestion],
+    { error: () => m.invalid_question() }
+  )
 
   return z
     .object({

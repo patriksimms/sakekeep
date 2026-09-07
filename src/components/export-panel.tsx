@@ -107,9 +107,9 @@ export function ExportPanel({ project }: { project: Project }) {
             `${specification.mediaWidthMm} × ${specification.mediaHeightMm} mm`,
           ],
           [m.ui_print_condition(), "PSO Coated v3 · FOGRA51"],
-          [m.ui_image_target(), "300 effective PPI"],
+          [m.ui_image_target(), m.export_image_target()],
           [m.ui_blocking_threshold(), "< 150 PPI"],
-          [m.ui_output_target(), "Structurally verified PDF/X-4"],
+          [m.ui_output_target(), m.export_output_target()],
         ].map(([label, value]) => (
           <Card key={label} className="bg-card/85">
             <CardHeader>
@@ -329,7 +329,7 @@ export function ExportPanel({ project }: { project: Project }) {
                   href: artifact.pageJpegZipUrl,
                   icon: <ImagesIcon aria-hidden="true" />,
                   label: m.ui_one_jpeg_per_page_zip(),
-                  detail: "300 PPI images with bleed, for previews and photo prints.",
+                  detail: m.export_jpeg_description(),
                 },
                 {
                   href: artifact.reportUrl,

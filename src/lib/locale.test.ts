@@ -4,11 +4,41 @@ import { paraglideMiddleware } from "#/paraglide/server.js"
 import * as m from "#/paraglide/messages.js"
 import { runtimeLocale } from "#/test/locale.ts"
 import { problemMessage } from "#/domain/problem-message.ts"
+import { validateFormForDraft } from "#/domain/form.ts"
 import { localeSchema } from "./locale.ts"
 
 afterEach(() => overwriteGetLocale(() => "en"))
 
 describe("locale scopes", () => {
+  it("localizes invalid numeric question settings at validation time", () => {
+    for (const locale of ["de", "en"] as const) {
+      overwriteGetLocale(() => locale)
+      for (const characterLimit of [0, 1.5, 100001]) {
+        const issues = validateFormForDraft({
+          version: 1,
+          questions: [
+            {
+              id: "memory",
+              type: "multiline",
+              prompt: "Erinnerung",
+              required: false,
+              characterLimit,
+            },
+          ],
+        })
+        expect(issues).toEqual([
+          {
+            path: "questions.0.characterLimit",
+            message:
+              locale === "de"
+                ? "Gib eine ganze Zahl von 1 bis 100000 ein."
+                : "Enter a whole number from 1 to 100000.",
+          },
+        ])
+      }
+    }
+  })
+
   it("uses cookie, preferred language, then German without changing URLs", async () => {
     overwriteGetLocale(runtimeLocale)
     for (const [headers, locale] of [

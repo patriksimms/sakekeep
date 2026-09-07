@@ -851,5 +851,11 @@
   "load_form_failed": "Das Formular konnte nicht geladen werden",
   "font_group_sans": "Serifenlos",
   "font_group_serif": "Serifen",
-  "font_group_handwriting": "Handschrift"
+  "font_group_handwriting": "Handschrift",
+  "export_image_target": "300 effektive PPI",
+  "export_output_target": "Strukturell geprüftes PDF/X-4",
+  "export_jpeg_description": "Bilder mit 300 PPI und Beschnitt für Vorschauen und Fotoabzüge.",
+  "character_limit_range": "Gib eine ganze Zahl von 1 bis 100000 ein.",
+  "image_limit_range": "Wähle eine ganze Zahl von 1 bis 10.",
+  "invalid_question": "Prüfe die Einstellungen der Frage."
 }

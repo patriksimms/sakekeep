@@ -244,6 +244,18 @@ describe("canonical text layout", () => {
 })
 
 describe("book-language hyphenation", () => {
+  it("keeps a German word intact when it moves to an empty line and fits there", () => {
+    const settings = { ...DEFAULT_TEXT_SETTINGS, overflow: "flag" as const }
+    const result = layoutText([{ text: "Sommernachmittage bleiben" }], 35, 21.2, settings, "de")
+    expect(result.renderedLines.map((line) => line.text)).toEqual([
+      "Sommer-",
+      "nachmittage",
+      "bleiben",
+    ])
+    expect(result.fits).toBe(true)
+    expect(result.truncated).toBe(false)
+  })
+
   it("breaks German compounds at syllable boundaries without changing English books", () => {
     const word = "Geburtstagserinnerungen"
     const settings = { ...DEFAULT_TEXT_SETTINGS, fontSize: 14, overflow: "flag" as const }

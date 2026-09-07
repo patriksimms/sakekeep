@@ -851,5 +851,11 @@
   "load_form_failed": "Could not load form",
   "font_group_sans": "Sans",
   "font_group_serif": "Serif",
-  "font_group_handwriting": "Handwriting"
+  "font_group_handwriting": "Handwriting",
+  "export_image_target": "300 effective PPI",
+  "export_output_target": "Structurally verified PDF/X-4",
+  "export_jpeg_description": "300 PPI images with bleed, for previews and photo prints.",
+  "character_limit_range": "Enter a whole number from 1 to 100000.",
+  "image_limit_range": "Choose a whole number from 1 to 10.",
+  "invalid_question": "Check the question settings."
 }

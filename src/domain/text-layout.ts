@@ -100,6 +100,7 @@ function wrapRuns(
           if (locale === "de") {
             const parts = germanHyphenation.hyphenateSync(word).split("\u00ad")
             while (parts.length > 1) {
+              if (!line && textWidthMm(parts.join(""), settings, weight, size) <= widthMm) break
               let fitting = 0
               for (let end = 1; end < parts.length; end += 1) {
                 const prefix = `${line ? `${line} ` : ""}${parts.slice(0, end).join("")}-`
