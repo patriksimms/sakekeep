@@ -18,6 +18,13 @@ const elementIds = [
   "diagonal-line",
 ]
 
+async function waitForPrintAssets(page: Page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await Promise.all([...document.images].map((image) => image.decode()))
+  })
+}
+
 async function renderedStyles(surface: Locator, id: string) {
   return surface.locator(`[data-layout-element-id="${id}"]`).evaluate((element) => {
     const style = getComputedStyle(element)
@@ -160,20 +167,6 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
   await page.emulateMedia({ reducedMotion: "reduce" })
   await page.setViewportSize({ width: 1400, height: 620 })
   await page.goto("/layout-parity")
-  await page.evaluate(async () => {
-    await document.fonts.ready
-    await Promise.all(
-      [...document.images]
-        .filter((image) => !image.complete)
-        .map(
-          (image) =>
-            new Promise<void>((resolve) => {
-              image.addEventListener("load", () => resolve(), { once: true })
-              image.addEventListener("error", () => resolve(), { once: true })
-            })
-        )
-    )
-  })
 
   const editor = page.getByTestId("editor-layout-elements")
   const preview = page.getByTestId("preview-layout-elements")
@@ -187,6 +180,7 @@ test("Fabric editor and book preview preserve canonical rendering parity", async
     "true"
   )
   await expect(preview).toBeVisible()
+  await waitForPrintAssets(page)
   await expect(editor).toHaveAttribute("aria-hidden", "true")
   await expect(preview).not.toHaveAttribute("aria-hidden")
 
@@ -323,18 +317,23 @@ test("text frames remain editable on the HTML layer", async ({ page }) => {
 })
 
 test("German syllable breaks agree in the editor and book preview", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" })
   await page.setViewportSize({ width: 1440, height: 620 })
   await page.goto("/layout-parity?bookLanguage=de")
-  await page.evaluate(() => document.fonts.ready)
   const editor = page.getByTestId("editor-layout-elements")
   const preview = page.getByTestId("preview-layout-elements")
+  await expect(editor).toBeVisible()
+  await expect(preview).toBeVisible()
+  await waitForPrintAssets(page)
   const lines = (surface: Locator) =>
     surface.locator('[data-layout-element-id="static-heading"] span').allTextContents()
   await expect.poll(() => lines(editor)).toEqual(await lines(preview))
   const text = await lines(editor)
   expect(text.length).toBeGreaterThan(1)
   expect(text[0]).toContain("-")
-  expect(await pixelDifference(await editor.screenshot(), await preview.screenshot())).toBeLessThan(
-    0.025
-  )
+  const editorImage = await editor.screenshot()
+  const previewImage = await preview.screenshot()
+  await test.info().attach("editor", { body: editorImage, contentType: "image/png" })
+  await test.info().attach("preview", { body: previewImage, contentType: "image/png" })
+  expect(await pixelDifference(editorImage, previewImage)).toBeLessThan(0.025)
 })

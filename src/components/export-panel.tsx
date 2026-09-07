@@ -94,8 +94,7 @@ export function ExportPanel({ project }: { project: Project }) {
         </h2>
         <p className="text-sm text-muted-foreground">
           {m.ui_render_source_assets_and_canonical_geometry_into_individual()}{" "}
-          {specification.standard}
-          {m.ui_pages()}{" "}
+          {specification.standard} {m.ui_pages()}
         </p>
       </div>
 

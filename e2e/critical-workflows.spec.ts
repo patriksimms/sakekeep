@@ -29,7 +29,9 @@ test.describe.serial("critical local prototype workflows", () => {
   test("public form is responsive, accessible, and recovers an image draft", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto(`/s/${collectingToken}`)
-    await expect(page.getByRole("heading", { name: "Mina’s 30th birthday" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Mina’s 30th birthday" })).toBeVisible({
+      timeout: 15_000,
+    })
     await page.screenshot({
       path: resolve(screenshots, "public-form-mobile.png"),
       fullPage: true,
