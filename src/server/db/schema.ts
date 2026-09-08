@@ -278,7 +278,7 @@ export const projectInvitations = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    email: text("email").notNull(),
+    email: text("email"),
     role: text("role").$type<"organizer" | "editor">().notNull(),
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),

@@ -112,28 +112,29 @@ export async function getProjectAccess(projectId: string, userId: string): Promi
 export async function inviteCollaborator(
   projectId: string,
   userId: string,
-  rawEmail: string,
+  rawEmail: string | null,
   role: CollaboratorRole,
-  deliver: (email: string, token: string) => Promise<void>
+  deliver?: (email: string, token: string) => Promise<void>
 ) {
-  const email = invitationEmailSchema.parse(rawEmail)
+  const email = rawEmail === null ? null : invitationEmailSchema.parse(rawEmail)
   const token = randomBytes(32).toString("base64url")
   const id = crypto.randomUUID()
   await db.transaction(async (tx) => {
     await lockProject(tx, projectId)
     await requireProjectRole(projectId, userId, "manage", tx)
     // A replacement invitation invalidates older links for this project and address.
-    await tx
-      .update(projectInvitations)
-      .set({ revokedAt: new Date() })
-      .where(
-        and(
-          eq(projectInvitations.projectId, projectId),
-          eq(projectInvitations.email, email),
-          isNull(projectInvitations.acceptedBy),
-          isNull(projectInvitations.revokedAt)
+    if (email)
+      await tx
+        .update(projectInvitations)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(projectInvitations.projectId, projectId),
+            eq(projectInvitations.email, email),
+            isNull(projectInvitations.acceptedBy),
+            isNull(projectInvitations.revokedAt)
+          )
         )
-      )
     await tx.insert(projectInvitations).values({
       id,
       projectId,
@@ -144,7 +145,7 @@ export async function inviteCollaborator(
     })
   })
   try {
-    await deliver(email, token)
+    if (deliver && email) await deliver(email, token)
   } catch {
     await db
       .update(projectInvitations)
@@ -156,10 +157,25 @@ export async function inviteCollaborator(
     .update(projectInvitations)
     .set({ deliveredAt: new Date() })
     .where(eq(projectInvitations.id, id))
-  return { id }
+  return { id, token }
 }
 
-export async function acceptInvitation(token: string, userId: string, verifiedEmails: string[]) {
+// Preview exposes only the project and role. It never creates membership.
+export async function previewInvitation(token: string) {
+  const [row] = await db
+    .select({ invite: projectInvitations, title: projects.title, owner: projects.ownerUserId })
+    .from(projectInvitations)
+    .innerJoin(projects, eq(projects.id, projectInvitations.projectId))
+    .where(eq(projectInvitations.tokenHash, tokenHash(token)))
+  if (!row) throw new HttpError(404, m.access_error_4())
+  const { invite } = row
+  if (invite.revokedAt || !invite.deliveredAt || invite.expiresAt <= new Date() || !row.owner)
+    throw new HttpError(410, m.access_error_5())
+  if (invite.acceptedBy) throw new HttpError(410, m.access_error_7())
+  return { title: row.title, role: invite.role, expiresAt: invite.expiresAt.toISOString() }
+}
+
+export async function acceptInvitation(token: string, userId: string, accountEmails: string[]) {
   const [invite] = await db
     .select()
     .from(projectInvitations)
@@ -180,8 +196,6 @@ export async function acceptInvitation(token: string, userId: string, verifiedEm
       !project.ownerUserId
     )
       throw new HttpError(410, m.access_error_5())
-    if (!verifiedEmails.some((email) => email.toLowerCase() === current.email))
-      throw new HttpError(403, m.access_error_6())
     if (current.acceptedBy) {
       if (current.acceptedBy !== userId) throw new HttpError(410, m.access_error_7())
       await projectRole(project.id, userId, tx)
@@ -191,7 +205,12 @@ export async function acceptInvitation(token: string, userId: string, verifiedEm
     if (project.ownerUserId !== userId)
       await tx
         .insert(projectMembers)
-        .values({ projectId: project.id, userId, email: current.email, role: current.role })
+        .values({
+          projectId: project.id,
+          userId,
+          email: accountEmails[0] ?? userId,
+          role: current.role,
+        })
         .onConflictDoNothing()
     await tx
       .update(projectInvitations)
