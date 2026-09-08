@@ -66,8 +66,8 @@ function statusLabel(state: "draft" | "collecting" | "closed") {
   return m.ui_draft()
 }
 
-function NewProjectDialog() {
-  const [open, setOpen] = useState(false)
+function NewProjectDialog({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen)
   const [title, setTitle] = useState("")
   const [bookLanguage, setBookLanguage] = useState(getLocale)
   const [occasion, setOccasion] = useState("")
@@ -219,9 +219,7 @@ function ProjectsPage() {
           >
             {m.ui_your_projects()}
           </h1>
-          <p className="text-muted-foreground">
-            {m.ui_everything_here_is_stored_in_your_local_postgresql_and_rustfs_ser()}{" "}
-          </p>
+          <p className="text-muted-foreground">{m.access_private()} </p>
         </div>
         <div className="flex items-center gap-2">
           {archivedCount > 0 && (
@@ -251,12 +249,9 @@ function ProjectsPage() {
               <BookHeartIcon />
             </EmptyMedia>
             <EmptyTitle data-testid="heading-local-services-are-not-ready">
-              {m.ui_local_services_are_not_ready()}
+              {m.access_load_error()}
             </EmptyTitle>
-            <EmptyDescription>
-              {projects.error.message} {m.ui_run()} <code>bun run setup</code>
-              {m.ui_then_retry()}{" "}
-            </EmptyDescription>
+            <EmptyDescription>{projects.error.message}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button data-testid="button-retry" variant="outline" onClick={() => projects.refetch()}>
@@ -278,7 +273,7 @@ function ProjectsPage() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <NewProjectDialog />
+            <NewProjectDialog initiallyOpen={allProjects.length === 0} />
           </EmptyContent>
         </Empty>
       ) : (

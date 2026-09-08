@@ -1,6 +1,8 @@
 import { type Locale } from "#/lib/locale.ts"
 import {
   index,
+  primaryKey,
+  check,
   integer,
   jsonb,
   pgTable,
@@ -29,6 +31,8 @@ export const projects = pgTable(
   {
     id: uuid("id").primaryKey(),
     title: text("title").notNull(),
+    // Null only for legacy projects awaiting the explicit ownership backfill.
+    ownerUserId: text("owner_user_id"),
     bookLanguage: text("book_language").$type<Locale>().notNull().default("de"),
     occasion: text("occasion"),
     state: text("state").$type<"draft" | "collecting" | "closed">().notNull().default("draft"),
@@ -249,3 +253,42 @@ export const assetTombstones = pgTable("asset_tombstones", {
     mode: "date",
   }),
 })
+
+export const projectMembers = pgTable(
+  "project_members",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    email: text("email").notNull(),
+    role: text("role").$type<"organizer" | "editor">().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.userId] }),
+    index("project_members_user_index").on(table.userId),
+    check("project_members_role_check", sql`${table.role} in ('organizer', 'editor')`),
+  ]
+)
+
+export const projectInvitations = pgTable(
+  "project_invitations",
+  {
+    id: uuid("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role").$type<"organizer" | "editor">().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    acceptedBy: text("accepted_by"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("project_invitations_token_unique").on(table.tokenHash),
+    index("project_invitations_project_index").on(table.projectId),
+    check("project_invitations_role_check", sql`${table.role} in ('organizer', 'editor')`),
+  ]
+)

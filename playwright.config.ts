@@ -64,6 +64,13 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   webServer: [
     {
+      name: "clerk-fixture",
+      command: "bun run e2e/fixtures/clerk-backend.ts",
+      env: { ...process.env, SAKEKEEP_CLERK_FIXTURE_PORT: String(port + 2) },
+      url: `http://127.0.0.1:${port + 2}/health`,
+      reuseExistingServer: false,
+    },
+    {
       name: "demo",
       command: `bunx vite dev --port ${port}`,
       env: {
@@ -82,6 +89,7 @@ export default defineConfig({
       env: {
         ...process.env,
         CLERK_JWT_KEY: testClerk.publicKey,
+        CLERK_API_URL: `http://127.0.0.1:${port + 2}`,
         CLERK_SECRET_KEY: clerkSecretKey,
         VITE_CLERK_PUBLISHABLE_KEY: clerkPublishableKey,
         VITE_SAKEKEEP_DEMO_MODE: "false",

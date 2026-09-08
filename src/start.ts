@@ -4,6 +4,7 @@ import { createMiddleware } from "@tanstack/react-start"
 import { createStart } from "@tanstack/react-start"
 
 import { isDemoMode } from "#/lib/demo-mode.ts"
+import { projectAuthorizationMiddleware } from "#/server/project-authorization.ts"
 import { authorizationMiddleware } from "#/server/auth-policy.ts"
 
 // Production auth configuration is validated in server.ts; this module is bundled for the
@@ -17,7 +18,9 @@ export const startInstance = createStart(() => {
   return {
     requestMiddleware: [
       localeMiddleware,
-      ...(isDemoMode ? [] : [clerkMiddleware(), authorizationMiddleware]),
+      ...(isDemoMode
+        ? []
+        : [clerkMiddleware(), authorizationMiddleware, projectAuthorizationMiddleware]),
     ],
   }
 })

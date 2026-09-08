@@ -29,10 +29,12 @@ const PUBLIC_ASSET_PREFIXES = [
 
 export type RouteAccess = "organizer" | "public"
 
-type ClerkRequestContext = {
+export type ClerkRequestContext = {
   auth?: (options?: {
     treatPendingAsSignedOut?: boolean
-  }) => { isAuthenticated: boolean } | Promise<{ isAuthenticated: boolean }>
+  }) =>
+    | { isAuthenticated: boolean; userId?: string | null }
+    | Promise<{ isAuthenticated: boolean; userId?: string | null }>
 }
 
 export function routeAccess(pathname: string): RouteAccess {
@@ -43,6 +45,7 @@ export function routeAccess(pathname: string): RouteAccess {
   if (normalizedPath === "/sign-up" || normalizedPath.startsWith("/sign-up/")) return "public"
   // PostHog ingestion proxy: events arrive from consented but not necessarily signed-in browsers.
   if (normalizedPath.startsWith("/ingest/")) return "public"
+  if (/^\/invitations\/[A-Za-z0-9_-]{43}$/.test(normalizedPath)) return "public"
   if (/^\/s\/[^/]+$/.test(normalizedPath)) return "public"
   if (/^\/api\/share\/[^/]+$/.test(normalizedPath)) return "public"
   return "organizer"

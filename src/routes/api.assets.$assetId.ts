@@ -21,7 +21,7 @@ export const Route = createFileRoute("/api/assets/$assetId")({
           return new Response(body, {
             headers: {
               "Content-Type": stored.contentType,
-              "Cache-Control": "private, max-age=31536000, immutable",
+              "Cache-Control": "private, no-store",
               "X-Content-Type-Options": "nosniff",
             },
           })

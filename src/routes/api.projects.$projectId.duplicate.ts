@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 
+import { currentUserId } from "#/server/organizer.ts"
 import { jsonError } from "#/server/http.ts"
 import { duplicateProject } from "#/server/repository.ts"
 
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/api/projects/$projectId/duplicate")({
     handlers: {
       POST: async ({ params }) => {
         try {
-          return Response.json(await duplicateProject(params.projectId), {
+          return Response.json(await duplicateProject(params.projectId, await currentUserId()), {
             status: 201,
           })
         } catch (error) {
