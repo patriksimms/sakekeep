@@ -1,3 +1,5 @@
+import { readPendingInvitations } from "#/lib/pending-invitations"
+import { PendingInvitations } from "#/components/pending-invitations"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
 import { getLocale } from "#/paraglide/runtime.js"
 import { isLocale } from "#/lib/locale.ts"
@@ -20,7 +22,7 @@ import {
   LoaderCircleIcon,
   PlusIcon,
 } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { Badge } from "#/components/ui/badge.tsx"
@@ -67,7 +69,10 @@ function statusLabel(state: "draft" | "collecting" | "closed") {
 }
 
 function NewProjectDialog({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
-  const [open, setOpen] = useState(initiallyOpen)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (initiallyOpen && readPendingInvitations().length === 0) setOpen(true)
+  }, [initiallyOpen])
   const [title, setTitle] = useState("")
   const [bookLanguage, setBookLanguage] = useState(getLocale)
   const [occasion, setOccasion] = useState("")
@@ -208,6 +213,7 @@ function ProjectsPage() {
 
   return (
     <main id="main-content" className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+      <PendingInvitations />
       <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div className="flex max-w-2xl flex-col gap-2">
           <p className="text-sm font-semibold tracking-[0.16em] text-primary uppercase">

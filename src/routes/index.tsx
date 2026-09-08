@@ -1,3 +1,4 @@
+import { PendingInvitations } from "#/components/pending-invitations"
 import * as m from "#/paraglide/messages.js"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import {
@@ -58,6 +59,7 @@ const workflow = [
 function Home() {
   return (
     <main id="main-content">
+      <PendingInvitations />
       <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl items-center gap-14 px-4 py-16 sm:px-6 lg:grid-cols-[1.04fr_0.96fr] lg:py-24">
         <div className="flex flex-col items-start gap-7">
           <Badge variant="secondary" className="gap-1.5">
