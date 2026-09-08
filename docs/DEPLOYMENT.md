@@ -31,8 +31,18 @@ not automatic application startup tasks. Use each environment's own Clerk keys.
 No additional email service, secret, or workspace configuration is required.
 Clerk sends invitation emails through its application invitation API, which is
 limited to 100 requests per hour per instance. Delivery errors are shown in the app;
-retry sends a fresh invitation. Sakekeep binds seven-day invitations to a verified
-email and stores only a token hash. Revoked and expired links cannot grant access.
+retry sends a fresh invitation. Sakekeep stores only a token hash. Each seven-day
+invitation can be redeemed by the first authenticated account holding the link,
+regardless of its email. Membership starts only after confirmation on `/projects`.
+Revoked and expired links cannot grant access. Copied links use the same flow.
+
+The preferred-account invitation update requires the migration that allows a null
+invitation delivery email. The normal migration container applies it. No additional
+secrets, email service, or Clerk configuration changes are required for this update.
+Pending invitations are stored in the browser across sign-in, signup, and account
+switching. Dismissal persists in that browser; invitations do not sync to other devices.
+The invitation landing page drops Clerk's ticket before opening authentication so
+signup does not inherit the delivery email.
 
 ## Stack and configuration
 

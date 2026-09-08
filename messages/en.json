@@ -922,5 +922,18 @@
   "access_error_11": "Resource not found.",
   "access_error_12": "Sign in to manage collaborators.",
   "access_error_13": "Verify an email address before transferring ownership.",
-  "access_copy_retry": "The project changed while copying. Please try again."
+  "access_copy_retry": "The project changed while copying. Please try again.",
+  "invitation_storage_error": "This invitation could not be remembered. Allow browser storage and reopen the invitation link.",
+  "invitation_join": "Join project",
+  "invitation_project_role": "{title} · {role}",
+  "invitation_confirm_help": "Confirm to give this account access to the project.",
+  "invitation_account": "Signed in as {account}",
+  "invitation_switch_account": "Switch accounts",
+  "invitation_switch_error": "Could not sign out. Please try again.",
+  "invitation_link_warning": "Anyone with the link can join first. Forwarding it passes on access. Links expire after seven days.",
+  "invitation_copy_link": "Create invitation link",
+  "invitation_link_label": "Invitation link",
+  "invitation_copy": "Copy link",
+  "invitation_copied": "Link copied",
+  "invitation_copy_failed": "Copy failed. Select and copy the link below."
 }

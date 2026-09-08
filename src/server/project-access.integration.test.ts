@@ -18,6 +18,7 @@ import {
 } from "./repository"
 import {
   acceptInvitation,
+  previewInvitation,
   changeCollaborator,
   getProjectAccess,
   inviteCollaborator,
@@ -68,21 +69,20 @@ describe("private project membership", () => {
     await expect(projectRole(project.id, "owner")).rejects.toMatchObject({ status: 404 })
   })
 
-  it("accepts verified invitations, enforces roles, transfers ownership, and revokes access", async () => {
+  it("accepts invitations with a different account email, enforces roles, transfers ownership, and revokes access", async () => {
     const project = await makeProject()
     const editorInvite = await invitation(project.id, " EDITOR@EXAMPLE.COM ")
-    await expect(acceptInvitation(editorInvite.token, "editor", [])).rejects.toMatchObject({
-      status: 403,
-    })
-    await expect(
-      acceptInvitation(editorInvite.token, "stranger", ["wrong@example.com"])
-    ).rejects.toMatchObject({ status: 403 })
-    expect(await acceptInvitation(editorInvite.token, "editor", ["EDITOR@example.com"])).toEqual({
+    expect(
+      await acceptInvitation(editorInvite.token, "editor", ["relay@privaterelay.appleid.com"])
+    ).toEqual({
       projectId: project.id,
     })
     expect(await acceptInvitation(editorInvite.token, "editor", ["editor@example.com"])).toEqual({
       projectId: project.id,
     })
+    expect((await getProjectAccess(project.id, "owner")).members[0]?.email).toBe(
+      "relay@privaterelay.appleid.com"
+    )
     expect((await listProjects("editor")).map((p) => p.id)).toContain(project.id)
     expect(await requireProjectRole(project.id, "editor", "edit")).toBe("editor")
     await expect(requireProjectRole(project.id, "editor", "manage")).rejects.toMatchObject({
@@ -151,6 +151,49 @@ describe("private project membership", () => {
     const newRole = await invitation(project.id, "editor@example.com", "organizer")
     await acceptInvitation(newRole.token, "editor", ["editor@example.com"])
     expect(await projectRole(project.id, "editor")).toBe("editor")
+  })
+
+  it("previews without granting access and lets only one account redeem a copied link", async () => {
+    const project = await makeProject()
+    const invite = await inviteCollaborator(project.id, "owner", null, "editor")
+    const preview = await previewInvitation(invite.token)
+    expect(preview).toMatchObject({ title: "Private book", role: "editor" })
+    expect(new Date(preview.expiresAt).getTime() - Date.now()).toBeGreaterThan(6.99 * 86_400_000)
+    expect((await getProjectAccess(project.id, "owner")).members).toHaveLength(0)
+    const results = await Promise.allSettled([
+      acceptInvitation(invite.token, "a", []),
+      acceptInvitation(invite.token, "b", ["different@example.com"]),
+    ])
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
+    expect(results.find((result) => result.status === "rejected")).toMatchObject({
+      reason: { status: 410 },
+    })
+    const members = (await getProjectAccess(project.id, "owner")).members
+    expect(members).toHaveLength(1)
+    const winner = members[0]!.userId
+    await acceptInvitation(invite.token, winner, [])
+    expect((await getProjectAccess(project.id, "owner")).members).toHaveLength(1)
+    await expect(previewInvitation(invite.token)).rejects.toMatchObject({ status: 410 })
+    await changeCollaborator(project.id, "owner", winner, null)
+    await expect(acceptInvitation(invite.token, winner, [])).rejects.toMatchObject({ status: 410 })
+    expect((await getProjectAccess(project.id, "owner")).members).toHaveLength(0)
+  })
+
+  it("rechecks expiry and revocation after preview", async () => {
+    const project = await makeProject()
+    for (const reason of ["expired", "revoked"]) {
+      const invite = await inviteCollaborator(project.id, "owner", null, "editor")
+      await previewInvitation(invite.token)
+      if (reason === "expired")
+        await db
+          .update(projectInvitations)
+          .set({ expiresAt: new Date(0) })
+          .where(eq(projectInvitations.id, invite.id))
+      else await revokeInvitation(project.id, "owner", invite.id)
+      await expect(acceptInvitation(invite.token, "a", [])).rejects.toMatchObject({ status: 410 })
+    }
+    await expect(previewInvitation("unknown")).rejects.toMatchObject({ status: 404 })
+    expect((await getProjectAccess(project.id, "owner")).members).toHaveLength(0)
   })
 
   it("serializes simultaneous ownership transfers", async () => {

@@ -73,20 +73,23 @@ function RoleSelect({
 export function Collaborators({ projectId, access }: { projectId: string; access: ProjectAccess }) {
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<CollaboratorRole>("editor")
+  const [invitationUrl, setInvitationUrl] = useState("")
   const queryClient = useQueryClient()
   const change = useMutation({
     mutationFn: (
       input:
         | { action: "invite"; email: string; role: CollaboratorRole }
+        | { action: "link" }
         | { action: "change"; userId: string; role: CollaboratorRole | null }
         | { action: "revoke"; invitationId: string }
         | { action: "transfer"; userId: string }
     ) =>
-      api<void>(`/api/projects/${projectId}/collaborators`, {
+      api<{ url: string } | undefined>(`/api/projects/${projectId}/collaborators`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: async (_, input) => {
+    onSuccess: async (result, input) => {
+      if (result?.url) setInvitationUrl(result.url)
       captureAnalyticsEvent("collaborators:changed", {
         action: input.action,
         role: "role" in input ? input.role : null,
@@ -140,6 +143,39 @@ export function Collaborators({ projectId, access }: { projectId: string; access
             </Button>
           </FieldGroup>
         </form>
+        <p className="text-sm text-muted-foreground">{m.invitation_link_warning()}</p>
+        <Button
+          variant="outline"
+          disabled={change.isPending}
+          onClick={() => change.mutate({ action: "link" })}
+        >
+          {m.invitation_copy_link()}
+        </Button>
+        {invitationUrl && (
+          <Field>
+            <FieldLabel htmlFor="invitation-link">{m.invitation_link_label()}</FieldLabel>
+            <Input
+              data-ph-no-capture
+              id="invitation-link"
+              value={invitationUrl}
+              readOnly
+              onFocus={(event) => event.target.select()}
+            />
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(invitationUrl)
+                  toast.success(m.invitation_copied())
+                } catch {
+                  toast.error(m.invitation_copy_failed())
+                }
+              }}
+            >
+              {m.invitation_copy()}
+            </Button>
+          </Field>
+        )}
         {access.members.map((member) => (
           <div key={member.userId} className="flex flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1 break-all text-sm">{member.email}</span>
@@ -179,7 +215,9 @@ export function Collaborators({ projectId, access }: { projectId: string; access
             <h3 className="text-sm font-medium">{m.access_pending()}</h3>
             {access.invitations.map((invite) => (
               <div key={invite.id} className="flex items-center gap-2 text-sm">
-                <span className="min-w-0 flex-1 break-all">{invite.email}</span>
+                <span className="min-w-0 flex-1 break-all">
+                  {invite.email ?? m.invitation_link_label()}
+                </span>
                 <span>{invite.role === "editor" ? m.access_editor() : m.access_organizer()}</span>
                 <Button
                   variant="ghost"

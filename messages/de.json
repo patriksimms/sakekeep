@@ -922,5 +922,18 @@
   "access_error_11": "Datei nicht gefunden.",
   "access_error_12": "Melde dich an, um Mitwirkende zu verwalten.",
   "access_error_13": "Bestätige eine E-Mail-Adresse, bevor du das Eigentum überträgst.",
-  "access_copy_retry": "Das Projekt wurde während des Kopierens geändert. Bitte versuche es erneut."
+  "access_copy_retry": "Das Projekt wurde während des Kopierens geändert. Bitte versuche es erneut.",
+  "invitation_storage_error": "Diese Einladung konnte nicht gespeichert werden. Erlaube den Browserspeicher und öffne den Einladungslink erneut.",
+  "invitation_join": "Projekt beitreten",
+  "invitation_project_role": "{title} · {role}",
+  "invitation_confirm_help": "Bestätige, um diesem Konto Zugriff auf das Projekt zu geben.",
+  "invitation_account": "Angemeldet als {account}",
+  "invitation_switch_account": "Konto wechseln",
+  "invitation_switch_error": "Abmelden fehlgeschlagen. Bitte versuche es erneut.",
+  "invitation_link_warning": "Wer den Link hat, kann zuerst beitreten. Weiterleiten gibt diese Möglichkeit weiter. Links laufen nach sieben Tagen ab.",
+  "invitation_copy_link": "Einladungslink erstellen",
+  "invitation_link_label": "Einladungslink",
+  "invitation_copy": "Link kopieren",
+  "invitation_copied": "Link kopiert",
+  "invitation_copy_failed": "Kopieren fehlgeschlagen. Wähle den Link unten aus und kopiere ihn."
 }
