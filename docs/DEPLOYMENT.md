@@ -9,7 +9,10 @@ Keep Clerk registration restricted while deploying this change. Do not apply the
 committed public Clerk configuration until the following steps have finished:
 
 1. Back up the database and deploy the new image and schema migration.
-2. In the app container, run `bun run scripts/backfill-project-owners.ts patriksimms@outlook.de`.
+2. Pass the intended owner email explicitly for the target environment. Patrik confirmed
+   `patriksimms@outlook.de` for this installation. In its app container, run
+   `bun run scripts/backfill-project-owners.ts patriksimms@outlook.de`.
+   For another installation, confirm its intended owner before running the script.
    It requires the environment's `DATABASE_URL` and `CLERK_SECRET_KEY`, resolves exactly
    one account with that verified email, and assigns only projects without an owner.
    It is safe to repeat and does not change ownership of newer projects.

@@ -112,10 +112,11 @@ export async function getProjectAccess(projectId: string, userId: string): Promi
 export async function inviteCollaborator(
   projectId: string,
   userId: string,
-  email: string,
+  rawEmail: string,
   role: CollaboratorRole,
   deliver: (email: string, token: string) => Promise<void>
 ) {
+  const email = invitationEmailSchema.parse(rawEmail)
   const token = randomBytes(32).toString("base64url")
   const id = crypto.randomUUID()
   await db.transaction(async (tx) => {
@@ -144,10 +145,6 @@ export async function inviteCollaborator(
   })
   try {
     await deliver(email, token)
-    await db
-      .update(projectInvitations)
-      .set({ deliveredAt: new Date() })
-      .where(eq(projectInvitations.id, id))
   } catch {
     await db
       .update(projectInvitations)
@@ -155,6 +152,10 @@ export async function inviteCollaborator(
       .where(eq(projectInvitations.id, id))
     throw new HttpError(502, m.access_error_3())
   }
+  await db
+    .update(projectInvitations)
+    .set({ deliveredAt: new Date() })
+    .where(eq(projectInvitations.id, id))
   return { id }
 }
 

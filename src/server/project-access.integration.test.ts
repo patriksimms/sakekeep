@@ -70,7 +70,7 @@ describe("private project membership", () => {
 
   it("accepts verified invitations, enforces roles, transfers ownership, and revokes access", async () => {
     const project = await makeProject()
-    const editorInvite = await invitation(project.id)
+    const editorInvite = await invitation(project.id, " EDITOR@EXAMPLE.COM ")
     await expect(acceptInvitation(editorInvite.token, "editor", [])).rejects.toMatchObject({
       status: 403,
     })

@@ -20,9 +20,9 @@ export function projectPermission(method: string, resource: string): "edit" | "m
 
 export const projectAuthorizationMiddleware = createMiddleware({ type: "request" }).server(
   async ({ context, request, next }) => {
+    // TanStack matches routes case-insensitively. Protected IDs are UUIDs.
+    const pathname = new URL(request.url).pathname.toLowerCase().replace(/\/+$/, "")
     try {
-      // TanStack matches routes case-insensitively. Protected IDs are UUIDs.
-      const pathname = new URL(request.url).pathname.toLowerCase().replace(/\/+$/, "")
       const projectMatch = /^\/(?:api\/)?projects\/([^/]+)(?:\/(.*))?$/.exec(pathname)
       const assetMatch = /^\/api\/(assets|exports)\/([^/]+)$/.exec(pathname)
       if (!projectMatch && !assetMatch) return next()
@@ -50,6 +50,12 @@ export const projectAuthorizationMiddleware = createMiddleware({ type: "request"
       )
       return next()
     } catch (error) {
+      if (!pathname.startsWith("/api/") && error instanceof HttpError && error.status === 404) {
+        return new Response(null, {
+          status: 307,
+          headers: { Location: "/projects", "Cache-Control": "no-store" },
+        })
+      }
       return jsonError(error)
     }
   }

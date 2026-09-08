@@ -81,8 +81,11 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
         expect((await stranger.fetch(url, { method })).status(), `${method} ${url}`).toBe(404)
       }
     }
-    expect((await stranger.get(`/projects/${id}`, { maxRedirects: 0 })).status()).toBe(404)
-    expect((await stranger.get(`/Projects/${id}`, { maxRedirects: 0 })).status()).toBe(404)
+    for (const pagePath of [`/projects/${id}`, `/Projects/${id}`]) {
+      const deniedPage = await stranger.get(pagePath, { maxRedirects: 0 })
+      expect(deniedPage.status()).toBe(307)
+      expect(deniedPage.headers().location).toBe("/projects")
+    }
     expect((await owner.get(`/API/Projects/${id}`)).status()).toBe(200)
     const editorToken = await invite(owner, id!, "user_editor", "editor")
     expect((await stranger.post(`/api/invitations/${editorToken}`)).status()).toBe(403)
@@ -206,7 +209,9 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
       expect(image.headers()["cache-control"]).toContain("no-store")
     }
     const other = await stranger.post("/api/projects", { data: { title: "Another private book" } })
+    expect(other.status()).toBe(201)
     const otherId = (await other.json()).id
+    expect(otherId).toBeTruthy()
     try {
       // Direct nested resource requests cannot change the asset's project.
       expect(
