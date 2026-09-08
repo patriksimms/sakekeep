@@ -36,6 +36,7 @@ function project(layouts: LayoutRecord[]): Project {
     id: layouts[0]?.projectId ?? "99999999-9999-4999-8999-999999999999",
     title: "Test",
     occasion: null,
+    bookLanguage: "en",
     state: "closed",
     shareUrl: null,
     submissionCount: 0,

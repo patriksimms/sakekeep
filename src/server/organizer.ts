@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { auth, clerkClient } from "@clerk/tanstack-react-start/server"
 
 import { isDemoMode } from "#/lib/demo-mode.ts"
@@ -10,10 +11,10 @@ export interface OrganizerIdentity {
 }
 
 export async function currentOrganizer(): Promise<OrganizerIdentity> {
-  if (isDemoMode) return { userId: "demo-organizer", name: "Demo organizer" }
+  if (isDemoMode) return { userId: "demo-organizer", name: m.ui_demo_organizer() }
 
   const { userId, sessionClaims } = await auth({ treatPendingAsSignedOut: true })
-  if (!userId) throw new HttpError(401, "Authentication required.")
+  if (!userId) throw new HttpError(401, m.ui_authentication_required())
 
   const claimedName = (sessionClaims as { name?: unknown } | null)?.name
   if (typeof claimedName === "string" && claimedName.trim()) {

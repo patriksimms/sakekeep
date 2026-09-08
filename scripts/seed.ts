@@ -67,9 +67,11 @@ const formSchema = {
 await ensureBucket()
 await db.delete(projects).where(inArray(projects.id, [CLOSED_PROJECT_ID, COLLECTING_PROJECT_ID]))
 
+// Keep the English-authored fixtures in English to exercise book/UI language separation.
 await db.insert(projects).values([
   {
     id: CLOSED_PROJECT_ID,
+    bookLanguage: "en",
     title: "Lea’s farewell book",
     occasion: "Team farewell · September 2026",
     state: "closed",
@@ -81,6 +83,7 @@ await db.insert(projects).values([
   },
   {
     id: COLLECTING_PROJECT_ID,
+    bookLanguage: "en",
     title: "Mina’s 30th birthday",
     occasion: "Birthday · October 2026",
     state: "collecting",

@@ -57,6 +57,8 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     colorScheme: "light",
+    locale: "en-US",
+    extraHTTPHeaders: { "Accept-Language": "en-US" },
     trace: "retain-on-failure",
   },
   globalSetup: "./e2e/global-setup.ts",

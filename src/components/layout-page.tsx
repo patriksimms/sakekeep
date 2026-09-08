@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { type Locale } from "#/lib/locale.ts"
 import { useMemo } from "react"
 
 import {
@@ -38,6 +40,7 @@ import { PhotoFocusSlot, type PhotoFocusControls } from "#/components/photo-focu
 import { effectiveFocalPoint } from "#/domain/photo-focus.ts"
 
 export interface LayoutPageContent {
+  locale?: Locale
   questions?: FormQuestion[]
   submission?: SubmissionSummary
   decorativeAssetUrl?: (assetId: string) => string
@@ -135,7 +138,7 @@ function PrintedPhoto({
       controls={content.photoFocus}
       rotation={element.geometry.rotation}
       borderRadius={borderRadius}
-      label={`Move the crop of ${image.name}`}
+      label={m.move_photo_crop({ value0: image.name })}
     >
       {photo}
     </PhotoFocusSlot>
@@ -155,7 +158,7 @@ function textElementRuns(
     element.type === "bound-text" && !content.submission
       ? boundQuestionPlaceholder(content.questions ?? [], element.questionId)
       : ""
-  return textRunsForElement(element, question, answer, placeholder)
+  return textRunsForElement(element, question, answer, placeholder, content.locale)
 }
 
 /**
@@ -180,7 +183,13 @@ export function textElementVerticalOffsetMm(
       ? content.questions?.find((candidate) => candidate.id === target.questionId)
       : undefined
   const runs = textElementRuns(target, content, question)
-  return layoutText(runs, target.geometry.width, target.geometry.height, target.text).offsetYMm
+  return layoutText(
+    runs,
+    target.geometry.width,
+    target.geometry.height,
+    target.text,
+    content.locale
+  ).offsetYMm
 }
 
 /**
@@ -263,21 +272,33 @@ function ElementContent({
 
   if (element.type === "static-text" || element.type === "bound-text") {
     const runs = textElementRuns(element, content, question)
-    const layout = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
+    const layout = layoutText(
+      runs,
+      element.geometry.width,
+      element.geometry.height,
+      element.text,
+      content.locale
+    )
     const hasLabel = element.type === "bound-text" && element.showLabel
     const labelLineCount = hasLabel
-      ? layoutText(runs.slice(0, 1), element.geometry.width, Number.POSITIVE_INFINITY, {
-          ...element.text,
-          fontSize: layout.effectiveFontSize,
-          minFontSize: layout.effectiveFontSize,
-          overflow: "flag",
-        }).renderedLines.length
+      ? layoutText(
+          runs.slice(0, 1),
+          element.geometry.width,
+          Number.POSITIVE_INFINITY,
+          {
+            ...element.text,
+            fontSize: layout.effectiveFontSize,
+            minFontSize: layout.effectiveFontSize,
+            overflow: "flag",
+          },
+          content.locale
+        ).renderedLines.length
       : 0
     // `editingText` carries the uncommitted inline edit, so the reserved label space and the
     // vertical offset track what is on screen rather than what was last saved.
     const liveLabel =
       element.type === "bound-text" && editingElementId === element.id
-        ? (editingText ?? boundTextLabel({ ...element, showLabel: true }, question))
+        ? (editingText ?? boundTextLabel({ ...element, showLabel: true }, question, content.locale))
         : ""
     // Committing a blank label drops it entirely, so a label of nothing but spaces has to read as
     // absent here too. Otherwise this reserves a line that the editor's own offset does not.
@@ -291,7 +312,8 @@ function ElementContent({
           [{ text: editedLabel, fontWeight: "bold" as const }, ...runs],
           element.geometry.width,
           element.geometry.height,
-          element.text
+          element.text,
+          content.locale
         )
       : layout
     return (
@@ -319,10 +341,11 @@ function ElementContent({
           showEditorPlaceholders &&
           editingElementId !== element.id && (
             <strong
+              data-testid="text-ui_add_label"
               data-editor-empty-label
               className="absolute top-0 left-0 z-10 bg-background/90 px-1 py-0.5 font-sans text-[10px] leading-none font-normal text-muted-foreground italic"
             >
-              Add label…
+              {m.ui_add_label()}{" "}
             </strong>
           )}
         {layout.renderedLines.map((line, index) => {

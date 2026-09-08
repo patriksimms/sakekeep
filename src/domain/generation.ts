@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { type Locale } from "#/lib/locale.ts"
 import {
   FORM_SCHEMA_VERSION,
   type BookPage,
@@ -14,13 +16,11 @@ import {
 import { elementExtendsBeyondBleed, gallerySlots, isCriticalElementOutsideSafeArea } from "./layout"
 import { findLayoutByRole, isCoverRole, responseLayouts } from "./layout-roles.ts"
 import { pageSpecificationForLayout, type PageSpecification } from "./page-format.ts"
-import { questionPrompt } from "./layout-question-palette.ts"
 import {
   assignPhotosToFrames,
   framePhotos,
   isPhotoFrame,
   type PhotoFrameElement,
-  type QuestionPhotoAssignment,
 } from "./photo-assignment.ts"
 import { layoutText, textRunsForElement, type TextLayoutResult } from "./text-layout.ts"
 
@@ -79,42 +79,42 @@ export function effectivePpi(
   return Math.floor(Math.min(ppiX, ppiY))
 }
 
-function lineCount(count: number): string {
-  return `${count} ${count === 1 ? "line" : "lines"}`
-}
-
 function textElementName(
   element: Extract<LayoutElement, { type: "bound-text" | "static-text" }>,
   form: FormSchema
 ): string {
   if (element.type === "bound-text") {
     if (element.showLabel && element.label?.trim()) return element.label.trim()
-    return form.questions.find((question) => question.id === element.questionId)?.prompt ?? "Text"
+    return form.questions.find((question) => question.id === element.questionId)?.prompt ?? ""
   }
   const firstLine = element.content.trim().split("\n")[0]?.trim()
-  if (!firstLine) return "Static text"
+  if (!firstLine) return ""
   return firstLine.length > 50 ? `${firstLine.slice(0, 47)}…` : firstLine
 }
 
 function textOverflowMessage(
-  name: string,
-  location: string,
+  name: { name: string; occurrence: number },
+  location: string | number,
   policy: "shrink" | "truncate" | "flag",
   fit: TextLayoutResult,
   heightMm: number
-): string {
-  const action = policy === "truncate" ? "is truncated" : "overflows"
-  const size =
-    policy === "shrink"
-      ? `${fit.effectiveFontSize} pt minimum`
-      : `configured ${fit.effectiveFontSize} pt size`
-  if (fit.availableLines === 0) {
-    return `${name} ${action} on ${location}. Its text bounding box is too short for one line at the ${size} (needs ${fit.lineHeightMm.toFixed(2)} mm, has ${heightMm.toFixed(2)} mm).`
+): PageProblem["params"] {
+  return {
+    ...name,
+    location,
+    policy,
+    fontSize: fit.effectiveFontSize,
+    requiredLines: fit.requiredLines,
+    availableLines: fit.availableLines,
+    lineHeightMm: fit.lineHeightMm,
+    heightMm,
   }
-  return `${name} ${action} on ${location}. It needs ${lineCount(fit.requiredLines)} at the ${size}, but only ${lineCount(fit.availableLines)} ${fit.availableLines === 1 ? "fits" : "fit"}.`
 }
 
-function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<string, string> {
+function textProblemNames(
+  elements: LayoutElement[],
+  form: FormSchema
+): Map<string, { name: string; occurrence: number }> {
   const textElements = elements.filter(
     (element): element is Extract<LayoutElement, { type: "bound-text" | "static-text" }> =>
       element.type === "bound-text" || element.type === "static-text"
@@ -129,10 +129,7 @@ function textProblemNames(elements: LayoutElement[], form: FormSchema): Map<stri
       const name = names[index]!
       const occurrence = (occurrences.get(name) ?? 0) + 1
       occurrences.set(name, occurrence)
-      return [
-        element.id,
-        counts.get(name) === 1 ? name : `${name} (text bounding box ${occurrence})`,
-      ]
+      return [element.id, { name, occurrence: counts.get(name) === 1 ? 0 : occurrence }]
     })
   )
 }
@@ -153,7 +150,7 @@ function frameSlots(element: PhotoFrameElement): Array<{ width: number; height: 
 function problem(
   pageId: string,
   code: PageProblem["code"],
-  message: string,
+  params: PageProblem["params"],
   blocking: boolean,
   scope: { elementId?: string; assetId?: string; key?: string } = {}
 ): PageProblem {
@@ -163,25 +160,9 @@ function problem(
     pageId,
     elementId: scope.elementId,
     assetId: scope.assetId,
-    message,
+    params,
     blocking,
   }
-}
-
-function plural(count: number, noun: string): string {
-  return `${count} ${count === 1 ? noun : `${noun}s`}`
-}
-
-function photoSlotMessage(
-  prompt: string,
-  response: number,
-  question: QuestionPhotoAssignment
-): string {
-  const capacity = `The layout has ${plural(question.slotCount, "photo slot")} for ${plural(question.photoCount, "uploaded photo")}.`
-  if (question.unplacedPhotoCount > 0) {
-    return `${plural(question.unplacedPhotoCount, "photo")} for "${prompt}" ${question.unplacedPhotoCount === 1 ? "is" : "are"} not shown on Response ${response}. ${capacity}`
-  }
-  return `${plural(question.emptySlotCount, "photo slot")} for "${prompt}" ${question.emptySlotCount === 1 ? "stays" : "stay"} empty on Response ${response}. ${capacity}`
 }
 
 /**
@@ -196,35 +177,17 @@ function inspectElementPlacement(
   const problems: PageProblem[] = []
   if (elementExtendsBeyondBleed(element, specification)) {
     problems.push(
-      problem(
-        pageId,
-        "outside-print-area",
-        "An element extends beyond the 3 mm bleed boundary.",
-        element.type === "bound-text",
-        { elementId: element.id }
-      )
+      problem(pageId, "outside-print-area", { boundary: "bleed" }, element.type === "bound-text", {
+        elementId: element.id,
+      })
     )
   } else if (isCriticalElementOutsideSafeArea(element, specification)) {
     problems.push(
-      problem(
-        pageId,
-        "outside-print-area",
-        "Text or critical content is outside the 6 mm safe area.",
-        true,
-        { elementId: element.id }
-      )
+      problem(pageId, "outside-print-area", { boundary: "safe" }, true, { elementId: element.id })
     )
   }
   if (element.type === "decorative-image" && !element.assetId) {
-    problems.push(
-      problem(
-        pageId,
-        "empty-decorative-image",
-        "A decorative image has no image selected and will be omitted from preview and export.",
-        false,
-        { elementId: element.id }
-      )
-    )
+    problems.push(problem(pageId, "empty-decorative-image", {}, false, { elementId: element.id }))
   }
   return problems
 }
@@ -235,17 +198,27 @@ const EMPTY_FORM: FormSchema = { version: FORM_SCHEMA_VERSION, questions: [] }
  * A cover or standalone page has no response behind it, so only placement and the fit of its own
  * text can go wrong. Response-bound elements cannot be authored on such a layout and are ignored.
  */
-export function inspectStandalonePage(pageId: string, layout: LayoutRecord): PageProblem[] {
+export function inspectStandalonePage(
+  pageId: string,
+  layout: LayoutRecord,
+  locale: Locale = "en"
+): PageProblem[] {
   const specification = pageSpecificationForLayout(layout.schema)
   const problemNames = textProblemNames(layout.schema.elements, EMPTY_FORM)
   const problems: PageProblem[] = []
   for (const element of layout.schema.elements) {
     problems.push(...inspectElementPlacement(pageId, element, specification))
     if (element.type !== "static-text") continue
-    const runs = textRunsForElement(element, undefined, undefined)
+    const runs = textRunsForElement(element, undefined, undefined, "", locale)
     const content = runs.map((run) => run.text).join("\n")
     if (!content.trim()) continue
-    const fit = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
+    const fit = layoutText(
+      runs,
+      element.geometry.width,
+      element.geometry.height,
+      element.text,
+      locale
+    )
     if (fit.fits && !fit.truncated) continue
     problems.push(
       problem(
@@ -271,7 +244,8 @@ export function inspectSubmissionPage(
   layout: LayoutRecord,
   submission: SubmissionSummary,
   form: FormSchema,
-  resolutionOverrides: string[]
+  resolutionOverrides: string[],
+  locale: Locale = "en"
 ): PageProblem[] {
   const problems: PageProblem[] = []
   const overrides = new Set(resolutionOverrides)
@@ -294,7 +268,7 @@ export function inspectSubmissionPage(
           : undefined
       const answer =
         element.type === "bound-text" ? submission.answers[element.questionId] : undefined
-      const runs = textRunsForElement(element, question, answer)
+      const runs = textRunsForElement(element, question, answer, "", locale)
       const content = runs.map((run) => run.text).join("\n")
       if (
         element.type === "bound-text" &&
@@ -304,17 +278,17 @@ export function inspectSubmissionPage(
           : !Array.isArray(answer) || answer.length === 0)
       ) {
         problems.push(
-          problem(
-            pageId,
-            "missing-required-answer",
-            "A required answer used by this layout is missing.",
-            true,
-            { elementId: element.id }
-          )
+          problem(pageId, "missing-required-answer", {}, true, { elementId: element.id })
         )
       }
       if (!content.trim()) continue
-      const fit = layoutText(runs, element.geometry.width, element.geometry.height, element.text)
+      const fit = layoutText(
+        runs,
+        element.geometry.width,
+        element.geometry.height,
+        element.text,
+        locale
+      )
       if (!fit.fits || fit.truncated) {
         problems.push(
           problem(
@@ -322,7 +296,7 @@ export function inspectSubmissionPage(
             "text-overflow",
             textOverflowMessage(
               problemNames.get(element.id)!,
-              `Response ${submission.sequence}`,
+              submission.sequence,
               element.text.overflow,
               fit,
               element.geometry.height
@@ -341,13 +315,10 @@ export function inspectSubmissionPage(
         if (!image) return
         if (image.mimeType !== "image/jpeg" && image.mimeType !== "image/png") {
           problems.push(
-            problem(
-              pageId,
-              "unsupported-asset",
-              `${image.name} is not a supported print-master format.`,
-              true,
-              { elementId: element.id, assetId: image.assetId }
-            )
+            problem(pageId, "unsupported-asset", { name: image.name }, true, {
+              elementId: element.id,
+              assetId: image.assetId,
+            })
           )
           return
         }
@@ -355,23 +326,17 @@ export function inspectSubmissionPage(
         const ppi = effectivePpi(image.width, image.height, slot.width, slot.height)
         if (ppi < 150 && !overrides.has(image.assetId)) {
           problems.push(
-            problem(
-              pageId,
-              "image-blocking-resolution",
-              `${image.name} has ${ppi} effective PPI; at least 150 PPI or an explicit override is required.`,
-              true,
-              { elementId: element.id, assetId: image.assetId }
-            )
+            problem(pageId, "image-blocking-resolution", { name: image.name, ppi }, true, {
+              elementId: element.id,
+              assetId: image.assetId,
+            })
           )
         } else if (ppi < 300) {
           problems.push(
-            problem(
-              pageId,
-              "image-low-resolution",
-              `${image.name} has ${ppi} effective PPI; 300 PPI is recommended.`,
-              false,
-              { elementId: element.id, assetId: image.assetId }
-            )
+            problem(pageId, "image-low-resolution", { name: image.name, ppi }, false, {
+              elementId: element.id,
+              assetId: image.assetId,
+            })
           )
         }
       })
@@ -380,14 +345,20 @@ export function inspectSubmissionPage(
 
   for (const question of assignment.questions) {
     if (question.unplacedPhotoCount === 0 && question.emptySlotCount === 0) continue
-    const prompt = questionPrompt(
-      form.questions.find((candidate) => candidate.id === question.questionId)
-    )
+    const prompt =
+      form.questions.find((candidate) => candidate.id === question.questionId)?.prompt ?? ""
     problems.push(
       problem(
         pageId,
         "photo-slot-mismatch",
-        photoSlotMessage(prompt, submission.sequence, question),
+        {
+          prompt,
+          response: submission.sequence,
+          slotCount: question.slotCount,
+          photoCount: question.photoCount,
+          unplacedPhotoCount: question.unplacedPhotoCount,
+          emptySlotCount: question.emptySlotCount,
+        },
         false,
         { key: question.questionId }
       )
@@ -459,7 +430,11 @@ export function pinCoverPages(pages: BookPage[], layouts: LayoutRecord[]): BookP
 }
 
 /** The pinned page for a cover role, or nothing when the project has no such layout. */
-function coverPages(layouts: LayoutRecord[], role: "front-cover" | "back-cover"): BookPage[] {
+function coverPages(
+  layouts: LayoutRecord[],
+  role: "front-cover" | "back-cover",
+  locale: Locale = "en"
+): BookPage[] {
   const layout = findLayoutByRole(layouts, role)
   if (!layout) return []
   const id = `standalone:${layout.id}`
@@ -468,12 +443,13 @@ function coverPages(layouts: LayoutRecord[], role: "front-cover" | "back-cover")
       id,
       kind: "standalone",
       layoutId: layout.id,
-      problems: inspectStandalonePage(id, layout),
+      problems: inspectStandalonePage(id, layout, locale),
     },
   ]
 }
 
 export function generateBook(input: {
+  locale?: Locale
   projectId: string
   form: FormSchema
   submissions: SubmissionSummary[]
@@ -483,13 +459,13 @@ export function generateBook(input: {
   now?: string
 }): GeneratedBook {
   if (input.layouts.length === 0) {
-    throw new Error("Create at least one layout before generating the book.")
+    throw new Error(m.ui_create_at_least_one_layout_before_generating_the_book())
   }
   const submissions = [...input.submissions].sort((left, right) => left.sequence - right.sequence)
   const layouts = [...input.layouts].sort((left, right) => left.position - right.position)
   const responses = responseLayouts(layouts)
   if (submissions.length > 0 && responses.length === 0) {
-    throw new Error("Create at least one response layout before generating the book.")
+    throw new Error(m.ui_create_at_least_one_response_layout_before_generating_the_book())
   }
   const assignments = deterministicLayoutAssignments(submissions, layouts, input.settings)
   const layoutById = new Map(layouts.map((layout) => [layout.id, layout]))
@@ -508,7 +484,8 @@ export function generateBook(input: {
         layout,
         submission,
         input.form,
-        input.settings.resolutionOverrides
+        input.settings.resolutionOverrides,
+        input.locale
       ),
     }
   })
@@ -519,7 +496,7 @@ export function generateBook(input: {
       if (page.kind !== "standalone") return []
       const layout = layoutById.get(page.layoutId)
       if (!layout || layout.role !== "static") return []
-      return [{ ...page, problems: inspectStandalonePage(page.id, layout) }]
+      return [{ ...page, problems: inspectStandalonePage(page.id, layout, input.locale) }]
     }
   )
   const bodyPages: BookPage[] = [...submissionPages, ...standalonePages]
@@ -536,19 +513,22 @@ export function generateBook(input: {
   })
 
   const allPages: BookPage[] = [
-    ...coverPages(layouts, "front-cover"),
+    ...coverPages(layouts, "front-cover", input.locale),
     ...bodyPages,
-    ...coverPages(layouts, "back-cover"),
+    ...coverPages(layouts, "back-cover", input.locale),
   ]
 
   const now = input.now ?? new Date().toISOString()
   const sourceFingerprint = fingerprintBookSource({
+    locale: input.locale ?? "en",
+    layoutEngineVersion: 1,
     submissions,
     layouts,
     settings: input.settings,
     pages: allPages,
   })
   return {
+    layoutEngineVersion: 1,
     projectId: input.projectId,
     settings: input.settings,
     pages: allPages,

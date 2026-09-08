@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { createPreflightReport, hasFailedPreflight, reportAsText } from "../domain/preflight"
 import { blockingProblems } from "../domain/generation"
 import { pageSpecification } from "../domain/page-format.ts"
@@ -32,15 +33,15 @@ export async function exportProject(
 ): Promise<ExportArtifact> {
   const project = await getProject(projectId, true)
   if (project.archivedAt) {
-    throw new HttpError(409, "This project is archived. Unarchive it before making changes.")
+    throw new HttpError(409, m.ui_this_project_is_archived_unarchive_it_before_making_changes())
   }
   if (!project.book || project.bookStatus === "not-generated") {
-    throw new HttpError(409, "Generate the complete book before exporting.")
+    throw new HttpError(409, m.ui_generate_the_complete_book_before_exporting())
   }
   if (project.bookStatus === "stale") {
     throw new HttpError(
       409,
-      "This preview is stale. Regenerate the complete book before exporting."
+      m.ui_this_preview_is_stale_regenerate_the_complete_book_before_exporti()
     )
   }
   if (
@@ -49,20 +50,17 @@ export async function exportProject(
   ) {
     throw new HttpError(
       409,
-      "The book changed after you accepted its problems. Review it again before exporting."
+      m.ui_the_book_changed_after_you_accepted_its_problems_review_it_again_()
     )
   }
   const problems = blockingProblems(project.book)
   if (problems.length > 0 && !options.allowBlockingProblems) {
-    throw new HttpError(
-      409,
-      `Resolve ${problems.length} blocking page problem(s) before exporting.`,
-      { problems }
-    )
+    throw new HttpError(409, m.resolve_blocking_problems({ value0: problems.length }), { problems })
   }
 
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const renderInput = {
+    locale: project.bookLanguage,
     book: project.book,
     layouts: project.layouts,
     submissions: project.submissions ?? [],
@@ -88,7 +86,9 @@ export async function exportProject(
     pageSpecification: specification,
   })
   if (hasFailedPreflight(report)) {
-    throw new HttpError(409, "Automated preflight failed. No final export was stored.", { report })
+    throw new HttpError(409, m.ui_automated_preflight_failed_no_final_export_was_stored(), {
+      report,
+    })
   }
 
   const id = crypto.randomUUID()

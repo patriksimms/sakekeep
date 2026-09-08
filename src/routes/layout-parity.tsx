@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { type Canvas } from "fabric"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { PagePreview } from "#/components/book-review.tsx"
 import { LayoutCanvas } from "#/components/layout-canvas.tsx"
@@ -19,11 +19,13 @@ declare global {
   interface Window {
     __sakekeepLayoutParityCanvas?: Canvas | null
     __sakekeepRemountLayoutParityCanvas?: () => void
+    __sakekeepSetCanvasLocale?: (locale: "de" | "en") => void
   }
 }
 
 export const Route = createFileRoute("/layout-parity")({
   validateSearch: (search: Record<string, unknown>) => ({
+    bookLanguage: search.bookLanguage === "de" ? ("de" as const) : ("en" as const),
     orientation: search.orientation === "portrait" ? ("portrait" as const) : undefined,
   }),
   component: LayoutParityFixture,
@@ -170,6 +172,7 @@ const project: Project = {
   id: "parity-project",
   title: "Layout parity fixture",
   occasion: null,
+  bookLanguage: "en",
   state: "closed",
   formSchema: {
     version: FORM_SCHEMA_VERSION,
@@ -238,25 +241,53 @@ const portraitPage: SubmissionBookPage = {
 }
 
 function LayoutParityFixture() {
-  const { orientation } = Route.useSearch()
+  const { orientation, bookLanguage } = Route.useSearch()
   const isPortrait = orientation === "portrait"
-  const activeSchema = isPortrait ? portraitSchema : schema
-  const activeProject = isPortrait ? portraitProject : project
+  const activeSchema = useMemo(() => {
+    const base = isPortrait ? portraitSchema : schema
+    if (bookLanguage === "en") return base
+    return {
+      ...base,
+      elements: base.elements.map((element) =>
+        element.id === "static-heading" && element.type === "static-text"
+          ? {
+              ...element,
+              content: "Geburtstagserinnerungen",
+              geometry: { ...element.geometry, width: 32, height: 40 },
+              text: { ...element.text, fontSize: 14, overflow: "flag" as const },
+            }
+          : element
+      ),
+    }
+  }, [isPortrait, bookLanguage])
+  const baseProject = isPortrait ? portraitProject : project
+  const activeProject = {
+    ...baseProject,
+    bookLanguage,
+    layouts: baseProject.layouts.map((layout) => ({ ...layout, schema: activeSchema })),
+  }
   const activePage = isPortrait ? portraitPage : page
   const pageWidth = isPortrait ? 432 : 648
   const decorativeAssetUrl = () => "/layout-parity-decor.svg"
   const canvasRef = useRef<Canvas | null>(null)
   const [editorSchema, setEditorSchema] = useState(activeSchema)
   const [canvasKey, setCanvasKey] = useState(0)
+  const [canvasLocale, setCanvasLocale] = useState<"de" | "en">()
+
+  useEffect(() => {
+    setEditorSchema(activeSchema)
+  }, [activeSchema])
 
   useEffect(() => {
     Object.defineProperty(window, "__sakekeepLayoutParityCanvas", {
       configurable: true,
       get: () => canvasRef.current,
     })
+    window.__sakekeepSetCanvasLocale = setCanvasLocale
     window.__sakekeepRemountLayoutParityCanvas = () => setCanvasKey((value) => value + 1)
     return () => {
       delete window.__sakekeepLayoutParityCanvas
+      delete window.__sakekeepSetCanvasLocale
       delete window.__sakekeepRemountLayoutParityCanvas
     }
   }, [])
@@ -268,13 +299,20 @@ function LayoutParityFixture() {
         <p className="text-sm text-muted-foreground">
           {isPortrait
             ? "A5 portrait decorative background, rendered by the editor and book preview."
-            : "Fixed schema, content, assets, fonts, viewport, and reduced motion."}
+            : "Fixed schema, content, assets, fonts, viewport, and reduced motion."}{" "}
+          <Link to="/layout-parity" search={{ orientation, bookLanguage: "de" }}>
+            Deutsch
+          </Link>{" "}
+          <Link to="/layout-parity" search={{ orientation, bookLanguage: "en" }}>
+            English
+          </Link>
         </p>
       </div>
       <div className="grid grid-cols-2 gap-6" data-testid="layout-parity-fixture">
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Fabric editor</h2>
           <LayoutCanvas
+            locale={canvasLocale ?? bookLanguage}
             key={canvasKey}
             schema={editorSchema}
             width={pageWidth}

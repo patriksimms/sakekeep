@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { openDB, type DBSchema } from "idb"
 
 import { type SubmissionAnswers } from "#/domain/types.ts"
@@ -19,7 +20,7 @@ interface SakekeepDraftDatabase extends DBSchema {
 
 function database() {
   if (typeof indexedDB === "undefined") {
-    throw new Error("Contributor drafts are only available in the browser.")
+    throw new Error(m.ui_contributor_drafts_are_only_available_in_the_browser())
   }
   return openDB<SakekeepDraftDatabase>("sakekeep-contributor-drafts", 1, {
     upgrade(db) {

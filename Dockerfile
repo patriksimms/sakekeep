@@ -7,6 +7,9 @@ WORKDIR /app
 
 FROM base AS production-dependencies
 COPY package.json bun.lock ./
+COPY scripts/compile-messages.ts ./scripts/compile-messages.ts
+COPY project.inlang ./project.inlang
+COPY messages ./messages
 RUN bun install --frozen-lockfile --production
 
 FROM production-dependencies AS dependencies

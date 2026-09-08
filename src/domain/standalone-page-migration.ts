@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 /**
  * Books saved before standalone pages became layout-backed carry their own `title`, `body` and
  * `background`. This module converts such a page into a layout that reproduces its rendering, so
@@ -147,7 +148,7 @@ export function legacyStandaloneSchema(
 
 export function legacyStandaloneName(page: LegacyStandaloneBookPage): string {
   const title = page.title.trim()
-  if (!title) return page.pageType === "blank" ? "Blank page" : "Standalone page"
+  if (!title) return page.pageType === "blank" ? m.ui_blank_page() : m.ui_standalone_page()
   return title.length > 60 ? `${title.slice(0, 57)}…` : title
 }
 

@@ -19,6 +19,7 @@ function project(): Project {
     id: "project-id",
     title: "Test project",
     occasion: null,
+    bookLanguage: "en",
     state: "closed",
     formSchema: completeForm,
     formRevision: 1,

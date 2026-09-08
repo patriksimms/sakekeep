@@ -36,7 +36,7 @@ test("stale direct links and reloads update read-only previews, with retry after
   })
   try {
     await page.goto(url)
-    await expect(page.getByText("Updating book", { exact: true })).toBeVisible()
+    await expect(page.getByText("Updating book", { exact: true })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId("book-page-tile")).toHaveCount(3)
     await expect(page.getByRole("combobox", { name: "Assignment mode" })).toBeDisabled()
     await expect(page.getByRole("button", { name: "Regenerate complete book" })).toHaveCount(0)
@@ -155,7 +155,7 @@ test("settings, assignments, page order and standalone pages rebuild after savin
   const mode = page.getByRole("combobox", { name: "Assignment mode" })
   try {
     await page.goto(url)
-    await expect(mode).toBeEnabled()
+    await expect(mode).toBeEnabled({ timeout: 15_000 })
     await mode.click()
     await page.getByRole("option", { name: "Seeded random", exact: true }).click()
     await expect

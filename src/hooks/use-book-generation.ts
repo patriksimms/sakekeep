@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import type { GenerationSettings, Project } from "#/domain/types.ts"
@@ -68,7 +69,7 @@ export function useBookGeneration({
           attempted = true
         }
         const updated = await projectApi.generate(saved.id, settings ?? saved.book!.settings)
-        if (!updated) throw new Error("Generation returned no book.")
+        if (!updated) throw new Error(m.ui_generation_returned_no_book())
         latest.current.onProjectChange({
           ...saved,
           book: updated,
@@ -81,7 +82,7 @@ export function useBookGeneration({
           })
       } catch (caught) {
         failure.current = true
-        setError(caught instanceof Error ? caught.message : "Generation failed")
+        setError(caught instanceof Error ? caught.message : m.ui_generation_failed())
         if (automatic) {
           // Waiting for a layout save is part of the attempt, including a failed flush.
           if (!attempted) captureAnalyticsEvent("book_review:regeneration_attempt", properties)
@@ -114,7 +115,7 @@ export function useBookGeneration({
     input: Parameters<typeof projectApi.updateBook>[1],
     staleCause: RegenerationCause
   ) => {
-    if (locked.current) throw new Error("Wait for the current book update to finish.")
+    if (locked.current) throw new Error(m.book_wait_for_update())
     setWorking(true)
     try {
       const updated = await projectApi.updateBook(latest.current.project.id, input)

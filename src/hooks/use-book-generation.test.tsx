@@ -21,6 +21,7 @@ function fixture(): Project {
   return {
     id: layout.projectId,
     title: "Book",
+    bookLanguage: "en",
     occasion: null,
     state: "closed",
     formSchema: completeForm,

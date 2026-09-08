@@ -1,3 +1,4 @@
+import { type Locale } from "#/lib/locale.ts"
 import { type FontFamily } from "./fonts.ts"
 
 export const FORM_SCHEMA_VERSION = 1 as const
@@ -231,7 +232,7 @@ export interface PageProblem {
   pageId: string
   elementId?: string
   assetId?: string
-  message: string
+  params: Record<string, string | number | boolean>
   blocking: boolean
 }
 
@@ -253,6 +254,7 @@ export interface StandaloneBookPage {
 export type BookPage = SubmissionBookPage | StandaloneBookPage
 
 export interface GeneratedBook {
+  layoutEngineVersion?: number
   projectId: string
   settings: GenerationSettings
   pages: BookPage[]
@@ -262,6 +264,7 @@ export interface GeneratedBook {
 }
 
 export interface Project {
+  bookLanguage: Locale
   id: string
   title: string
   occasion: string | null
@@ -282,6 +285,7 @@ export interface Project {
 }
 
 export interface ProjectSummary {
+  bookLanguage: Locale
   id: string
   title: string
   occasion: string | null

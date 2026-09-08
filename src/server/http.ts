@@ -1,6 +1,15 @@
+import * as m from "#/paraglide/messages.js"
 import { z } from "zod"
+import de from "zod/v4/locales/de.js"
+import en from "zod/v4/locales/en.js"
+import { getLocale } from "#/paraglide/runtime.js"
 
 import { captureServerException } from "#/server/error-tracking.ts"
+
+const validationLocales = { de: de(), en: en() }
+// Resolve inside the callback so concurrent requests keep their own language.
+// Schema-specific messages retain precedence over these default Zod messages.
+z.config({ localeError: (issue) => validationLocales[getLocale()].localeError(issue) })
 
 export class HttpError extends Error {
   constructor(
@@ -22,7 +31,7 @@ export function jsonError(error: unknown): Response {
   if (error instanceof z.ZodError) {
     return Response.json(
       {
-        error: "The request contains invalid data.",
+        error: m.ui_the_request_contains_invalid_data(),
         details: {
           issues: error.issues.map((issue) => ({
             path: issue.path.join("."),
@@ -35,13 +44,13 @@ export function jsonError(error: unknown): Response {
   }
   console.error(error)
   captureServerException(error)
-  return Response.json({ error: "An unexpected local server error occurred." }, { status: 500 })
+  return Response.json({ error: m.ui_an_unexpected_local_server_error_occurred() }, { status: 500 })
 }
 
 export async function readJson<T>(request: Request): Promise<T> {
   try {
     return (await request.json()) as T
   } catch {
-    throw new HttpError(400, "The request body must be valid JSON.")
+    throw new HttpError(400, m.ui_the_request_body_must_be_valid_json())
   }
 }

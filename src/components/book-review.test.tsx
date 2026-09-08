@@ -52,13 +52,27 @@ describe("book review problems", () => {
       code: "text-overflow" as const,
       pageId: `submission:${submissions[1]!.id}`,
       elementId: textElement.id,
-      message: "A memory overflows on Response 2. It needs 3 lines, but only 1 line fits.",
+      params: {
+        name: "A memory",
+        location: "Response 2",
+        requiredLines: 3,
+        availableLines: 1,
+        fontSize: 20,
+      },
       blocking: true,
     }
     const project = {
       id: layout.projectId,
       title: "Test book",
       occasion: null,
+      bookLanguage: "en",
+      formRevision: 1,
+      shareUrl: null,
+      submissionCount: 1,
+      pageFormat: "a5",
+      pageOrientation: "landscape",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
       state: "closed",
       formSchema: completeForm,
       layouts: [layout],
@@ -110,7 +124,13 @@ describe("book review problems", () => {
       code: "text-overflow" as const,
       pageId: `submission:${submission.id}`,
       elementId: textElement.id,
-      message: "A memory overflows on Response 1.",
+      params: {
+        name: "A memory",
+        location: "Response 1",
+        requiredLines: 3,
+        availableLines: 1,
+        fontSize: 20,
+      },
       blocking: true,
     }
     const page = {
@@ -132,6 +152,14 @@ describe("book review problems", () => {
       id: layout.projectId,
       title: "Test book",
       occasion: null,
+      bookLanguage: "en",
+      formRevision: 1,
+      shareUrl: null,
+      submissionCount: 1,
+      pageFormat: "a5",
+      pageOrientation: "landscape",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
       state: "closed",
       formSchema: completeForm,
       layouts: [layout, replacement],
@@ -188,6 +216,14 @@ describe("book review page grid", () => {
       id: layout.projectId,
       title: "Test book",
       occasion: null,
+      bookLanguage: "en",
+      formRevision: 1,
+      shareUrl: null,
+      submissionCount: 1,
+      pageFormat: "a5",
+      pageOrientation: "landscape",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
       state: "closed",
       formSchema: completeForm,
       layouts: [layout, cover],
@@ -256,8 +292,18 @@ it("records a resolution override and automatically replaces its blocking previe
   const submission = submissionFixture("10000000-0000-4000-8000-000000000001", 1)
   const pageId = `submission:${submission.id}`
   const assetId = "20000000-0000-4000-8000-000000000001"
-  const initial = {
+  const initial: Project = {
     id: layout.projectId,
+    title: "Book",
+    occasion: null,
+    formRevision: 1,
+    shareUrl: null,
+    submissionCount: 1,
+    pageFormat: "a5",
+    pageOrientation: "landscape",
+    createdAt: "",
+    updatedAt: "",
+    bookLanguage: "en",
     state: "closed",
     archivedAt: null,
     formSchema: completeForm,
@@ -280,7 +326,7 @@ it("records a resolution override and automatically replaces its blocking previe
               pageId,
               assetId,
               blocking: true,
-              message: "Photo resolution is too low",
+              params: { name: "Photo" },
             },
           ],
         },
@@ -289,7 +335,7 @@ it("records a resolution override and automatically replaces its blocking previe
       generatedAt: "",
       updatedAt: "",
     },
-  } as Project
+  }
   const settings = { ...cycleSettings, resolutionOverrides: [assetId] }
   updateBook.mockResolvedValue({ ...initial.book!, settings })
   generate.mockResolvedValue({
@@ -312,6 +358,7 @@ it("keeps the stored preview and retry available after the last layout is delete
   const project: Project = {
     id: "project",
     title: "Book",
+    bookLanguage: "en",
     occasion: null,
     formRevision: 1,
     shareUrl: null,

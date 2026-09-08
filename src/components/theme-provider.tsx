@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { useEffect, useState, type ReactNode } from "react"
 
 type Theme = "light" | "dark" | "system"
@@ -39,7 +40,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     <div data-theme={theme}>
       {children}
       <button type="button" className="sr-only" onClick={cycle} data-theme-toggle-hidden>
-        Cycle theme
+        {m.ui_cycle_theme()}{" "}
       </button>
     </div>
   )

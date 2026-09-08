@@ -1,3 +1,5 @@
+import * as m from "#/paraglide/messages.js"
+import { type Locale } from "#/lib/locale.ts"
 import { z } from "zod"
 
 import { FONT_FAMILY_IDS } from "./fonts.ts"
@@ -134,7 +136,11 @@ export const layoutSchemaValidator = z
       context.addIssue({
         code: "custom",
         path,
-        message: `${label} must be between ${round(minimum)} and ${round(maximum)} for this page format.`,
+        message: m.geometry_limit({
+          value0: label,
+          value1: round(minimum),
+          value2: round(maximum),
+        }),
       })
     }
     for (const [index, element] of layout.elements.entries()) {
@@ -142,7 +148,7 @@ export const layoutSchemaValidator = z
         context.addIssue({
           code: "custom",
           path: ["elements", index, "id"],
-          message: "Element IDs must be unique.",
+          message: m.ui_element_ids_must_be_unique(),
         })
       }
       ids.add(element.id)
@@ -151,34 +157,34 @@ export const layoutSchemaValidator = z
         geometryLimits.x.min,
         geometryLimits.x.max,
         ["elements", index, "geometry", "x"],
-        "Horizontal position"
+        m.ui_horizontal_position()
       )
       checkRange(
         element.geometry.y,
         geometryLimits.y.min,
         geometryLimits.y.max,
         ["elements", index, "geometry", "y"],
-        "Vertical position"
+        m.ui_vertical_position()
       )
       checkRange(
         element.geometry.width,
         Number.MIN_VALUE,
         geometryLimits.widthMax,
         ["elements", index, "geometry", "width"],
-        "Width"
+        m.ui_width()
       )
       checkRange(
         element.geometry.height,
         Number.MIN_VALUE,
         geometryLimits.heightMax,
         ["elements", index, "geometry", "height"],
-        "Height"
+        m.ui_height()
       )
       if ("text" in element && element.text.minFontSize > element.text.fontSize) {
         context.addIssue({
           code: "custom",
           path: ["elements", index, "text", "minFontSize"],
-          message: "Minimum font size cannot exceed the font size.",
+          message: m.ui_minimum_font_size_cannot_exceed_the_font_size(),
         })
       }
       if ("text" in element) {
@@ -187,14 +193,14 @@ export const layoutSchemaValidator = z
           limits.fontSize.min,
           limits.fontSize.max,
           ["elements", index, "text", "fontSize"],
-          "Font size"
+          m.ui_font_size()
         )
         checkRange(
           element.text.minFontSize,
           limits.fontSize.min,
           limits.fontSize.max,
           ["elements", index, "text", "minFontSize"],
-          "Minimum font size"
+          m.ui_minimum_font_size()
         )
       }
       if (element.type === "image-frame") {
@@ -203,11 +209,11 @@ export const layoutSchemaValidator = z
           0,
           limits.cornerRadiusMax,
           ["elements", index, "cornerRadius"],
-          "Corner radius"
+          m.ui_corner_radius()
         )
       }
       if (element.type === "gallery-frame") {
-        checkRange(element.gap, 0, limits.gapMax, ["elements", index, "gap"], "Gallery gap")
+        checkRange(element.gap, 0, limits.gapMax, ["elements", index, "gap"], m.ui_gallery_gap())
       }
       if (element.type === "rectangle" || element.type === "circle" || element.type === "line") {
         checkRange(
@@ -215,7 +221,7 @@ export const layoutSchemaValidator = z
           0,
           limits.strokeWidthMax,
           ["elements", index, "strokeWidth"],
-          "Stroke width"
+          m.ui_stroke_width()
         )
       }
     }
@@ -387,7 +393,8 @@ export function addElement(
   schema: LayoutSchema,
   type: LayoutElement["type"],
   questionId?: string,
-  center?: { x: number; y: number }
+  center?: { x: number; y: number },
+  locale: Locale = "en"
 ): LayoutSchema {
   const specification = pageSpecificationForLayout(schema)
   const id = crypto.randomUUID()
@@ -411,7 +418,7 @@ export function addElement(
         type,
         geometry,
         opacity: 1,
-        content: "A little note",
+        content: m.little_note({}, { locale }),
         text: { ...DEFAULT_TEXT_SETTINGS },
       }
       break

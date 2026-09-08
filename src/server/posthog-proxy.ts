@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { env, type Environment } from "#/server/env.ts"
 
 // Only these request headers reach PostHog. An allowlist (rather than a blocklist) guarantees
@@ -37,7 +38,7 @@ export async function proxyPosthogRequest(
   fetchImplementation: FetchLike = fetch
 ): Promise<Response> {
   if (!configuration.VITE_POSTHOG_PROJECT_TOKEN) {
-    return Response.json({ error: "PostHog ingestion is not configured." }, { status: 404 })
+    return Response.json({ error: m.ui_posthog_ingestion_is_not_configured() }, { status: 404 })
   }
 
   const url = new URL(request.url)
@@ -54,7 +55,7 @@ export async function proxyPosthogRequest(
       redirect: "manual",
     })
   } catch {
-    return Response.json({ error: "PostHog ingestion is unavailable." }, { status: 502 })
+    return Response.json({ error: m.ui_posthog_ingestion_is_unavailable() }, { status: 502 })
   }
 
   const headers = new Headers(upstreamResponse.headers)

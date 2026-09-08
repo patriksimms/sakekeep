@@ -1,3 +1,4 @@
+import { problemMessage } from "./problem-message.ts"
 import { describe, expect, it } from "vitest"
 
 import { createPreflightReport, hasFailedPreflight, reportAsText } from "./preflight.ts"
@@ -83,7 +84,7 @@ describe("preflight", () => {
       code: "empty-decorative-image",
       pageId: generated.pages[0]!.id,
       elementId: "decorative-element",
-      message: "An empty decorative image is omitted.",
+      params: {},
       blocking: false,
     })
     const report = createPreflightReport({
@@ -112,7 +113,7 @@ describe("preflight", () => {
       code: "outside-print-area",
       pageId: generated.pages[0]!.id,
       elementId: "static-element",
-      message: "A static element extends beyond the bleed boundary.",
+      params: { boundary: "bleed" },
       blocking: false,
     })
     const report = createPreflightReport({
@@ -141,7 +142,7 @@ describe("preflight", () => {
       code: "outside-print-area" as const,
       pageId: generated.pages[0]!.id,
       elementId: "text-element",
-      message: "Text is outside the 6 mm safe area.",
+      params: { boundary: "safe" },
       blocking: true,
     }
     generated.pages[0]!.problems.push(acceptedProblem)
@@ -166,7 +167,7 @@ describe("preflight", () => {
     )
     expect(report.ignoredProblems).toEqual([acceptedProblem])
     expect(reportAsText(report)).toContain(
-      `${acceptedProblem.pageId} / text-element: ${acceptedProblem.message}`
+      `${acceptedProblem.pageId} / text-element: ${problemMessage(acceptedProblem, "en")}`
     )
     expect(hasFailedPreflight(report)).toBe(false)
 

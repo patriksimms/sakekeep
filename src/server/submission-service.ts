@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { z } from "zod"
 
 import { type UploadedImageDescriptor, validateSubmission } from "../domain/form"
@@ -36,28 +37,29 @@ export async function submitContribution(
   request: Request
 ): Promise<{ id: string; created: boolean }> {
   const publicProject = await findPublicProject(token)
+  const locale = publicProject.status === "unknown" ? "de" : publicProject.bookLanguage
   if (publicProject.status === "unknown") {
-    throw new HttpError(404, "This share link is unknown or malformed.")
+    throw new HttpError(404, m.ui_this_share_link_is_unknown_or_malformed({}, { locale }))
   }
   if (publicProject.status === "closed") {
-    throw new HttpError(409, "Collection is closed. This response was not saved.")
+    throw new HttpError(409, m.ui_collection_is_closed_this_response_was_not_saved({}, { locale }))
   }
 
   let formData: FormData
   try {
     formData = await request.formData()
   } catch {
-    throw new HttpError(400, "The submission must use multipart form data.")
+    throw new HttpError(400, m.ui_the_submission_must_use_multipart_form_data({}, { locale }))
   }
   const rawPayload = formData.get("payload")
   if (typeof rawPayload !== "string") {
-    throw new HttpError(400, "Submission payload is missing.")
+    throw new HttpError(400, m.ui_submission_payload_is_missing({}, { locale }))
   }
   let payload: z.infer<typeof payloadSchema>
   try {
     payload = payloadSchema.parse(JSON.parse(rawPayload))
   } catch {
-    throw new HttpError(400, "Submission payload is invalid.")
+    throw new HttpError(400, m.ui_submission_payload_is_invalid({}, { locale }))
   }
 
   const existing = await findSubmissionByIdempotency(
@@ -72,7 +74,7 @@ export async function submitContribution(
     const value = rawValue as File
     const parsed = parseUploadFieldName(name)
     if (!parsed) {
-      throw new HttpError(400, "An image upload field is malformed.")
+      throw new HttpError(400, m.ui_an_image_upload_field_is_malformed({}, { locale }))
     }
     uploads.push({
       descriptor: {
@@ -94,10 +96,11 @@ export async function submitContribution(
   const issues = validateSubmission(
     publicProject.formSchema,
     answers,
-    uploads.map((upload) => upload.descriptor)
+    uploads.map((upload) => upload.descriptor),
+    locale
   )
   if (issues.length > 0) {
-    throw new HttpError(422, "Resolve the response errors and try again.", {
+    throw new HttpError(422, m.ui_resolve_the_response_errors_and_try_again({}, { locale }), {
       issues,
     })
   }
@@ -107,7 +110,10 @@ export async function submitContribution(
   try {
     for (const upload of uploads) {
       if (!isAcceptedImage(upload.file)) {
-        throw new HttpError(422, `${upload.file.name} is not a supported image.`)
+        throw new HttpError(
+          422,
+          m.unsupported_uploaded_file({ value0: upload.file.name }, { locale })
+        )
       }
       const bytes = new Uint8Array(await upload.file.arrayBuffer())
       const normalized = await normalizeImage(bytes, upload.file.type)
@@ -154,6 +160,9 @@ export async function submitContribution(
   } catch (error) {
     await deleteObjects(uploadedKeys)
     if (error instanceof HttpError) throw error
-    throw new HttpError(422, "One or more images could not be processed. No response was saved.")
+    throw new HttpError(
+      422,
+      m.ui_one_or_more_images_could_not_be_processed_no_response_was_saved({}, { locale })
+    )
   }
 }

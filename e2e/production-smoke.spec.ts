@@ -36,12 +36,12 @@ test("creates persistent production data before app recreation", async ({ page, 
 
   const publicPage = await page.context().browser()!.newPage()
   await publicPage.goto(`/s/${collectingToken}`)
-  await publicPage.getByLabel("What should we call you in the book?").fill("Production smoke")
-  await publicPage.getByLabel("Which memory still makes you smile?").fill(submissionMarker)
+  await publicPage.getByTestId("answer-name").fill("Production smoke")
+  await publicPage.getByTestId("answer-memory").fill(submissionMarker)
   await publicPage.getByRole("radio", { name: "Making chaos feel calm" }).click()
   await publicPage.getByRole("checkbox", { name: "A little travel" }).click()
   await publicPage.locator('input[type="file"]').setInputFiles("public/logo512.png")
-  await publicPage.getByRole("button", { name: "Submit once" }).click()
+  await publicPage.getByTestId("submit-contribution").click()
   await expect(publicPage.getByText("Your response was submitted.")).toBeVisible()
 
   const health = await request.get("/api/health")

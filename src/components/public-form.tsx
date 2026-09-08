@@ -1,3 +1,5 @@
+import { type Locale } from "#/lib/locale.ts"
+import * as m from "#/paraglide/messages.js"
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
@@ -44,6 +46,7 @@ import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 
 interface PublicFormProps {
+  locale?: Locale
   token: string
   title: string
   formSchema: FormSchema
@@ -59,7 +62,15 @@ function errorFor(issues: ValidationIssue[], questionId: string) {
   return issues.find((issue) => issue.path.startsWith(`answers.${questionId}`))?.message
 }
 
-function FilePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
+function FilePreview({
+  file,
+  onRemove,
+  locale,
+}: {
+  file: File
+  onRemove: () => void
+  locale: Locale
+}) {
   const [url, setUrl] = useState("")
   useEffect(() => {
     const next = URL.createObjectURL(file)
@@ -84,7 +95,8 @@ function FilePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
         size="icon-sm"
         variant="ghost"
         onClick={onRemove}
-        aria-label={`Remove ${file.name}`}
+        data-testid={`remove-file-${file.name}`}
+        aria-label={m.remove_file({ value0: file.name }, { locale })}
       >
         <Trash2Icon />
       </Button>
@@ -100,12 +112,14 @@ function isAcceptedImage(file: File) {
 }
 
 function ImagesField({
+  locale,
   question,
   files,
   issue,
   onFiles,
 }: {
   question: Extract<FormQuestion, { type: "images" }>
+  locale: Locale
   files: File[]
   issue?: string
   onFiles: (files: File[]) => void
@@ -122,9 +136,9 @@ function ImagesField({
     setNotice(
       [
         images.length < candidates.length &&
-          "Only JPEG, PNG, WebP, HEIF, or HEIC images can be added.",
+          m.ui_only_jpeg_png_webp_heif_or_heic_images_can_be_added({}, { locale }),
         accepted.length < images.length &&
-          `Only ${question.maxImages} image${question.maxImages === 1 ? "" : "s"} can be added here.`,
+          m.image_limit_notice({ value0: question.maxImages }, { locale }),
       ]
         .filter(Boolean)
         .join(" ")
@@ -156,14 +170,14 @@ function ImagesField({
       >
         <ImagePlusIcon aria-hidden="true" />
         <span className="text-sm font-medium">
-          Drag and drop or choose up to {question.maxImages} image
-          {question.maxImages === 1 ? "" : "s"}
+          {m.upload_hint({ count: question.maxImages }, { locale })}
         </span>
         <span className="text-xs text-muted-foreground">
-          JPEG, PNG, WebP, HEIF, or HEIC · 15 MB each
+          {m.ui_jpeg_png_webp_heif_or_heic_15_mb_each({}, { locale })}{" "}
         </span>
         <input
           id={fieldId}
+          data-testid={fieldId}
           className="sr-only"
           type="file"
           accept=".jpg,.jpeg,.png,.webp,.heif,.heic,image/jpeg,image/png,image/webp,image/heif,image/heic"
@@ -182,6 +196,7 @@ function ImagesField({
         <ul className="grid gap-2 sm:grid-cols-2">
           {files.map((file, index) => (
             <FilePreview
+              locale={locale}
               key={`${file.name}-${file.lastModified}-${index}`}
               file={file}
               onRemove={() => {
@@ -198,6 +213,7 @@ function ImagesField({
 }
 
 function QuestionField({
+  locale,
   question,
   answer,
   files,
@@ -207,6 +223,7 @@ function QuestionField({
 }: {
   question: FormQuestion
   answer: SubmissionAnswers[string]
+  locale: Locale
   files: File[]
   issue?: string
   onAnswer: (answer: SubmissionAnswers[string]) => void
@@ -264,7 +281,15 @@ function QuestionField({
     )
   }
   if (question.type === "images") {
-    return <ImagesField question={question} files={files} issue={issue} onFiles={onFiles} />
+    return (
+      <ImagesField
+        locale={locale}
+        question={question}
+        files={files}
+        issue={issue}
+        onFiles={onFiles}
+      />
+    )
   }
 
   if (question.type !== "single-line" && question.type !== "multiline") {
@@ -279,6 +304,7 @@ function QuestionField({
       {question.type === "multiline" ? (
         <Textarea
           id={fieldId}
+          data-testid={fieldId}
           value={value}
           rows={5}
           maxLength={question.characterLimit}
@@ -290,6 +316,7 @@ function QuestionField({
       ) : (
         <Input
           id={fieldId}
+          data-testid={fieldId}
           value={value}
           type={question.validateUrl ? "url" : "text"}
           maxLength={question.characterLimit}
@@ -301,7 +328,7 @@ function QuestionField({
       )}
       {question.characterLimit && (
         <FieldDescription id={`${fieldId}-description`}>
-          {value.length} / {question.characterLimit} characters
+          {value.length} / {question.characterLimit} {m.ui_characters({}, { locale })}{" "}
         </FieldDescription>
       )}
       <FieldError>{issue}</FieldError>
@@ -309,7 +336,7 @@ function QuestionField({
   )
 }
 
-export function PublicForm({ token, title, formSchema }: PublicFormProps) {
+export function PublicForm({ token, title, formSchema, locale = "en" }: PublicFormProps) {
   const [answers, setAnswers] = useState(() => initialAnswers(formSchema))
   const [files, setFiles] = useState<Record<string, File[]>>({})
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
@@ -394,11 +421,11 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
         sizeBytes: file.size,
       }))
     )
-    const validation = validateSubmission(formSchema, answers, descriptors)
+    const validation = validateSubmission(formSchema, answers, descriptors, locale)
     setIssues(validation)
     if (validation.length > 0) {
       setStatus("error")
-      setMessage("Review the highlighted answers before submitting.")
+      setMessage(m.ui_review_the_highlighted_answers_before_submitting({}, { locale }))
       document.querySelector<HTMLElement>("[aria-invalid=true]")?.focus()
       return
     }
@@ -418,20 +445,27 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
         error?: string
         message?: string
       }
-      if (!response.ok) throw new Error(payload.error ?? "Submission failed.")
+      if (!response.ok) throw new Error(payload.error ?? m.ui_submission_failed({}, { locale }))
       await clearContributorDraft(token)
       setStatus("success")
-      setMessage(payload.message ?? "Your response was submitted.")
+      setMessage(payload.message ?? m.ui_your_response_was_submitted({}, { locale }))
     } catch (error) {
       setStatus("error")
-      setMessage(error instanceof Error ? error.message : "The response could not be submitted.")
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : m.ui_the_response_could_not_be_submitted({}, { locale })
+      )
     }
   }
 
   if (!loaded) {
     return (
       <div className="flex min-h-80 items-center justify-center">
-        <LoaderCircleIcon className="animate-spin" aria-label="Restoring draft" />
+        <LoaderCircleIcon
+          className="animate-spin"
+          aria-label={m.ui_restoring_draft({}, { locale })}
+        />
       </div>
     )
   }
@@ -443,13 +477,17 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
           <span className="mb-3 flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
             <CheckCircle2Icon aria-hidden="true" />
           </span>
-          <CardTitle className="text-3xl">Thank you.</CardTitle>
+          <CardTitle data-testid="heading-thank-you" className="text-3xl">
+            {m.ui_thank_you({}, { locale })}
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p>{message}</p>
           <p className="text-sm text-muted-foreground">
-            Your saved browser draft and local image copies have been cleared. Responses cannot be
-            edited after submission.
+            {m.ui_your_saved_browser_draft_and_local_image_copies_have_been_cleared(
+              {},
+              { locale }
+            )}{" "}
           </p>
         </CardContent>
       </Card>
@@ -464,22 +502,29 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
         </span>
         <div>
           <p className="text-sm font-semibold tracking-[0.15em] text-primary uppercase">
-            An anonymous contribution
+            {m.ui_an_anonymous_contribution({}, { locale })}{" "}
           </p>
           <h1 className="mt-2 font-heading text-4xl tracking-tight sm:text-5xl">{title}</h1>
         </div>
         <p className="mx-auto max-w-lg text-muted-foreground">
-          No account is needed. Your answers stay editable on this device until you submit them
-          once.
+          {m.ui_no_account_is_needed_your_answers_stay_editable_on_this_device_un(
+            {},
+            { locale }
+          )}{" "}
         </p>
       </div>
 
       {recovered && (
         <Alert className="mb-5">
           <RefreshCwIcon />
-          <AlertTitle>Draft restored</AlertTitle>
+          <AlertTitle data-testid="text-ui_draft_restored">
+            {m.ui_draft_restored({}, { locale })}
+          </AlertTitle>
           <AlertDescription>
-            Your answers and selected local images were recovered from this browser.
+            {m.ui_your_answers_and_selected_local_images_were_recovered_from_this_b(
+              {},
+              { locale }
+            )}{" "}
           </AlertDescription>
         </Alert>
       )}
@@ -488,8 +533,15 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
         value={(answeredCount / formSchema.questions.length) * 100}
         className="mb-5 rounded-xl border bg-card/80 p-3"
       >
-        <ProgressLabel>Your progress</ProgressLabel>
-        <ProgressValue>{() => `${answeredCount} of ${formSchema.questions.length}`}</ProgressValue>
+        <ProgressLabel>{m.ui_your_progress({}, { locale })}</ProgressLabel>
+        <ProgressValue>
+          {() =>
+            m.answer_progress(
+              { value0: answeredCount, value1: formSchema.questions.length },
+              { locale }
+            )
+          }
+        </ProgressValue>
       </Progress>
 
       <form onSubmit={submit}>
@@ -498,6 +550,7 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
             <FieldGroup>
               {formSchema.questions.map((question) => (
                 <QuestionField
+                  locale={locale}
                   key={question.id}
                   question={question}
                   answer={answers[question.id]}
@@ -523,31 +576,38 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
             {status === "error" && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircleIcon />
-                <AlertTitle>Could not submit</AlertTitle>
+                <AlertTitle>{m.ui_could_not_submit({}, { locale })}</AlertTitle>
                 <AlertDescription>{message}</AlertDescription>
               </Alert>
             )}
             <Field orientation="horizontal" className="mb-4">
               <Checkbox
                 id="privacy-consent"
+                data-testid="contribution-consent"
                 checked={consented}
                 onCheckedChange={(checked) => setConsented(checked === true)}
               />
               <FieldContent>
                 <FieldLabel htmlFor="privacy-consent" className="font-normal">
-                  I agree that my answers and any images I upload are processed for this book as
-                  described in the privacy policy.
+                  {m.ui_i_agree_that_my_answers_and_any_images_i_upload_are_processed_for(
+                    {},
+                    { locale }
+                  )}{" "}
                 </FieldLabel>
                 <FieldDescription>
-                  Read the{" "}
+                  {m.ui_read_the({}, { locale })}{" "}
                   <a href="/privacy" target="_blank" rel="noreferrer" className="text-primary">
-                    privacy policy
+                    {m.ui_privacy_policy({}, { locale })}{" "}
                   </a>
-                  . Your consent is needed before this form can be submitted.
+                  {m.ui_your_consent_is_needed_before_this_form_can_be_submitted(
+                    {},
+                    { locale }
+                  )}{" "}
                 </FieldDescription>
               </FieldContent>
             </Field>
             <Button
+              data-testid="submit-contribution"
               type="submit"
               size="lg"
               className="w-full"
@@ -558,7 +618,9 @@ export function PublicForm({ token, title, formSchema }: PublicFormProps) {
               ) : (
                 <SendIcon data-icon="inline-start" />
               )}
-              {status === "submitting" ? "Processing and submitting…" : "Submit once"}
+              {status === "submitting"
+                ? m.ui_processing_and_submitting({}, { locale })
+                : m.ui_submit_once({}, { locale })}
             </Button>
           </div>
         </Card>

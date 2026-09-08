@@ -1,3 +1,4 @@
+import * as m from "#/paraglide/messages.js"
 import { type LayoutElement, type LayoutRecord, type LayoutRole } from "./types.ts"
 
 export const LAYOUT_ROLES = [
@@ -24,13 +25,13 @@ export function isStandaloneRole(role: LayoutRole): boolean {
 export function layoutRoleLabel(role: LayoutRole): string {
   switch (role) {
     case "submission":
-      return "Response layout"
+      return m.ui_response_layout()
     case "front-cover":
-      return "Front cover"
+      return m.ui_front_cover()
     case "back-cover":
-      return "Back cover"
+      return m.ui_back_cover()
     case "static":
-      return "Standalone page"
+      return m.ui_standalone_page()
   }
 }
 
@@ -84,5 +85,7 @@ export function reorderableLayouts(layouts: LayoutRecord[]): LayoutRecord[] {
 }
 
 export function defaultLayoutName(role: LayoutRole, existingCount: number): string {
-  return role === "submission" ? `Layout ${existingCount + 1}` : layoutRoleLabel(role)
+  return role === "submission"
+    ? m.layout_number({ value0: existingCount + 1 })
+    : layoutRoleLabel(role)
 }
