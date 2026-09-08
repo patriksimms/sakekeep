@@ -305,7 +305,7 @@ test("a new account starts in project creation and editor controls stay limited"
   await expect(page.getByTestId("button-lock-collection")).toHaveCount(0)
 })
 
-test("invitation landing drops the email ticket, remembers the link, and avoids new-project onboarding", async ({
+test("invitation landing preserves valid links without granting access and explains malformed links", async ({
   page,
 }) => {
   await page.route("**/api/projects", (route) => route.fulfill({ json: { projects: [] } }))
@@ -328,6 +328,8 @@ test("invitation landing drops the email ticket, remembers the link, and avoids 
   await expect(page.getByTestId("heading-no-keepsakes-yet")).toBeVisible()
   await expect(page.getByRole("dialog")).toHaveCount(0)
   expect(acceptRequests).toEqual([])
+  await page.goto("/invitations/not-a-token")
+  await expect(page.getByRole("alert")).toHaveText("Invitation not found.")
 })
 
 test("copied links use authenticated preview and explicit single-account acceptance", async () => {
