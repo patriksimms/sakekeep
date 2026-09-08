@@ -72,6 +72,7 @@ function RoleSelect({
 
 export function Collaborators({ projectId, access }: { projectId: string; access: ProjectAccess }) {
   const [email, setEmail] = useState("")
+  const [role, setRole] = useState<CollaboratorRole>("editor")
   const [invitationUrl, setInvitationUrl] = useState("")
   const queryClient = useQueryClient()
   const change = useMutation({
@@ -118,7 +119,7 @@ export function Collaborators({ projectId, access }: { projectId: string; access
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            change.mutate({ action: "invite", email, role: "editor" })
+            change.mutate({ action: "invite", email, role })
           }}
         >
           <FieldGroup className="sm:flex-row sm:items-end">
@@ -132,6 +133,10 @@ export function Collaborators({ projectId, access }: { projectId: string; access
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
+            </Field>
+            <Field className="sm:w-40">
+              <FieldLabel>{m.access_role()}</FieldLabel>
+              <RoleSelect value={role} onChange={setRole} label={m.access_role()} />
             </Field>
             <Button type="submit" disabled={change.isPending || !email.trim()}>
               {m.access_invite()}
