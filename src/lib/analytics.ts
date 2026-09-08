@@ -27,6 +27,11 @@ type RegenerationProperties = {
 }
 
 interface AnalyticsEvents {
+  "collaborators:changed": {
+    action: "invite" | "change" | "revoke" | "transfer"
+    role: "organizer" | "editor" | null
+  }
+  "invitation:accepted": Record<string, never>
   "locale:changed": { previous_locale: Locale; locale: Locale }
   "project:created": { book_language: Locale; ui_locale: Locale }
   "book_review:regeneration_attempt": RegenerationProperties

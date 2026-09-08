@@ -8,7 +8,7 @@ export const Route = createFileRoute("/sign-in/$")({
 function Page() {
   return (
     <div className="flex min-h-[calc(100svh-10rem)] items-center justify-center py-12">
-      <SignIn />
+      <SignIn fallbackRedirectUrl="/projects" />
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import { Collaborators } from "#/components/collaborators"
+import { canManageProject, type ProjectAccess } from "#/domain/project-access"
 import { projectStateLabel, bookStatusLabel } from "#/domain/project-labels.ts"
 import { getLocale } from "#/paraglide/runtime.js"
 import * as m from "#/paraglide/messages.js"
@@ -64,7 +66,7 @@ import {
   type BookView,
   type WorkspaceStep,
 } from "#/domain/workspace-tabs.ts"
-import { projectApi } from "#/lib/api.ts"
+import { api, projectApi } from "#/lib/api.ts"
 
 export const Route = createFileRoute("/projects/$projectId")({
   validateSearch: (search): { tab?: WorkspaceStep; bookView?: BookView } => ({
@@ -127,6 +129,12 @@ function ProjectWorkspace() {
     queryFn: () => projectApi.get(projectId, true),
     refetchInterval: (query) => (query.state.data?.state === "collecting" ? 5_000 : false),
   })
+  const accessQuery = useQuery({
+    queryKey: ["project-access", projectId],
+    queryFn: () => api<ProjectAccess>(`/api/projects/${projectId}/collaborators`),
+    refetchInterval: 5_000,
+  })
+  const canManage = !accessQuery.isError && canManageProject(accessQuery.data?.role)
   const [editingTitle, setEditingTitle] = useState(false)
   const [title, setTitle] = useState("")
 
@@ -212,6 +220,12 @@ function ProjectWorkspace() {
     )
   }
 
+  const visibleSteps = canManage ? steps : steps.filter((step) => step.value !== "form")
+  const activeTab =
+    !canManage && (!search.tab || search.tab === "form")
+      ? "responses"
+      : (search.tab ?? defaultWorkspaceStep(project.state))
+
   return (
     <main id="main-content" className="mx-auto max-w-[1540px] px-4 py-8 sm:px-6">
       <Link
@@ -228,7 +242,7 @@ function ProjectWorkspace() {
 
       <Card className="mb-6 bg-card/90" inert={bookBusy}>
         <CardHeader>
-          {editingTitle ? (
+          {editingTitle && canManage ? (
             <form
               onSubmit={async (event) => {
                 event.preventDefault()
@@ -268,7 +282,7 @@ function ProjectWorkspace() {
                 className="flex items-center gap-2 text-3xl"
               >
                 {project.title}
-                {!project.archivedAt && (
+                {canManage && !project.archivedAt && (
                   <Button
                     data-testid="button-rename-project"
                     variant="ghost"
@@ -327,39 +341,82 @@ function ProjectWorkspace() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {project.archivedAt ? (
-              <Button
-                data-testid="button-unarchive-project"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    setProject(await projectApi.action(project.id, "unarchive"))
-                    toast.success(m.ui_project_unarchived())
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : m.ui_unarchive_failed())
-                  }
-                }}
-              >
-                <ArchiveRestoreIcon data-icon="inline-start" />
-                {m.ui_unarchive_project()}{" "}
-              </Button>
-            ) : (
+            {accessQuery.data && <Collaborators projectId={projectId} access={accessQuery.data} />}
+            {canManage &&
+              (project.archivedAt ? (
+                <Button
+                  data-testid="button-unarchive-project"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      setProject(await projectApi.action(project.id, "unarchive"))
+                      toast.success(m.ui_project_unarchived())
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : m.ui_unarchive_failed())
+                    }
+                  }}
+                >
+                  <ArchiveRestoreIcon data-icon="inline-start" />
+                  {m.ui_unarchive_project()}{" "}
+                </Button>
+              ) : (
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    data-testid="button-archive-project"
+                    render={<Button variant="outline" size="sm" />}
+                  >
+                    <ArchiveIcon data-icon="inline-start" />
+                    {m.ui_archive_project()}{" "}
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle data-testid="heading-archive-this-project">
+                        {m.ui_archive_this_project()}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {m.archive_confirmation({ state: projectStateLabel(project.state) })}{" "}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-testid="button-cancel">
+                        {m.ui_cancel()}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        data-testid="button-archive-project"
+                        onClick={async () => {
+                          try {
+                            setProject(await projectApi.action(project.id, "archive"))
+                            toast.success(m.ui_project_archived())
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error ? error.message : m.ui_archive_failed()
+                            )
+                          }
+                        }}
+                      >
+                        {m.ui_archive_project()}{" "}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ))}
+            {accessQuery.data?.role === "owner" && (
               <AlertDialog>
                 <AlertDialogTrigger
-                  data-testid="button-archive-project"
-                  render={<Button variant="outline" size="sm" />}
+                  data-testid="button-delete-project"
+                  render={<Button variant="ghost" size="sm" />}
                 >
-                  <ArchiveIcon data-icon="inline-start" />
-                  {m.ui_archive_project()}{" "}
+                  <Trash2Icon data-icon="inline-start" />
+                  {m.ui_delete_project()}{" "}
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle data-testid="heading-archive-this-project">
-                      {m.ui_archive_this_project()}
+                    <AlertDialogTitle data-testid="heading-delete-this-local-project">
+                      {m.ui_delete_this_local_project()}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      {m.archive_confirmation({ state: projectStateLabel(project.state) })}{" "}
+                      {m.ui_the_project_submissions_layouts_stored_image_masters_previews_and()}{" "}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -367,64 +424,27 @@ function ProjectWorkspace() {
                       {m.ui_cancel()}
                     </AlertDialogCancel>
                     <AlertDialogAction
-                      data-testid="button-archive-project"
+                      data-testid="button-delete-everything"
+                      variant="destructive"
                       onClick={async () => {
                         try {
-                          setProject(await projectApi.action(project.id, "archive"))
-                          toast.success(m.ui_project_archived())
+                          await projectApi.remove(project.id)
+                          await queryClient.invalidateQueries({
+                            queryKey: ["projects"],
+                          })
+                          toast.success(m.ui_project_deleted())
+                          await navigate({ to: "/projects" })
                         } catch (error) {
-                          toast.error(
-                            error instanceof Error ? error.message : m.ui_archive_failed()
-                          )
+                          toast.error(error instanceof Error ? error.message : m.ui_delete_failed())
                         }
                       }}
                     >
-                      {m.ui_archive_project()}{" "}
+                      {m.ui_delete_everything()}{" "}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            <AlertDialog>
-              <AlertDialogTrigger
-                data-testid="button-delete-project"
-                render={<Button variant="ghost" size="sm" />}
-              >
-                <Trash2Icon data-icon="inline-start" />
-                {m.ui_delete_project()}{" "}
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle data-testid="heading-delete-this-local-project">
-                    {m.ui_delete_this_local_project()}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {m.ui_the_project_submissions_layouts_stored_image_masters_previews_and()}{" "}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel data-testid="button-cancel">{m.ui_cancel()}</AlertDialogCancel>
-                  <AlertDialogAction
-                    data-testid="button-delete-everything"
-                    variant="destructive"
-                    onClick={async () => {
-                      try {
-                        await projectApi.remove(project.id)
-                        await queryClient.invalidateQueries({
-                          queryKey: ["projects"],
-                        })
-                        toast.success(m.ui_project_deleted())
-                        await navigate({ to: "/projects" })
-                      } catch (error) {
-                        toast.error(error instanceof Error ? error.message : m.ui_delete_failed())
-                      }
-                    }}
-                  >
-                    {m.ui_delete_everything()}{" "}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
         </CardContent>
       </Card>
@@ -443,7 +463,7 @@ function ProjectWorkspace() {
 
       <Tabs
         key={project.id}
-        value={search.tab ?? defaultWorkspaceStep(project.state)}
+        value={activeTab}
         onValueChange={(value) => {
           void navigate({
             to: "/projects/$projectId",
@@ -459,7 +479,7 @@ function ProjectWorkspace() {
           variant="line"
           className="mb-6 h-auto w-full justify-start overflow-x-auto rounded-xl border bg-card/80 p-1"
         >
-          {steps.map((item, index) => (
+          {visibleSteps.map((item, index) => (
             <TabsTrigger
               data-testid={`workspace-${item.value}`}
               key={item.value}
@@ -475,10 +495,11 @@ function ProjectWorkspace() {
           ))}
         </TabsList>
         <TabsContent value="form" inert={bookBusy}>
-          <FormBuilder project={project} onProjectChange={setProject} />
+          {canManage && <FormBuilder project={project} onProjectChange={setProject} />}
         </TabsContent>
         <TabsContent value="responses" inert={bookBusy}>
           <SubmissionsPanel
+            canManage={canManage}
             project={project}
             onProjectChange={setProject}
             onRefresh={() => void projectQuery.refetch()}

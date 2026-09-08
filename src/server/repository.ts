@@ -57,12 +57,13 @@ import {
   exportsTable,
   layouts,
   projects,
+  projectMembers,
   submissionEdits,
   submissions,
 } from "./db/schema"
 import { env } from "./env"
 import { HttpError } from "./http"
-import { deleteObjects } from "./object-store"
+import { deleteObjects, getObject, putObject } from "./object-store"
 import { shareTokenForProject, shareTokenHash } from "./share-token"
 
 function iso(value: Date): string {
@@ -80,6 +81,18 @@ function layoutRecord(row: typeof layouts.$inferSelect): LayoutRecord {
     schema: row.schema,
     updatedAt: iso(row.updatedAt),
   }
+}
+
+function decorativeAssetIds(rows: Array<{ schema: LayoutSchema }>) {
+  return [
+    ...new Set(
+      rows.flatMap((layout) =>
+        layout.schema.elements.flatMap((element) =>
+          element.type === "decorative-image" && element.assetId ? [element.assetId] : []
+        )
+      )
+    ),
+  ]
 }
 
 function submissionSummary(
@@ -140,7 +153,7 @@ function assertNotArchived(project: { archivedAt: Date | null }): void {
   }
 }
 
-export async function listProjects(): Promise<ProjectSummary[]> {
+export async function listProjects(userId?: string): Promise<ProjectSummary[]> {
   const rows = await db
     .select({
       project: projects,
@@ -148,6 +161,23 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     })
     .from(projects)
     .leftJoin(submissions, eq(submissions.projectId, projects.id))
+    .where(
+      userId
+        ? or(
+            eq(projects.ownerUserId, userId),
+            and(
+              isNotNull(projects.ownerUserId),
+              inArray(
+                projects.id,
+                db
+                  .select({ projectId: projectMembers.projectId })
+                  .from(projectMembers)
+                  .where(eq(projectMembers.userId, userId))
+              )
+            )
+          )
+        : undefined
+    )
     .groupBy(projects.id)
     .orderBy(desc(projects.updatedAt))
 
@@ -387,6 +417,7 @@ export async function updateSubmissionTextAnswers(input: {
 }
 
 export async function createProject(input: {
+  ownerUserId?: string
   bookLanguage?: Locale
   title: string
   occasion?: string | null
@@ -399,6 +430,7 @@ export async function createProject(input: {
   await db.insert(projects).values({
     id,
     title,
+    ownerUserId: input.ownerUserId ?? "demo-organizer",
     occasion: input.occasion?.trim() || null,
     bookLanguage: input.bookLanguage ?? "de",
     formSchema: emptyFormSchema(),
@@ -556,8 +588,26 @@ export async function unarchiveProject(projectId: string): Promise<Project> {
   return getProject(projectId, true)
 }
 
-export async function duplicateProject(projectId: string): Promise<Project> {
+export async function duplicateProject(
+  projectId: string,
+  ownerUserId = "demo-organizer"
+): Promise<Project> {
   const newId = crypto.randomUUID()
+  const plannedLayouts = await db
+    .select({ schema: layouts.schema })
+    .from(layouts)
+    .where(eq(layouts.projectId, projectId))
+  const copiedAssetIds = new Map(
+    decorativeAssetIds(plannedLayouts).map((id) => [id, crypto.randomUUID()])
+  )
+  // Reserve before opening the transaction so concurrent copies cannot exhaust the pool
+  // while each waits for a second connection. Failed copies leave recoverable tombstones.
+  await reserveObjects(
+    [...copiedAssetIds.values()].flatMap((id) => [
+      `projects/${newId}/decorative/${id}/master`,
+      `projects/${newId}/decorative/${id}/preview`,
+    ])
+  )
   await db.transaction(async (tx) => {
     const [source] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("share")
     if (!source) throw new HttpError(404, m.ui_project_not_found())
@@ -566,6 +616,7 @@ export async function duplicateProject(projectId: string): Promise<Project> {
     }
     await tx.insert(projects).values({
       id: newId,
+      ownerUserId,
       title: m.project_copy_title({ value0: source.title }),
       occasion: source.occasion,
       bookLanguage: source.bookLanguage,
@@ -578,6 +629,41 @@ export async function duplicateProject(projectId: string): Promise<Project> {
       .from(layouts)
       .where(eq(layouts.projectId, projectId))
       .orderBy(asc(layouts.position))
+    const decorativeIds = decorativeAssetIds(sourceLayouts)
+    const sourceAssets = decorativeIds.length
+      ? await tx
+          .select()
+          .from(assets)
+          .where(and(eq(assets.projectId, projectId), inArray(assets.id, decorativeIds)))
+      : []
+    for (const asset of sourceAssets) {
+      const id = copiedAssetIds.get(asset.id)
+      if (!id) throw new HttpError(409, m.access_copy_retry())
+      const objectKey = `projects/${newId}/decorative/${id}/master`
+      const previewObjectKey = `projects/${newId}/decorative/${id}/preview`
+      const keys = [objectKey, previewObjectKey]
+      for (const [from, key] of [
+        [asset.objectKey, objectKey],
+        [asset.previewObjectKey, previewObjectKey],
+      ] as const) {
+        const object = await getObject(from)
+        await putObject({ key, body: object.body, contentType: object.contentType })
+      }
+      const released = await tx
+        .delete(assetTombstones)
+        .where(and(inArray(assetTombstones.objectKey, keys), isNull(assetTombstones.claimedAt)))
+        .returning()
+      if (released.length !== keys.length) throw new HttpError(409, m.access_copy_retry())
+      await tx.insert(assets).values({
+        ...asset,
+        id,
+        projectId: newId,
+        submissionId: null,
+        kind: "decorative-image",
+        objectKey,
+        previewObjectKey,
+      })
+    }
     if (sourceLayouts.length > 0) {
       await tx.insert(layouts).values(
         sourceLayouts.map((layout) => ({
@@ -586,7 +672,17 @@ export async function duplicateProject(projectId: string): Promise<Project> {
           name: layout.name,
           position: layout.position,
           role: layout.role,
-          schema: layout.schema,
+          schema: {
+            ...layout.schema,
+            elements: layout.schema.elements.map((element) =>
+              element.type === "decorative-image"
+                ? {
+                    ...element,
+                    assetId: element.assetId ? copiedAssetIds.get(element.assetId) : undefined,
+                  }
+                : element
+            ),
+          },
         }))
       )
     }
@@ -848,6 +944,20 @@ export async function updateLayout(input: {
     if (!project) throw new HttpError(404, m.ui_project_not_found())
     assertNotArchived(project)
     if (input.schema) {
+      const ids = [
+        ...new Set(
+          input.schema.elements.flatMap((element) =>
+            element.type === "decorative-image" && element.assetId ? [element.assetId] : []
+          )
+        ),
+      ]
+      if (ids.length > 0) {
+        const owned = await tx
+          .select({ id: assets.id })
+          .from(assets)
+          .where(and(eq(assets.projectId, input.projectId), inArray(assets.id, ids)))
+        if (owned.length !== ids.length) throw new HttpError(422, m.access_error_11())
+      }
       const specification = pageSpecification(project.pageFormat, project.pageOrientation)
       if (
         input.schema.trim.widthMm !== specification.trimWidthMm ||
@@ -1374,8 +1484,15 @@ export async function createSubmissionRecord(input: {
   })
 }
 
-export async function getAsset(assetId: string): Promise<typeof assets.$inferSelect> {
-  const [asset] = await db.select().from(assets).where(eq(assets.id, assetId)).limit(1)
+export async function getAsset(
+  assetId: string,
+  projectId?: string
+): Promise<typeof assets.$inferSelect> {
+  const [asset] = await db
+    .select()
+    .from(assets)
+    .where(and(eq(assets.id, assetId), projectId ? eq(assets.projectId, projectId) : undefined))
+    .limit(1)
   if (!asset) throw new HttpError(404, m.ui_asset_not_found())
   return asset
 }

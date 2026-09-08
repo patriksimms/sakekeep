@@ -1,10 +1,35 @@
 # Coolify production deployment
 
-This runbook deploys Sakekeep as a private Coolify Docker Compose stack. It is
-not authorization guidance: organizer routes must be protected by
-[issue #23](https://github.com/patriksimms/sakekeep/issues/23), and the Clerk
-production instance must restrict sign-up, before the hostname is exposed to
-untrusted users.
+This runbook deploys Sakekeep as a Coolify Docker Compose stack. Projects are private
+and membership is stored in Sakekeep. Clerk handles accounts and invitation email.
+
+## Opening registration on an existing installation
+
+Keep Clerk registration restricted while deploying this change. Do not apply the
+committed public Clerk configuration until the following steps have finished:
+
+1. Back up the database and deploy the new image and schema migration.
+2. In the app container, run `bun run scripts/backfill-project-owners.ts patriksimms@outlook.de`.
+   It requires the environment's `DATABASE_URL` and `CLERK_SECRET_KEY`, resolves exactly
+   one account with that verified email, and assigns only projects without an owner.
+   It is safe to repeat and does not change ownership of newer projects.
+3. Verify the owner can open existing projects and a separate account cannot list,
+   read, edit, or download their files. Unassigned projects remain inaccessible.
+4. Apply `clerk/auth-access-control.json` to the intended Clerk instance. Verify
+   `auth_access_control.sign_up_mode` is `public`. New accounts can now create projects.
+5. Set Clerk's sign-in and sign-up paths to `/sign-in` and `/sign-up`, with `/projects`
+   as the fallback destination. Allow the application's `APP_ORIGIN` for redirects.
+   Invitations redirect to `/invitations/:token`, which handles both existing and new accounts.
+6. Send a real test invitation from the deployed app and verify registration/sign-in,
+   email verification, project acceptance, and revocation with a separate account.
+
+The backfill and Clerk configuration changes are explicit deployment operations,
+not automatic application startup tasks. Use each environment's own Clerk keys.
+No additional email service, secret, or workspace configuration is required.
+Clerk sends invitation emails through its application invitation API, which is
+limited to 100 requests per hour per instance. Delivery errors are shown in the app;
+retry sends a fresh invitation. Sakekeep binds seven-day invitations to a verified
+email and stores only a token hash. Revoked and expired links cannot grant access.
 
 ## Stack and configuration
 
@@ -68,8 +93,7 @@ bun run scripts/check-production-compose.ts
 5. Assign `https://<hostname>:3000` to the `app` service only. `3000` is the
    container target; Coolify's proxy serves normal public HTTPS. Do not add
    domains or host port mappings for PostgreSQL.
-6. Keep the resource private until organizer authorization and restricted Clerk
-   sign-up from issue #23 have been verified.
+6. Verify project isolation, then follow the registration steps above.
 
 The `postgres-data` named volume survives app rebuilds and normal redeployments.
 Objects persist in the external object-store bucket. Never select a destructive

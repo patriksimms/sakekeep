@@ -2,7 +2,7 @@ import * as m from "#/paraglide/messages.js"
 import { deDE, enUS } from "@clerk/localizations"
 import { loadPublicProject } from "#/lib/public-project.ts"
 import { getLocale } from "#/paraglide/runtime.js"
-import { ClerkProvider } from "@clerk/tanstack-react-start"
+import { ClerkProvider, useAuth } from "@clerk/tanstack-react-start"
 import { shadcn } from "@clerk/ui/themes"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
@@ -80,18 +80,9 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { readerLocale } = Route.useRouteContext()
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { staleTime: 5_000, retry: 1 },
-          mutations: { retry: 0 },
-        },
-      })
-  )
   const app = (
     <>
-      <QueryClientProvider client={queryClient}>
+      <AccountQueries>
         <ThemeProvider>
           <TooltipProvider>
             <a
@@ -109,7 +100,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <Analytics />
           </TooltipProvider>
         </ThemeProvider>
-      </QueryClientProvider>
+      </AccountQueries>
       <Scripts />
     </>
   )
@@ -133,4 +124,31 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </body>
     </html>
   )
+}
+
+function AccountQueries({ children }: { children: React.ReactNode }) {
+  return isDemoMode ? (
+    <QueryScope>{children}</QueryScope>
+  ) : (
+    <AuthenticatedQueries>{children}</AuthenticatedQueries>
+  )
+}
+
+function AuthenticatedQueries({ children }: { children: React.ReactNode }) {
+  const { userId } = useAuth()
+  // Remount both the query cache and editors when Clerk switches accounts.
+  return <QueryScope key={userId ?? "signed-out"}>{children}</QueryScope>
+}
+
+function QueryScope({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 5_000, retry: 1 },
+          mutations: { retry: 0 },
+        },
+      })
+  )
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }

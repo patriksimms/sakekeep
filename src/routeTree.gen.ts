@@ -16,6 +16,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiProjectsRouteImport } from './routes/api.projects'
 import { Route as IngestSplatRouteImport } from './routes/ingest.$'
+import { Route as InvitationsTokenRouteImport } from './routes/invitations.$token'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as STokenRouteImport } from './routes/s.$token'
@@ -23,12 +24,14 @@ import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as ApiAssetsAssetIdRouteImport } from './routes/api.assets.$assetId'
 import { Route as ApiExportsExportIdRouteImport } from './routes/api.exports.$exportId'
+import { Route as ApiInvitationsTokenRouteImport } from './routes/api.invitations.$token'
 import { Route as ApiProjectsProjectIdRouteImport } from './routes/api.projects.$projectId'
 import { Route as ApiShareTokenRouteImport } from './routes/api.share.$token'
 import { Route as ApiProjectsProjectIdArchiveRouteImport } from './routes/api.projects.$projectId.archive'
 import { Route as ApiProjectsProjectIdAssetsRouteImport } from './routes/api.projects.$projectId.assets'
 import { Route as ApiProjectsProjectIdBookRouteImport } from './routes/api.projects.$projectId.book'
 import { Route as ApiProjectsProjectIdCloseRouteImport } from './routes/api.projects.$projectId.close'
+import { Route as ApiProjectsProjectIdCollaboratorsRouteImport } from './routes/api.projects.$projectId.collaborators'
 import { Route as ApiProjectsProjectIdDuplicateRouteImport } from './routes/api.projects.$projectId.duplicate'
 import { Route as ApiProjectsProjectIdExportRouteImport } from './routes/api.projects.$projectId.export'
 import { Route as ApiProjectsProjectIdLayoutsRouteImport } from './routes/api.projects.$projectId.layouts'
@@ -73,6 +76,11 @@ const IngestSplatRoute = IngestSplatRouteImport.update({
   path: '/ingest/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvitationsTokenRoute = InvitationsTokenRouteImport.update({
+  id: '/invitations/$token',
+  path: '/invitations/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
@@ -108,6 +116,11 @@ const ApiExportsExportIdRoute = ApiExportsExportIdRouteImport.update({
   path: '/api/exports/$exportId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiInvitationsTokenRoute = ApiInvitationsTokenRouteImport.update({
+  id: '/api/invitations/$token',
+  path: '/api/invitations/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiProjectsProjectIdRoute = ApiProjectsProjectIdRouteImport.update({
   id: '/$projectId',
   path: '/$projectId',
@@ -140,6 +153,12 @@ const ApiProjectsProjectIdCloseRoute =
   ApiProjectsProjectIdCloseRouteImport.update({
     id: '/close',
     path: '/close',
+    getParentRoute: () => ApiProjectsProjectIdRoute,
+  } as any)
+const ApiProjectsProjectIdCollaboratorsRoute =
+  ApiProjectsProjectIdCollaboratorsRouteImport.update({
+    id: '/collaborators',
+    path: '/collaborators',
     getParentRoute: () => ApiProjectsProjectIdRoute,
   } as any)
 const ApiProjectsProjectIdDuplicateRoute =
@@ -199,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/ingest/$': typeof IngestSplatRoute
+  '/invitations/$token': typeof InvitationsTokenRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -206,12 +226,14 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof ProjectsIndexRoute
   '/api/assets/$assetId': typeof ApiAssetsAssetIdRoute
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
+  '/api/invitations/$token': typeof ApiInvitationsTokenRoute
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
   '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
   '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRouteWithChildren
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
+  '/api/projects/$projectId/collaborators': typeof ApiProjectsProjectIdCollaboratorsRoute
   '/api/projects/$projectId/duplicate': typeof ApiProjectsProjectIdDuplicateRoute
   '/api/projects/$projectId/export': typeof ApiProjectsProjectIdExportRoute
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
@@ -229,6 +251,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/ingest/$': typeof IngestSplatRoute
+  '/invitations/$token': typeof InvitationsTokenRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -236,12 +259,14 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsIndexRoute
   '/api/assets/$assetId': typeof ApiAssetsAssetIdRoute
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
+  '/api/invitations/$token': typeof ApiInvitationsTokenRoute
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
   '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
   '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRouteWithChildren
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
+  '/api/projects/$projectId/collaborators': typeof ApiProjectsProjectIdCollaboratorsRoute
   '/api/projects/$projectId/duplicate': typeof ApiProjectsProjectIdDuplicateRoute
   '/api/projects/$projectId/export': typeof ApiProjectsProjectIdExportRoute
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
@@ -260,6 +285,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/ingest/$': typeof IngestSplatRoute
+  '/invitations/$token': typeof InvitationsTokenRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$token': typeof STokenRoute
   '/sign-in/$': typeof SignInSplatRoute
@@ -267,12 +293,14 @@ export interface FileRoutesById {
   '/projects/': typeof ProjectsIndexRoute
   '/api/assets/$assetId': typeof ApiAssetsAssetIdRoute
   '/api/exports/$exportId': typeof ApiExportsExportIdRoute
+  '/api/invitations/$token': typeof ApiInvitationsTokenRoute
   '/api/projects/$projectId': typeof ApiProjectsProjectIdRouteWithChildren
   '/api/share/$token': typeof ApiShareTokenRoute
   '/api/projects/$projectId/archive': typeof ApiProjectsProjectIdArchiveRoute
   '/api/projects/$projectId/assets': typeof ApiProjectsProjectIdAssetsRouteWithChildren
   '/api/projects/$projectId/book': typeof ApiProjectsProjectIdBookRoute
   '/api/projects/$projectId/close': typeof ApiProjectsProjectIdCloseRoute
+  '/api/projects/$projectId/collaborators': typeof ApiProjectsProjectIdCollaboratorsRoute
   '/api/projects/$projectId/duplicate': typeof ApiProjectsProjectIdDuplicateRoute
   '/api/projects/$projectId/export': typeof ApiProjectsProjectIdExportRoute
   '/api/projects/$projectId/layouts': typeof ApiProjectsProjectIdLayoutsRouteWithChildren
@@ -292,6 +320,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/projects'
     | '/ingest/$'
+    | '/invitations/$token'
     | '/projects/$projectId'
     | '/s/$token'
     | '/sign-in/$'
@@ -299,12 +328,14 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/api/assets/$assetId'
     | '/api/exports/$exportId'
+    | '/api/invitations/$token'
     | '/api/projects/$projectId'
     | '/api/share/$token'
     | '/api/projects/$projectId/archive'
     | '/api/projects/$projectId/assets'
     | '/api/projects/$projectId/book'
     | '/api/projects/$projectId/close'
+    | '/api/projects/$projectId/collaborators'
     | '/api/projects/$projectId/duplicate'
     | '/api/projects/$projectId/export'
     | '/api/projects/$projectId/layouts'
@@ -322,6 +353,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/projects'
     | '/ingest/$'
+    | '/invitations/$token'
     | '/projects/$projectId'
     | '/s/$token'
     | '/sign-in/$'
@@ -329,12 +361,14 @@ export interface FileRouteTypes {
     | '/projects'
     | '/api/assets/$assetId'
     | '/api/exports/$exportId'
+    | '/api/invitations/$token'
     | '/api/projects/$projectId'
     | '/api/share/$token'
     | '/api/projects/$projectId/archive'
     | '/api/projects/$projectId/assets'
     | '/api/projects/$projectId/book'
     | '/api/projects/$projectId/close'
+    | '/api/projects/$projectId/collaborators'
     | '/api/projects/$projectId/duplicate'
     | '/api/projects/$projectId/export'
     | '/api/projects/$projectId/layouts'
@@ -352,6 +386,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/projects'
     | '/ingest/$'
+    | '/invitations/$token'
     | '/projects/$projectId'
     | '/s/$token'
     | '/sign-in/$'
@@ -359,12 +394,14 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/api/assets/$assetId'
     | '/api/exports/$exportId'
+    | '/api/invitations/$token'
     | '/api/projects/$projectId'
     | '/api/share/$token'
     | '/api/projects/$projectId/archive'
     | '/api/projects/$projectId/assets'
     | '/api/projects/$projectId/book'
     | '/api/projects/$projectId/close'
+    | '/api/projects/$projectId/collaborators'
     | '/api/projects/$projectId/duplicate'
     | '/api/projects/$projectId/export'
     | '/api/projects/$projectId/layouts'
@@ -383,6 +420,7 @@ export interface RootRouteChildren {
   ApiHealthRoute: typeof ApiHealthRoute
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
   IngestSplatRoute: typeof IngestSplatRoute
+  InvitationsTokenRoute: typeof InvitationsTokenRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
   STokenRoute: typeof STokenRoute
   SignInSplatRoute: typeof SignInSplatRoute
@@ -390,6 +428,7 @@ export interface RootRouteChildren {
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   ApiAssetsAssetIdRoute: typeof ApiAssetsAssetIdRoute
   ApiExportsExportIdRoute: typeof ApiExportsExportIdRoute
+  ApiInvitationsTokenRoute: typeof ApiInvitationsTokenRoute
   ApiShareTokenRoute: typeof ApiShareTokenRoute
 }
 
@@ -444,6 +483,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IngestSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invitations/$token': {
+      id: '/invitations/$token'
+      path: '/invitations/$token'
+      fullPath: '/invitations/$token'
+      preLoaderRoute: typeof InvitationsTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/': {
       id: '/projects/'
       path: '/projects'
@@ -493,6 +539,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiExportsExportIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/invitations/$token': {
+      id: '/api/invitations/$token'
+      path: '/api/invitations/$token'
+      fullPath: '/api/invitations/$token'
+      preLoaderRoute: typeof ApiInvitationsTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/projects/$projectId': {
       id: '/api/projects/$projectId'
       path: '/$projectId'
@@ -533,6 +586,13 @@ declare module '@tanstack/react-router' {
       path: '/close'
       fullPath: '/api/projects/$projectId/close'
       preLoaderRoute: typeof ApiProjectsProjectIdCloseRouteImport
+      parentRoute: typeof ApiProjectsProjectIdRoute
+    }
+    '/api/projects/$projectId/collaborators': {
+      id: '/api/projects/$projectId/collaborators'
+      path: '/collaborators'
+      fullPath: '/api/projects/$projectId/collaborators'
+      preLoaderRoute: typeof ApiProjectsProjectIdCollaboratorsRouteImport
       parentRoute: typeof ApiProjectsProjectIdRoute
     }
     '/api/projects/$projectId/duplicate': {
@@ -629,6 +689,7 @@ interface ApiProjectsProjectIdRouteChildren {
   ApiProjectsProjectIdAssetsRoute: typeof ApiProjectsProjectIdAssetsRouteWithChildren
   ApiProjectsProjectIdBookRoute: typeof ApiProjectsProjectIdBookRoute
   ApiProjectsProjectIdCloseRoute: typeof ApiProjectsProjectIdCloseRoute
+  ApiProjectsProjectIdCollaboratorsRoute: typeof ApiProjectsProjectIdCollaboratorsRoute
   ApiProjectsProjectIdDuplicateRoute: typeof ApiProjectsProjectIdDuplicateRoute
   ApiProjectsProjectIdExportRoute: typeof ApiProjectsProjectIdExportRoute
   ApiProjectsProjectIdLayoutsRoute: typeof ApiProjectsProjectIdLayoutsRouteWithChildren
@@ -642,6 +703,8 @@ const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
   ApiProjectsProjectIdAssetsRoute: ApiProjectsProjectIdAssetsRouteWithChildren,
   ApiProjectsProjectIdBookRoute: ApiProjectsProjectIdBookRoute,
   ApiProjectsProjectIdCloseRoute: ApiProjectsProjectIdCloseRoute,
+  ApiProjectsProjectIdCollaboratorsRoute:
+    ApiProjectsProjectIdCollaboratorsRoute,
   ApiProjectsProjectIdDuplicateRoute: ApiProjectsProjectIdDuplicateRoute,
   ApiProjectsProjectIdExportRoute: ApiProjectsProjectIdExportRoute,
   ApiProjectsProjectIdLayoutsRoute:
@@ -675,6 +738,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthRoute: ApiHealthRoute,
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
   IngestSplatRoute: IngestSplatRoute,
+  InvitationsTokenRoute: InvitationsTokenRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
   STokenRoute: STokenRoute,
   SignInSplatRoute: SignInSplatRoute,
@@ -682,6 +746,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsIndexRoute: ProjectsIndexRoute,
   ApiAssetsAssetIdRoute: ApiAssetsAssetIdRoute,
   ApiExportsExportIdRoute: ApiExportsExportIdRoute,
+  ApiInvitationsTokenRoute: ApiInvitationsTokenRoute,
   ApiShareTokenRoute: ApiShareTokenRoute,
 }
 export const routeTree = rootRouteImport

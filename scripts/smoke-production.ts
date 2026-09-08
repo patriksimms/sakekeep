@@ -51,6 +51,16 @@ try {
   run("docker", [...compose, "build", "app", "migrate"])
   run("docker", [...compose, "up", "-d", "--wait"])
   run("docker", [...compose, "run", "--rm", "migrate", "bun", "run", "db:seed"])
+  run("docker", [
+    ...compose,
+    "exec",
+    "-T",
+    "app",
+    "bun",
+    "run",
+    "scripts/backfill-project-owners.ts",
+    process.env.CLERK_TEST_USER_EMAIL!,
+  ])
   Object.assign(environment, {
     PRODUCTION_SMOKE_PHASE: "create",
     PRODUCTION_SMOKE_STATE_PATH: statePath,

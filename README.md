@@ -117,8 +117,7 @@ workspace. There is no per-user project ownership or tenant isolation.
 
 - Authenticated organizer surfaces: `/projects/**`, `/layout-parity`,
   `/api/projects/**`, `/api/assets/**`, and `/api/exports/**`.
-- Public surfaces: `/`, `/imprint`, `/sign-in/**`, the restricted Clerk
-  invitation flow at `/sign-up/**`, `/s/:token`, `/api/share/:token`,
+- Public surfaces: `/`, `/imprint`, `/sign-in/**`, registration at `/sign-up/**`, `/invitations/:token`, `/s/:token`, `/api/share/:token`,
   `/api/health`, and static assets.
 - Signed-out organizer page requests redirect to `/sign-in` with a same-origin
   return path. Signed-out organizer API requests receive JSON `401`.
@@ -127,19 +126,14 @@ workspace. There is no per-user project ownership or tenant isolation.
 tests. Production startup and builds reject demo mode and missing Clerk keys.
 Never enable demo mode in a public deployment.
 
-The committed `clerk/auth-access-control.json` keeps registration restricted.
-After linking the application and creating its production instance, apply and
-verify both environments:
+The committed `clerk/auth-access-control.json` enables public registration. Before
+applying it to an existing installation, deploy project authorization and backfill
+legacy owners as described in [the deployment runbook](docs/DEPLOYMENT.md#opening-registration-on-an-existing-installation).
 
-```sh
-clerk config patch --instance dev --file clerk/auth-access-control.json --yes
-clerk config patch --instance prod --file clerk/auth-access-control.json --yes
-clerk config pull --instance dev --keys auth_access_control
-clerk config pull --instance prod --keys auth_access_control
-```
-
-Both `config pull` commands must report a non-public `sign_up_mode` before
-deployment.
+Project creators own their projects. Owners can transfer ownership to a collaborator
+or delete the project. Organizers manage settings and collaborators; editors work
+on contributions, photos, layouts, and book composition. Contribution links stay
+account-free. Copies belong to their creator and do not inherit collaborators.
 
 ## Architecture
 
@@ -186,7 +180,7 @@ procedure is in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 Do not expose a deployment publicly until organizer authorization and
-restricted Clerk sign-up in issue #23 are complete.
+project isolation and the ownership backfill are verified.
 
 ## Reset and cleanup
 

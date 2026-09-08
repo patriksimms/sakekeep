@@ -113,8 +113,8 @@ function pdfY(yMm: number, heightMm: number, specification: PageSpecification): 
   return pt(specification.mediaHeightMm - specification.bleedMm - yMm - heightMm)
 }
 
-async function embedImage(pdf: PDFDocument, assetId: string): Promise<PDFImage> {
-  const asset = await getAsset(assetId)
+async function embedImage(pdf: PDFDocument, assetId: string, projectId: string): Promise<PDFImage> {
+  const asset = await getAsset(assetId, projectId)
   const source = await getObject(asset.objectKey)
   return asset.mimeType === "image/png" ? pdf.embedPng(source.body) : pdf.embedJpg(source.body)
 }
@@ -270,6 +270,7 @@ function drawTextElement(input: {
 }
 
 async function drawElement(input: {
+  projectId: string
   locale?: Locale
   pdf: PDFDocument
   page: PDFPage
@@ -352,7 +353,7 @@ async function drawElement(input: {
   }
   if (element.type === "decorative-image") {
     if (!element.assetId) return
-    const image = await embedImage(input.pdf, element.assetId)
+    const image = await embedImage(input.pdf, element.assetId, input.projectId)
     input.assetResolutions.push({
       assetId: element.assetId,
       pageId: input.pageId,
@@ -392,7 +393,7 @@ async function drawElement(input: {
       )
       return
     }
-    const embeddedImage = await embedImage(input.pdf, image.assetId)
+    const embeddedImage = await embedImage(input.pdf, image.assetId, input.projectId)
     input.assetResolutions.push({
       assetId: image.assetId,
       pageId: input.pageId,
@@ -425,7 +426,9 @@ async function drawElement(input: {
   const slotPhotos = await Promise.all(
     slots.map(async (_slot, index) => {
       const image = images[index]
-      return image ? { image, embedded: await embedImage(input.pdf, image.assetId) } : undefined
+      return image
+        ? { image, embedded: await embedImage(input.pdf, image.assetId, input.projectId) }
+        : undefined
     })
   )
   withTopLeftRotation(page, geometry, input.specification, () => {
@@ -683,6 +686,7 @@ async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uin
     const palette = fillerPalette(layout.schema)
     for (const element of layout.schema.elements) {
       await drawElement({
+        projectId: input.book.projectId,
         locale: input.locale,
         pdf,
         page,

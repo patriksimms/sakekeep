@@ -33,3 +33,18 @@ export async function currentOrganizer(): Promise<OrganizerIdentity> {
     return { userId, name: userId }
   }
 }
+
+export async function currentUserId() {
+  if (isDemoMode) return "demo-organizer"
+  const { userId } = await auth({ treatPendingAsSignedOut: true })
+  if (!userId) throw new HttpError(401, "Authentication required.")
+  return userId
+}
+
+export async function verifiedAccountEmails(userId: string) {
+  if (isDemoMode) return ["demo@example.com"]
+  const user = await clerkClient().users.getUser(userId)
+  return user.emailAddresses
+    .filter((email) => email.verification?.status === "verified")
+    .map((email) => email.emailAddress.toLowerCase())
+}

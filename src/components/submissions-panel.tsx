@@ -109,10 +109,12 @@ export function SubmissionsPanel({
   project,
   onProjectChange,
   onRefresh,
+  canManage = true,
 }: {
   project: Project
   onProjectChange: (project: Project) => void
   onRefresh: () => void
+  canManage?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [editStart, setEditStart] = useState<{
@@ -546,7 +548,7 @@ export function SubmissionsPanel({
         </AlertDialogContent>
       </AlertDialog>
 
-      {project.state === "collecting" && !project.archivedAt && (
+      {canManage && project.state === "collecting" && !project.archivedAt && (
         <div className="flex flex-col items-end gap-1.5">
           <AlertDialog>
             <AlertDialogTrigger
