@@ -112,8 +112,10 @@ evidence lives under `visual-artifacts/`.
 
 ## Authentication and route policy
 
-Any user admitted to the linked Clerk instance can access the shared organizer
-workspace. There is no per-user project ownership or tenant isolation.
+Projects are private to their owner and invited collaborators. Organizers can
+manage project settings and collaborators; editors can edit contributions,
+photos, layouts, and books. Only the owner can delete or transfer a project.
+Contributor share links remain account-free.
 
 - Authenticated organizer surfaces: `/projects/**`, `/layout-parity`,
   `/api/projects/**`, `/api/assets/**`, and `/api/exports/**`.

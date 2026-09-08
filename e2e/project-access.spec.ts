@@ -77,12 +77,13 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
       ["GET", "/collaborators"],
       ["POST", "/collaborators"],
     ]) {
-      expect(
-        (await stranger.fetch(`${path}${suffix}`, { method })).status(),
-        `${method} ${suffix}`
-      ).toBe(404)
+      for (const url of [`${path}${suffix}`, `/API/Projects/${id}${suffix.toUpperCase()}`]) {
+        expect((await stranger.fetch(url, { method })).status(), `${method} ${url}`).toBe(404)
+      }
     }
     expect((await stranger.get(`/projects/${id}`, { maxRedirects: 0 })).status()).toBe(404)
+    expect((await stranger.get(`/Projects/${id}`, { maxRedirects: 0 })).status()).toBe(404)
+    expect((await owner.get(`/API/Projects/${id}`)).status()).toBe(200)
     const editorToken = await invite(owner, id!, "user_editor", "editor")
     expect((await stranger.post(`/api/invitations/${editorToken}`)).status()).toBe(403)
     expect((await editor.post(`/api/invitations/${editorToken}`)).status()).toBe(200)
@@ -93,6 +94,8 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
     expect((await unverified.post(`/api/invitations/${badToken}`)).status()).toBe(403)
     expect((await editor.patch(path, { data: { title: "Forbidden" } })).status()).toBe(403)
     expect((await editor.post(`${path}/publish`)).status()).toBe(403)
+    expect((await editor.post(`/API/Projects/${id}/PUBLISH`)).status()).toBe(403)
+    expect((await editor.delete(`/API/Projects/${id}`)).status()).toBe(403)
     expect((await editor.post(`${path}/archive`)).status()).toBe(403)
     expect(
       (
@@ -193,7 +196,11 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
     expect(upload.status()).toBe(201)
     const assetId = (await upload.json()).id
     for (const variant of ["master", "preview"]) {
-      expect((await stranger.get(`/api/assets/${assetId}?variant=${variant}`)).status()).toBe(404)
+      for (const resource of ["assets", "Assets"]) {
+        expect(
+          (await stranger.get(`/api/${resource}/${assetId}?variant=${variant}`)).status()
+        ).toBe(404)
+      }
       const image = await editor.get(`/api/assets/${assetId}?variant=${variant}`)
       expect(image.status()).toBe(200)
       expect(image.headers()["cache-control"]).toContain("no-store")
@@ -223,7 +230,9 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
     expect(exported.status()).toBe(201)
     const exportId = (await exported.json()).id
     for (const file of ["pdf", "report", "page-pdfs", "page-jpegs"]) {
-      expect((await stranger.get(`/api/exports/${exportId}?file=${file}`)).status()).toBe(404)
+      for (const resource of ["exports", "Exports"]) {
+        expect((await stranger.get(`/api/${resource}/${exportId}?file=${file}`)).status()).toBe(404)
+      }
       expect((await editor.get(`/api/exports/${exportId}?file=${file}`)).status()).toBe(200)
     }
     expect((await stranger.delete(`${path}/layouts/${layoutId}`)).status()).toBe(404)

@@ -21,7 +21,8 @@ export function projectPermission(method: string, resource: string): "edit" | "m
 export const projectAuthorizationMiddleware = createMiddleware({ type: "request" }).server(
   async ({ context, request, next }) => {
     try {
-      const pathname = new URL(request.url).pathname.replace(/\/+$/, "")
+      // TanStack matches routes case-insensitively. Protected IDs are UUIDs.
+      const pathname = new URL(request.url).pathname.toLowerCase().replace(/\/+$/, "")
       const projectMatch = /^\/(?:api\/)?projects\/([^/]+)(?:\/(.*))?$/.exec(pathname)
       const assetMatch = /^\/api\/(assets|exports)\/([^/]+)$/.exec(pathname)
       if (!projectMatch && !assetMatch) return next()
