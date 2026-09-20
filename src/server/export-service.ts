@@ -23,13 +23,58 @@ async function* bundleEntries(
   }
 }
 
+export interface ExportOptions {
+  marks: boolean
+  allowBlockingProblems: boolean
+  reviewedBookFingerprint: string | null
+}
+
+/**
+ * One line per export attempt. Exports are the slowest thing the server does and the only
+ * operation that can outlive the request that asked for it, so duration, size and outcome have
+ * to be visible without a reproduction — including for an export the organizer never saw finish.
+ */
+function logExport(fields: {
+  projectId: string
+  pageCount: number
+  durationMs: number
+  outcome: "completed" | "rejected" | "failed"
+  clientDisconnected: boolean
+}): void {
+  console.log(`[export] ${JSON.stringify(fields)}`)
+}
+
 export async function exportProject(
   projectId: string,
-  options: {
-    marks: boolean
-    allowBlockingProblems: boolean
-    reviewedBookFingerprint: string | null
+  options: ExportOptions,
+  /** The request's signal, so a completion after the organizer gave up is recorded as such. */
+  signal?: AbortSignal
+): Promise<ExportArtifact> {
+  const started = performance.now()
+  const progress = { pageCount: 0 }
+  const record = (outcome: "completed" | "rejected" | "failed") =>
+    logExport({
+      projectId,
+      pageCount: progress.pageCount,
+      durationMs: Math.round(performance.now() - started),
+      outcome,
+      clientDisconnected: signal?.aborted ?? false,
+    })
+  try {
+    const artifact = await runExport(projectId, options, progress)
+    record("completed")
+    return artifact
+  } catch (error) {
+    // A refused export is a normal answer to a book that is not ready; only the rest is a fault.
+    record(error instanceof HttpError ? "rejected" : "failed")
+    throw error
   }
+}
+
+async function runExport(
+  projectId: string,
+  options: ExportOptions,
+  progress: { pageCount: number }
 ): Promise<ExportArtifact> {
   const project = await getProject(projectId, true)
   if (project.archivedAt) {
@@ -58,6 +103,7 @@ export async function exportProject(
     throw new HttpError(409, m.resolve_blocking_problems({ value0: problems.length }), { problems })
   }
 
+  progress.pageCount = project.book.pages.length
   const specification = pageSpecification(project.pageFormat, project.pageOrientation)
   const renderInput = {
     locale: project.bookLanguage,
@@ -118,7 +164,7 @@ export async function exportProject(
   // preflight passed, so a rejected export never spends time on them. Each one is
   // rendered, zipped, and uploaded in a single pass, one page at a time, so a long book
   // never puts its pages and its archive on the heap together.
-  const pageCount = project.book.pages.length
+  const pageCount = progress.pageCount
   await putObjectStream({
     key: pagePdfZipObjectKey,
     body: zipEntries(

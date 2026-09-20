@@ -54,23 +54,24 @@ receives a Coolify domain.
 
 Configure these Coolify build-time and runtime values:
 
-| Variable                     | Scope         | Requirement                                      |
-| ---------------------------- | ------------- | ------------------------------------------------ |
-| `POSTGRES_PASSWORD`          | Runtime       | Unique generated password                        |
-| `DATABASE_URL`               | Runtime       | PostgreSQL URL with percent-encoded password     |
-| `S3_ENDPOINT`                | Runtime       | Object-store HTTPS endpoint                      |
-| `S3_REGION`                  | Runtime       | Region used to sign S3 requests                  |
-| `S3_ACCESS_KEY_ID`           | Runtime       | Object-store access key                          |
-| `S3_SECRET_ACCESS_KEY`       | Runtime       | Object-store secret key                          |
-| `S3_BUCKET`                  | Runtime       | Existing object-store bucket name                |
-| `SHARE_TOKEN_SECRET`         | Runtime       | At least 48 random characters; keep stable       |
-| `APP_ORIGIN`                 | Runtime       | Final `https://<hostname>` origin                |
-| `VITE_SAKEKEEP_DEMO_MODE`    | Build/runtime | Fixed to `false`                                 |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Build/runtime | Clerk production publishable key                 |
-| `CLERK_SECRET_KEY`           | Runtime       | Clerk production secret key                      |
-| `VITE_POSTHOG_PROJECT_TOKEN` | Build/runtime | Optional PostHog publishable project token       |
-| `POSTHOG_HOST`               | Runtime       | Optional; defaults to `https://eu.i.posthog.com` |
-| `NODE_ENV`, `HOST`, `PORT`   | Runtime       | Fixed to `production`, `0.0.0.0`, `3000`         |
+| Variable                      | Scope         | Requirement                                           |
+| ----------------------------- | ------------- | ----------------------------------------------------- |
+| `POSTGRES_PASSWORD`           | Runtime       | Unique generated password                             |
+| `DATABASE_URL`                | Runtime       | PostgreSQL URL with percent-encoded password          |
+| `S3_ENDPOINT`                 | Runtime       | Object-store HTTPS endpoint                           |
+| `S3_REGION`                   | Runtime       | Region used to sign S3 requests                       |
+| `S3_ACCESS_KEY_ID`            | Runtime       | Object-store access key                               |
+| `S3_SECRET_ACCESS_KEY`        | Runtime       | Object-store secret key                               |
+| `S3_BUCKET`                   | Runtime       | Existing object-store bucket name                     |
+| `SHARE_TOKEN_SECRET`          | Runtime       | At least 48 random characters; keep stable            |
+| `APP_ORIGIN`                  | Runtime       | Final `https://<hostname>` origin                     |
+| `VITE_SAKEKEEP_DEMO_MODE`     | Build/runtime | Fixed to `false`                                      |
+| `VITE_CLERK_PUBLISHABLE_KEY`  | Build/runtime | Clerk production publishable key                      |
+| `CLERK_SECRET_KEY`            | Runtime       | Clerk production secret key                           |
+| `VITE_POSTHOG_PROJECT_TOKEN`  | Build/runtime | Optional PostHog publishable project token            |
+| `POSTHOG_HOST`                | Runtime       | Optional; defaults to `https://eu.i.posthog.com`      |
+| `NODE_ENV`, `HOST`, `PORT`    | Runtime       | Fixed to `production`, `0.0.0.0`, `3000`              |
+| `SERVER_IDLE_TIMEOUT_SECONDS` | Runtime       | Optional; defaults to 10. Book exports always get 255 |
 
 Compose uses required-variable expressions, so missing secrets stop
 configuration before deployment. The application also rejects local defaults,

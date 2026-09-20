@@ -95,6 +95,34 @@ function messageFor(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error"
 }
 
+const exportPath = /^\/api\/projects\/[^/]+\/export$/
+
+export function isExportRequest(method: string, pathname: string): boolean {
+  return method === "POST" && exportPath.test(pathname)
+}
+
+/**
+ * Bun drops a connection that has been busy for longer than its idle timeout, which defaults to
+ * ten seconds. An export renders every page, builds both page bundles and uploads them before it
+ * answers, and a full book takes longer than that, so organizers saw a failure for an export the
+ * server went on to finish and store. Exports therefore get Bun's per-request maximum while every
+ * other request keeps the short default. `SERVER_IDLE_TIMEOUT_SECONDS` lets a deployment match a
+ * proxy in front of it, and lets the tests check the policy without waiting on real timeouts.
+ */
+const EXPORT_TIMEOUT_SECONDS = 255
+const DEFAULT_IDLE_TIMEOUT_SECONDS = 10
+
+export function idleTimeoutSeconds(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_IDLE_TIMEOUT_SECONDS
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > EXPORT_TIMEOUT_SECONDS) {
+    throw new Error(
+      `SERVER_IDLE_TIMEOUT_SECONDS must be an integer between 1 and ${EXPORT_TIMEOUT_SECONDS}.`
+    )
+  }
+  return parsed
+}
+
 export async function startServer() {
   if (process.env.NODE_ENV === "production") {
     validateProductionAuthConfiguration(process.env)
@@ -115,8 +143,13 @@ export async function startServer() {
   const server = Bun.serve({
     hostname,
     port,
-    async fetch(request) {
+    idleTimeout: idleTimeoutSeconds(process.env.SERVER_IDLE_TIMEOUT_SECONDS),
+    async fetch(request, self) {
       try {
+        const { pathname } = new URL(request.url)
+        if (isExportRequest(request.method, pathname)) {
+          self.timeout(request, EXPORT_TIMEOUT_SECONDS)
+        }
         return (await staticResponse(request)) ?? (await handler.fetch(request))
       } catch (error) {
         console.error(`[server] request failed: ${messageFor(error)}`)
