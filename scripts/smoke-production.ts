@@ -51,9 +51,13 @@ const environment: NodeJS.ProcessEnv = {
   SHARE_TOKEN_SECRET: randomBytes(48).toString("hex"),
   APP_ORIGIN: "https://sakekeep.example.com",
   PRODUCTION_SMOKE: "true",
+  // A production-style key on purpose. A development instance sends every browser navigation
+  // through Clerk's hosted handshake to set its dev-browser cookie, and that host does not
+  // exist here, so the public contribution form could never load. Production instances leave a
+  // signed-out visitor alone, which is exactly what a contributor is.
   VITE_CLERK_PUBLISHABLE_KEY:
-    process.env.VITE_CLERK_PUBLISHABLE_KEY ?? "pk_test_c2FrZWtlZXAuY2xlcmsuYWNjb3VudHMk",
-  CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY ?? "sk_test_sakekeep_smoke",
+    process.env.VITE_CLERK_PUBLISHABLE_KEY ?? "pk_live_Y2xlcmsuc2FrZWtlZXAudGVzdCQ",
+  CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY ?? "sk_live_sakekeep_smoke",
   CLERK_JWT_KEY: publicKey,
   PRODUCTION_SMOKE_ORIGIN: origin,
   PRODUCTION_SMOKE_AUTH_TOKEN: sessionToken(smokeUserId),

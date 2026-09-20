@@ -149,7 +149,10 @@ bun run smoke:production
 It needs no Clerk tenant and no test account credentials, so it also runs on
 every push in CI. The image verifies real signed JWTs exactly as it does in
 production; only the account provider behind it is a local fixture, reached over
-the Compose network.
+the Compose network. The smoke configures a production-style publishable key on
+purpose: a Clerk development instance sends every browser navigation through its
+hosted handshake, and that host does not exist here, so the public contribution
+form would never load.
 
 The smoke test uses a uniquely named Compose project, builds the production
 targets, adds an isolated RustFS service through `docker-compose.smoke.yml`,
