@@ -361,7 +361,7 @@ it("records a resolution override and automatically replaces its blocking previe
   expect(generate).toHaveBeenCalledExactlyOnceWith(initial.id, settings)
 })
 
-it("keeps problem selection and the resolution override as separate keyboard controls", async () => {
+it("keeps problem selection and the resolution override as separate controls", async () => {
   const layout = layoutFixture()
   const submission = submissionFixture("10000000-0000-4000-8000-000000000001", 1)
   const pageId = `submission:${submission.id}`
@@ -431,7 +431,6 @@ it("keeps problem selection and the resolution override as separate keyboard con
 
   override.focus()
   expect(document.activeElement).toBe(override)
-  fireEvent.keyDown(override, { key: "Enter" })
   fireEvent.click(override)
   await waitFor(() => expect(updateBook).toHaveBeenCalled())
   expect(updateBook.mock.calls[0]![1]).toMatchObject({

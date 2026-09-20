@@ -18,6 +18,48 @@ const patchBook = async (request: APIRequestContext, data: object = {}) => {
 
 test.use({ colorScheme: "dark", viewport: { width: 1440, height: 1000 } })
 
+test("selects a problem and accepts its resolution override with the keyboard", async ({
+  page,
+  request,
+}) => {
+  const project = await getProject(request)
+  const book = project.book!
+  const firstPage = book.pages[0]!
+  const assetId = "20000000-0000-4000-8000-000000000001"
+  firstPage.problems = [
+    {
+      id: "keyboard-resolution",
+      code: "image-blocking-resolution",
+      pageId: firstPage.id,
+      assetId,
+      blocking: true,
+      params: { name: "Keyboard photo", ppi: 50 },
+    },
+  ]
+  await page.route(`**${api}?submissions=true`, (route) =>
+    route.fulfill({ json: { ...project, bookStatus: "current" } })
+  )
+  // Keep this accessibility check independent of the seeded book's actual photo resolution.
+  await page.route(`**${api}/book`, (route) => route.fulfill({ json: book }))
+  await page.goto(url)
+  await page.getByRole("button", { name: "Single page", exact: true }).click()
+
+  const selection = page.getByRole("button", { name: /Keyboard photo/ })
+  await selection.focus()
+  await page.keyboard.press("Enter")
+  await expect(selection).toHaveAttribute("aria-pressed", "true")
+  await page.keyboard.press("Tab")
+  await expect(page.getByTestId("button-record-resolution-override")).toBeFocused()
+  const saving = page.waitForRequest(
+    (request) => request.url().endsWith(`${api}/book`) && request.method() === "PATCH"
+  )
+  await page.keyboard.press("Enter")
+  expect((await saving).postDataJSON()).toMatchObject({
+    expectedRevision: book.revision,
+    settings: { resolutionOverrides: expect.arrayContaining([assetId]) },
+  })
+})
+
 test("stale direct links and reloads update read-only previews, with retry after failure", async ({
   page,
   request,

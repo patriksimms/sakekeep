@@ -4,6 +4,8 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 
+import { assertTestTarget, testTargetEnvironment } from "../src/test/target.ts"
+
 /**
  * The deployment runbook tells operators to run the storage cleanup inside the running
  * application container. That only works if the runtime image actually ships something the
@@ -16,6 +18,8 @@ import { dirname, join, resolve } from "node:path"
  */
 
 const root = resolve(import.meta.dirname, "..")
+const environment = { ...process.env, ...testTargetEnvironment() }
+assertTestTarget(environment)
 const dockerfile = readFileSync(join(root, "Dockerfile"), "utf8")
 const runbook = readFileSync(join(root, "docs/DEPLOYMENT.md"), "utf8")
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
@@ -90,7 +94,7 @@ try {
   const result = spawnSync("bun", command.slice(1), {
     cwd: isolated,
     encoding: "utf8",
-    env: process.env,
+    env: environment,
   })
   if (result.status !== 0) {
     process.stderr.write(result.stdout ?? "")

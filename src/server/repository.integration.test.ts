@@ -844,6 +844,25 @@ describe("cover and standalone layouts", () => {
     expect(reordered.pages).toHaveLength(stored.pages.length)
   })
 
+  it("keeps a collaborator's saved settings when an older regeneration arrives", async () => {
+    const project = await closedProject("Delayed regeneration")
+    await createLayout(project.id, "Response", "blank", "submission")
+    const loaded = await generateProjectBook(project.id, settings)
+    const saved = await updateProjectBook({
+      projectId: project.id,
+      expectedRevision: loaded.revision,
+      settings: { ...settings, mode: "seeded-random", seed: "alice-saved" },
+    })
+
+    const regenerated = await generateProjectBook(project.id, loaded.settings)
+
+    expect(regenerated.settings).toEqual(saved.settings)
+    expect(regenerated.revision).toBe(saved.revision + 1)
+    const stored = await getProject(project.id)
+    expect(stored.book!.settings).toEqual(saved.settings)
+    expect(stored.bookStatus).toBe("current")
+  })
+
   it("still accepts reordering a stale book whose layout was deleted", async () => {
     const project = await closedProject("Stale reorder")
     const response = await createLayout(project.id, "Response", "blank", "submission")

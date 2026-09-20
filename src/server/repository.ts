@@ -1223,7 +1223,7 @@ export async function setProjectPageFormat(input: {
 
 export async function generateProjectBook(
   projectId: string,
-  settings: GenerationSettings
+  initialSettings: GenerationSettings
 ): Promise<GeneratedBook> {
   // Regeneration reads the stored book directly, so a book that has never been loaded must be
   // converted here too; otherwise its legacy pages would be dropped instead of carried over.
@@ -1250,6 +1250,9 @@ export async function generateProjectBook(
       .where(eq(submissions.projectId, projectId))
       .orderBy(asc(submissions.sequence))
     const previousRows = await tx.select().from(books).where(eq(books.projectId, projectId))
+    // Existing settings are changed through the revision-checked save. A delayed regeneration
+    // must use those saved settings rather than replace a collaborator's changes.
+    const settings = previousRows[0]?.generatedBook.settings ?? initialSettings
     // Decoration pixel sizes live on the asset records, not in the layout, so inspection can only
     // measure a placed ornament if they are read here.
     const decorativeRows = await tx
