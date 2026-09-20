@@ -16,7 +16,9 @@ export const Route = createFileRoute("/api/projects/$projectId/export")({
       POST: async ({ params, request }) => {
         try {
           const input = exportSchema.parse(await readJson(request))
-          return Response.json(await exportProject(params.projectId, input), { status: 201 })
+          return Response.json(await exportProject(params.projectId, input, request.signal), {
+            status: 201,
+          })
         } catch (error) {
           return jsonError(error)
         }

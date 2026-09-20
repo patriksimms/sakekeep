@@ -124,6 +124,40 @@ describe("export page bundles", () => {
     getProject.mockResolvedValue(cleanProject())
   })
 
+  const options = {
+    marks: false,
+    allowBlockingProblems: false,
+    reviewedBookFingerprint: null,
+  }
+
+  it("records duration, size and outcome for every export, finished or not", async () => {
+    const lines: string[] = []
+    const log = vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+    const aborted = AbortSignal.abort()
+    try {
+      await exportProject("99999999-9999-4999-8999-999999999999", options, aborted)
+      recordExport.mockRejectedValueOnce(new Error("insert failed"))
+      await expect(exportProject("99999999-9999-4999-8999-999999999999", options)).rejects.toThrow(
+        "insert failed"
+      )
+    } finally {
+      log.mockRestore()
+    }
+
+    const entries = lines
+      .filter((line) => line.startsWith("[export] "))
+      .map((line) => JSON.parse(line.slice("[export] ".length)) as Record<string, unknown>)
+    expect(entries).toHaveLength(2)
+    // The organizer had already given up, but the export finished and was stored anyway.
+    expect(entries[0]).toMatchObject({
+      outcome: "completed",
+      pageCount: cleanProject().book!.pages.length,
+      clientDisconnected: true,
+    })
+    expect(entries[0]!.durationMs).toBeTypeOf("number")
+    expect(entries[1]).toMatchObject({ outcome: "failed", clientDisconnected: false })
+  })
+
   it("stores every format for a single export", async () => {
     const artifact = await exportProject("99999999-9999-4999-8999-999999999999", {
       marks: false,
