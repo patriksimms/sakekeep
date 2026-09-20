@@ -128,6 +128,7 @@ export function Collaborators({ projectId, access }: { projectId: string; access
               <Input
                 id="collaborator-email"
                 type="email"
+                data-1p-ignore
                 required
                 maxLength={320}
                 value={email}
