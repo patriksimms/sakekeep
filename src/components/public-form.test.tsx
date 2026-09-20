@@ -57,6 +57,10 @@ async function renderForm() {
 }
 
 beforeEach(() => {
+  // Restored per test: the storage-failure tests below replace these for their whole run.
+  loadContributorDraft.mockResolvedValue(undefined)
+  saveContributorDraft.mockResolvedValue(undefined)
+  clearContributorDraft.mockResolvedValue(undefined)
   vi.stubGlobal("fetch", vi.fn())
   URL.createObjectURL = vi.fn(() => "blob:preview")
   URL.revokeObjectURL = vi.fn()
@@ -117,6 +121,55 @@ describe("PublicForm privacy consent", () => {
     )
     expect(consentCheckbox().getAttribute("aria-checked")).toBe("false")
     expect(submit.disabled).toBe(true)
+  })
+})
+
+describe("PublicForm browser draft storage", () => {
+  it("stays usable and says so when the browser refuses to read a draft", async () => {
+    loadContributorDraft.mockRejectedValueOnce(new DOMException("blocked", "SecurityError"))
+
+    const submit = await renderForm()
+
+    expect(screen.getByTestId("text-draft_storage_unavailable")).toBeTruthy()
+    expect(screen.queryByLabelText("Restoring draft")).toBeNull()
+    fireEvent.change(screen.getByLabelText(/A memory/), {
+      target: { value: "Typed without a draft." },
+    })
+    fireEvent.click(consentCheckbox())
+    await waitFor(() => expect(submit.disabled).toBe(false))
+  })
+
+  it("warns when a draft cannot be saved without losing what was typed", async () => {
+    saveContributorDraft.mockRejectedValue(new DOMException("blocked", "SecurityError"))
+
+    await renderForm()
+    fireEvent.change(screen.getByLabelText(/A memory/), {
+      target: { value: "Still here after a failed save." },
+    })
+
+    expect(await screen.findByTestId("text-draft_storage_unavailable")).toBeTruthy()
+    expect((screen.getByLabelText(/A memory/) as HTMLTextAreaElement).value).toBe(
+      "Still here after a failed save."
+    )
+  })
+
+  it("keeps a submission successful when the local copy cannot be removed", async () => {
+    clearContributorDraft.mockRejectedValueOnce(new DOMException("blocked", "SecurityError"))
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: "Thanks!" }),
+    } as Response)
+
+    const submit = await renderForm()
+    fireEvent.change(screen.getByLabelText(/A memory/), {
+      target: { value: "A recovered afternoon." },
+    })
+    fireEvent.click(consentCheckbox())
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    fireEvent.submit(submit.closest("form")!)
+
+    expect(await screen.findByTestId("heading-thank-you")).toBeTruthy()
+    expect(screen.getByText(/would not let go of the local copy/)).toBeTruthy()
   })
 })
 

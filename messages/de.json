@@ -938,5 +938,8 @@
   "invitation_copy_failed": "Kopieren fehlgeschlagen. Wähle den Link unten aus und kopiere ihn.",
   "book_conflict_newer_revision_saved_first": "Jemand anderes hat das Buch zuerst gespeichert. Deine Änderung wurde nicht übernommen.",
   "book_conflict_reloaded": "Jemand anderes hat das Buch zuerst gespeichert. Die neueste Version wurde geladen, wende deine Änderung erneut an.",
-  "resolution_below_blocking_detail": "{value0} platzierte Bilder drucken unter {value1} effektiven PPI"
+  "resolution_below_blocking_detail": "{value0} platzierte Bilder drucken unter {value1} effektiven PPI",
+  "draft_storage_unavailable": "Dieser Browser speichert keinen Entwurf",
+  "draft_storage_unavailable_detail": "Deine Antworten bleiben nur in diesem Tab. Sende sie ab, bevor du ihn schließt oder neu lädst.",
+  "draft_could_not_be_cleared": "Deine Antwort wurde gespeichert. Dieser Browser hat die lokale Kopie nicht freigegeben. Lösche die Websitedaten, wenn du sie entfernen möchtest."
 }
