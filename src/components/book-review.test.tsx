@@ -361,6 +361,84 @@ it("records a resolution override and automatically replaces its blocking previe
   expect(generate).toHaveBeenCalledExactlyOnceWith(initial.id, settings)
 })
 
+it("keeps problem selection and the resolution override as separate keyboard controls", async () => {
+  const layout = layoutFixture()
+  const submission = submissionFixture("10000000-0000-4000-8000-000000000001", 1)
+  const pageId = `submission:${submission.id}`
+  const assetId = "20000000-0000-4000-8000-000000000001"
+  const project: Project = {
+    id: layout.projectId,
+    title: "Book",
+    occasion: null,
+    formRevision: 1,
+    shareUrl: null,
+    submissionCount: 1,
+    pageFormat: "a5",
+    pageOrientation: "landscape",
+    createdAt: "",
+    updatedAt: "",
+    bookLanguage: "en",
+    state: "closed",
+    archivedAt: null,
+    formSchema: completeForm,
+    layouts: [layout],
+    submissions: [submission],
+    bookStatus: "current",
+    book: {
+      projectId: layout.projectId,
+      settings: cycleSettings,
+      pages: [
+        {
+          id: pageId,
+          kind: "submission",
+          submissionId: submission.id,
+          layoutId: layout.id,
+          problems: [
+            {
+              id: "resolution",
+              code: "image-blocking-resolution",
+              pageId,
+              assetId,
+              blocking: true,
+              params: { name: "Photo" },
+            },
+            {
+              id: "overflow",
+              code: "text-overflow",
+              pageId,
+              elementId: "text",
+              blocking: false,
+              params: { name: "Memory", scope: "1", overflow: "clip", overflowBy: 4, height: 20 },
+            },
+          ],
+        },
+      ],
+      sourceFingerprint: "problems",
+      revision: 1,
+      generatedAt: "",
+      updatedAt: "",
+    },
+  }
+  updateBook.mockResolvedValue(project.book!)
+  generate.mockResolvedValue(project.book!)
+  render(<BookReview project={project} onProjectChange={() => undefined} view="detail" />)
+
+  const override = await screen.findByTestId("button-record-resolution-override")
+  // Nothing interactive may sit inside anything else interactive: assistive technology cannot
+  // present that, and the inner control never gets its own place in the tab order.
+  expect(override.closest("button:not([data-testid=button-record-resolution-override])")).toBeNull()
+  expect(document.querySelectorAll("button button")).toHaveLength(0)
+
+  override.focus()
+  expect(document.activeElement).toBe(override)
+  fireEvent.keyDown(override, { key: "Enter" })
+  fireEvent.click(override)
+  await waitFor(() => expect(updateBook).toHaveBeenCalled())
+  expect(updateBook.mock.calls[0]![1]).toMatchObject({
+    settings: expect.objectContaining({ resolutionOverrides: [assetId] }),
+  })
+})
+
 it("keeps the stored preview and retry available after the last layout is deleted", async () => {
   const project: Project = {
     id: "project",

@@ -270,19 +270,25 @@ function ProblemList({
   return (
     <div className="flex flex-col gap-2">
       {problems.map((problem) => (
-        <button
+        // Selecting the problem and accepting an override are two separate controls. Putting
+        // the override inside the selection button nested one button in another, which no
+        // assistive technology can present and the keyboard cannot reach.
+        <div
           key={problem.id}
-          type="button"
-          onClick={() => onSelect(problem)}
-          aria-pressed={selectedProblemId === problem.id}
-          className="rounded-lg border bg-card p-3 text-left hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:border-destructive aria-pressed:ring-1 aria-pressed:ring-destructive"
+          data-selected={selectedProblemId === problem.id || undefined}
+          className="flex flex-col items-start rounded-lg border bg-card p-3 data-selected:border-destructive data-selected:ring-1 data-selected:ring-destructive"
         >
-          <span className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => onSelect(problem)}
+            aria-pressed={selectedProblemId === problem.id}
+            className="flex w-full items-center justify-between gap-2 rounded-sm text-left hover:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
             <span className="text-sm font-medium">{problemMessage(problem)}</span>
             <Badge variant={problem.blocking ? "destructive" : "secondary"}>
               {problem.blocking ? m.ui_blocking() : m.ui_warning()}
             </Badge>
-          </span>
+          </button>
           {problem.code === "image-blocking-resolution" && problem.assetId && (
             <Button
               data-testid="button-record-resolution-override"
@@ -291,15 +297,12 @@ function ProblemList({
               variant="outline"
               size="sm"
               className="mt-2"
-              onClick={(event) => {
-                event.stopPropagation()
-                onOverride(problem.assetId!)
-              }}
+              onClick={() => onOverride(problem.assetId!)}
             >
               {m.ui_record_resolution_override()}{" "}
             </Button>
           )}
-        </button>
+        </div>
       ))}
     </div>
   )

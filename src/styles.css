@@ -198,6 +198,7 @@ body {
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-emphasis: var(--destructive-emphasis);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -237,6 +238,9 @@ body {
   --accent: oklch(0.91 0.047 146);
   --accent-foreground: oklch(0.295 0.06 146);
   --destructive: oklch(0.577 0.245 27.325);
+  /* Destructive text on a destructive tint. --destructive itself only reaches 3.95:1 there, so
+     anything reading as prose on that surface uses this instead. */
+  --destructive-emphasis: oklch(0.47 0.2 27.325);
   --border: oklch(0.875 0.024 72);
   --input: oklch(0.875 0.024 72);
   --ring: oklch(0.59 0.095 43);
@@ -272,6 +276,7 @@ body {
   --accent: oklch(0.34 0.055 146);
   --accent-foreground: oklch(0.91 0.04 146);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-emphasis: oklch(0.8 0.15 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.69 0.09 62);
