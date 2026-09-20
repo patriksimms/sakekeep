@@ -735,9 +735,15 @@ export async function deleteProject(projectId: string): Promise<void> {
     return objectKeys
   })
 
-  // Same rule as the sweep: delete only the objects whose tombstone this call won, and
-  // leave the row behind until the store confirms, so a crash here still leaves the sweep
-  // something to retry.
+  await discardReservedObjects(keys)
+}
+
+/**
+ * Removes objects whose owning row was never written. Same rule as the sweep: only objects
+ * whose tombstone this call won are deleted, and a key the store refused keeps its tombstone
+ * so the sweep tries again instead of the object being lost.
+ */
+export async function discardReservedObjects(keys: string[]): Promise<void> {
   const claim = await claimTombstones(db, keys)
   await settleTombstones(claim, await deleteObjects(claim.keys))
 }
@@ -1481,6 +1487,22 @@ export async function createSubmissionRecord(input: {
       })
       .returning()
     if (input.pendingAssets.length > 0) {
+      // Take the reservations back before the rows that own them exist. A tombstone a
+      // deleter already claimed means the uploaded file is on its way out, so the response
+      // must fail rather than be stored against images nobody can load.
+      const objectKeys = input.pendingAssets.flatMap((asset) => [
+        asset.objectKey,
+        asset.previewObjectKey,
+      ])
+      const owned = await tx
+        .delete(assetTombstones)
+        .where(
+          and(inArray(assetTombstones.objectKey, objectKeys), isNull(assetTombstones.claimedAt))
+        )
+        .returning({ objectKey: assetTombstones.objectKey })
+      if (owned.length !== objectKeys.length) {
+        throw new HttpError(409, m.upload_cleaned_up_before_record())
+      }
       await tx.insert(assets).values(
         input.pendingAssets.map((asset) => ({
           id: asset.id,
@@ -1573,25 +1595,37 @@ export async function createDecorativeAssetRecord(input: {
   if (project.state !== "closed") {
     throw new HttpError(409, m.ui_close_collection_before_authoring_layouts())
   }
-  const [asset] = await db
-    .insert(assets)
-    .values({
-      id: input.id,
-      projectId: input.projectId,
-      submissionId: null,
-      questionId: null,
-      kind: "decorative-image",
-      objectKey: input.objectKey,
-      previewObjectKey: input.previewObjectKey,
-      mimeType: input.masterMimeType,
-      sourceMimeType: input.sourceMimeType,
-      sourceName: input.sourceName,
-      sizeBytes: input.sizeBytes,
-      width: input.width,
-      height: input.height,
-    })
-    .returning()
-  return asset!
+  const objectKeys = [input.objectKey, input.previewObjectKey]
+  return db.transaction(async (tx) => {
+    // Same handover as a response upload: the reservation becomes the asset row, and only
+    // while no deleter has taken the keys on.
+    const owned = await tx
+      .delete(assetTombstones)
+      .where(and(inArray(assetTombstones.objectKey, objectKeys), isNull(assetTombstones.claimedAt)))
+      .returning({ objectKey: assetTombstones.objectKey })
+    if (owned.length !== objectKeys.length) {
+      throw new HttpError(409, m.upload_cleaned_up_before_record())
+    }
+    const [asset] = await tx
+      .insert(assets)
+      .values({
+        id: input.id,
+        projectId: input.projectId,
+        submissionId: null,
+        questionId: null,
+        kind: "decorative-image",
+        objectKey: input.objectKey,
+        previewObjectKey: input.previewObjectKey,
+        mimeType: input.masterMimeType,
+        sourceMimeType: input.sourceMimeType,
+        sourceName: input.sourceName,
+        sizeBytes: input.sizeBytes,
+        width: input.width,
+        height: input.height,
+      })
+      .returning()
+    return asset!
+  })
 }
 
 export async function recordExport(input: {

@@ -5,11 +5,13 @@ import { type UploadedImageDescriptor, validateSubmission } from "../domain/form
 import { type SubmissionAnswers } from "../domain/types"
 import { HttpError } from "./http"
 import { isAcceptedImage, normalizeImage } from "./image-pipeline"
-import { deleteObjects, putObject } from "./object-store"
+import { putObject } from "./object-store"
 import {
   createSubmissionRecord,
+  discardReservedObjects,
   findPublicProject,
   findSubmissionByIdempotency,
+  reserveObjects,
   type PendingAsset,
 } from "./repository"
 
@@ -106,7 +108,7 @@ export async function submitContribution(
   }
 
   const pendingAssets: PendingAsset[] = []
-  const uploadedKeys: string[] = []
+  const reservedKeys: string[] = []
   try {
     for (const upload of uploads) {
       if (!isAcceptedImage(upload.file)) {
@@ -121,18 +123,21 @@ export async function submitContribution(
       const extension = normalized.masterMimeType === "image/png" ? "png" : "jpg"
       const objectKey = `projects/${publicProject.projectId}/submissions/pending/${payload.idempotencyKey}/${id}/master.${extension}`
       const previewObjectKey = `projects/${publicProject.projectId}/submissions/pending/${payload.idempotencyKey}/${id}/preview.webp`
+      // Nothing but the asset row will ever discover these objects, so claim the keys as
+      // removable before the first byte is written. Whatever fails after this — the upload,
+      // the response record, the process — leaves the files findable for the sweep.
+      await reserveObjects([objectKey, previewObjectKey])
+      reservedKeys.push(objectKey, previewObjectKey)
       await putObject({
         key: objectKey,
         body: normalized.master,
         contentType: normalized.masterMimeType,
       })
-      uploadedKeys.push(objectKey)
       await putObject({
         key: previewObjectKey,
         body: normalized.preview,
         contentType: normalized.previewMimeType,
       })
-      uploadedKeys.push(previewObjectKey)
       pendingAssets.push({
         id,
         questionId: upload.descriptor.questionId,
@@ -154,11 +159,11 @@ export async function submitContribution(
       pendingAssets,
     })
     if (!result.created) {
-      await deleteObjects(uploadedKeys)
+      await discardReservedObjects(reservedKeys)
     }
     return { id: result.submission.id, created: result.created }
   } catch (error) {
-    await deleteObjects(uploadedKeys)
+    await discardReservedObjects(reservedKeys)
     if (error instanceof HttpError) throw error
     throw new HttpError(
       422,
