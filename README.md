@@ -81,7 +81,7 @@ bun run services:up       # start PostgreSQL and RustFS
 bun run services:down     # stop local services
 bun run db:migrate        # apply Drizzle migrations
 bun run db:seed           # reset deterministic demo projects
-bun run storage:cleanup   # retry tombstoned/orphan object deletion
+bun run storage:cleanup   # retry tombstoned/orphan object deletion (needs a build)
 bun run setup:icc         # fetch and checksum-verify the ECI ICC profile
 bun run dev               # development server on localhost:3000
 bun run build             # production client and server build
