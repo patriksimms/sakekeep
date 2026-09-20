@@ -93,6 +93,7 @@ function reviewProject(focalPoint?: { x: number; y: number }): Project {
         },
       ],
       sourceFingerprint: "test",
+      revision: 1,
       generatedAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
     },

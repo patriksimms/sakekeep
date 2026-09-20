@@ -8,6 +8,13 @@ const url = `/projects/${id}?tab=book`
 const screenshots = resolve("visual-artifacts/issues/94")
 const getProject = async (request: APIRequestContext) =>
   (await (await request.get(api)).json()) as Project
+// Book saves are guarded by the stored revision, so a direct patch has to read it first.
+const patchBook = async (request: APIRequestContext, data: object = {}) => {
+  const current = await getProject(request)
+  return request.patch(`${api}/book`, {
+    data: { ...data, expectedRevision: current.book!.revision },
+  })
+}
 
 test.use({ colorScheme: "dark", viewport: { width: 1440, height: 1000 } })
 
@@ -16,7 +23,7 @@ test("stale direct links and reloads update read-only previews, with retry after
   request,
 }) => {
   const original = await getProject(request)
-  await request.patch(`${api}/book`, { data: {} })
+  await patchBook(request)
   let release!: () => void
   const held = new Promise<void>((resolve) => {
     release = resolve
@@ -58,7 +65,7 @@ test("stale direct links and reloads update read-only previews, with retry after
     expect(attempts).toBe(2)
     await page.waitForTimeout(200) // Let the status badge finish its color transition.
     await page.screenshot({ path: resolve(screenshots, "after-current.png") })
-    await request.patch(`${api}/book`, { data: {} })
+    await patchBook(request)
     await page.reload()
     await expect.poll(() => attempts).toBe(3)
     await expect(page.getByRole("combobox", { name: "Assignment mode" })).toBeEnabled()
@@ -204,9 +211,7 @@ test("settings, assignments, page order and standalone pages rebuild after savin
     expect((await getProject(request)).bookStatus).toBe("current")
   } finally {
     await request.delete(`${api}/layouts/${standalone.id}`)
-    await request.patch(`${api}/book`, {
-      data: { pages: original.book!.pages, settings: original.book!.settings },
-    })
+    await patchBook(request, { pages: original.book!.pages, settings: original.book!.settings })
     await request.post(`${api}/book`, { data: original.book!.settings })
   }
 })

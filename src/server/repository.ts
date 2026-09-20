@@ -1284,6 +1284,8 @@ export async function updateProjectBook(input: {
   projectId: string
   pages?: BookPage[]
   settings?: GenerationSettings
+  /** The revision of the book the client edited. A mismatch means someone else saved first. */
+  expectedRevision: number
 }): Promise<GeneratedBook> {
   return db.transaction(async (tx) => {
     const [project] = await tx
@@ -1299,6 +1301,9 @@ export async function updateProjectBook(input: {
       .where(eq(books.projectId, input.projectId))
       .for("update")
     if (!book) throw new HttpError(409, m.ui_generate_the_book_first())
+    if (book.generatedBook.revision !== input.expectedRevision) {
+      throw new HttpError(409, m.book_conflict_newer_revision_saved_first())
+    }
     const layoutRows = input.pages
       ? await tx.select().from(layouts).where(eq(layouts.projectId, input.projectId))
       : []
@@ -1319,6 +1324,7 @@ export async function updateProjectBook(input: {
       ...(input.pages ? { pages: pinCoverPages(input.pages, layoutRows.map(layoutRecord)) } : {}),
       ...(input.settings ? { settings: input.settings } : {}),
       updatedAt: new Date().toISOString(),
+      revision: book.generatedBook.revision + 1,
     }
     await tx
       .update(books)

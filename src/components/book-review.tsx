@@ -95,7 +95,11 @@ import { pinCoverPages } from "#/domain/generation.ts"
 import { submissionLabel } from "#/domain/submission-label.ts"
 import { parseBookView, type BookView } from "#/domain/workspace-tabs.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
-import { useBookGeneration, type RegenerationCause } from "#/hooks/use-book-generation.ts"
+import {
+  useBookGeneration,
+  type BookUpdate,
+  type RegenerationCause,
+} from "#/hooks/use-book-generation.ts"
 import { projectApi } from "#/lib/api.ts"
 import { pageSpecification } from "#/domain/page-format.ts"
 
@@ -421,10 +425,7 @@ export function BookReview({
   })
   const readOnly = generating || project.bookStatus === "stale"
   const generate = () => void generateInitial(settings)
-  const saveBook = async (
-    input: Parameters<typeof projectApi.updateBook>[1],
-    cause: RegenerationCause
-  ) => {
+  const saveBook = async (input: BookUpdate, cause: RegenerationCause) => {
     try {
       await updateBook(input, cause)
     } catch (error) {

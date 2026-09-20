@@ -248,6 +248,7 @@ async function renderElements(
         },
       ],
       sourceFingerprint: "rotation-test",
+      revision: 1,
       generatedAt: "2026-07-18T00:00:00.000Z",
       updatedAt: "2026-07-18T00:00:00.000Z",
     },

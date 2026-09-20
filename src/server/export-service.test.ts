@@ -88,6 +88,7 @@ function currentProject(): Project {
         },
       ],
       sourceFingerprint: "new-book",
+      revision: 1,
       generatedAt: "2026-08-25T00:00:00.000Z",
       updatedAt: "2026-08-25T00:00:00.000Z",
     },

@@ -73,6 +73,7 @@ function projectWithBlockingProblem(): Project {
         },
       ],
       sourceFingerprint: "current-source",
+      revision: 1,
       generatedAt: "2026-08-25T00:00:00.000Z",
       updatedAt: "2026-08-25T00:00:00.000Z",
     },
@@ -98,6 +99,7 @@ function artifactFixture(): ExportArtifact {
     pageJpegZipUrl: `/api/exports/${id}?file=page-jpegs`,
     report: {
       sourceFingerprint: "current-source",
+      revision: 1,
       checks: [],
       pdfx: { limitation: "Structure only." },
     },

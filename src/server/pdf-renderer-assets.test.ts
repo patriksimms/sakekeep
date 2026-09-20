@@ -58,6 +58,7 @@ describe("PDF raster metadata", () => {
         },
       ],
       sourceFingerprint: "image-test",
+      revision: 1,
       generatedAt: "2026-07-18T00:00:00.000Z",
       updatedAt: "2026-07-18T00:00:00.000Z",
     }
@@ -123,6 +124,7 @@ describe("PDF photo distribution", () => {
           },
         ],
         sourceFingerprint: "distribution-test",
+        revision: 1,
         generatedAt: "2026-07-18T00:00:00.000Z",
         updatedAt: "2026-07-18T00:00:00.000Z",
       },

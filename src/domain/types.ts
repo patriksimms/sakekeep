@@ -261,6 +261,11 @@ export interface GeneratedBook {
   sourceFingerprint: string
   generatedAt: string
   updatedAt: string
+  /**
+   * Increments on every stored write. Clients echo it back as `expectedRevision` so a save built
+   * from an outdated book is rejected instead of overwriting a collaborator's work.
+   */
+  revision: number
 }
 
 export interface Project {
