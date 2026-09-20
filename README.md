@@ -87,6 +87,8 @@ bun run dev               # development server on localhost:3000
 bun run build             # production client and server build
 bun run start             # native Bun production server after a build
 bun run smoke:production  # isolated production Compose smoke test (requires Clerk test credentials)
+bun run test:unit         # tests that need no services
+bun run test:integration  # database- and storage-backed tests, on their own targets
 bun run verify            # every required repository gate
 ```
 
@@ -102,6 +104,12 @@ bun run build
 docker compose config --quiet
 bun run scripts/check-production-compose.ts
 ```
+
+Anything that touches PostgreSQL or the object store runs against its own
+database and bucket, named after the configured ones with a `-test` suffix, and
+refuses to start if it is pointed anywhere else. `bun run test:prepare` creates
+and migrates them; the test commands do it for you. Set `TEST_DATABASE_URL` and
+`TEST_S3_BUCKET` to send them somewhere else entirely.
 
 Vitest covers schema validation, lifecycle and concurrency behavior,
 IndexedDB file recovery, layout geometry, deterministic generation, overflow,
