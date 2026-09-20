@@ -941,5 +941,6 @@
   "resolution_below_blocking_detail": "{value0} platzierte Bilder drucken unter {value1} effektiven PPI",
   "draft_storage_unavailable": "Dieser Browser speichert keinen Entwurf",
   "draft_storage_unavailable_detail": "Deine Antworten bleiben nur in diesem Tab. Sende sie ab, bevor du ihn schließt oder neu lädst.",
-  "draft_could_not_be_cleared": "Deine Antwort wurde gespeichert. Dieser Browser hat die lokale Kopie nicht freigegeben. Lösche die Websitedaten, wenn du sie entfernen möchtest."
+  "draft_could_not_be_cleared": "Deine Antwort wurde gespeichert. Dieser Browser hat die lokale Kopie nicht freigegeben. Lösche die Websitedaten, wenn du sie entfernen möchtest.",
+  "upload_cleaned_up_before_record": "Die hochgeladenen Bilder wurden entfernt, bevor sie gespeichert werden konnten. Versuche es erneut."
 }

@@ -14,6 +14,7 @@ import {
   listProjects,
   duplicateProject,
   publishProject,
+  reserveObjects,
   updateProject,
 } from "./repository"
 import {
@@ -225,6 +226,8 @@ describe("private project membership", () => {
     const objectKey = `tests/${assetId}/master`
     const previewObjectKey = `tests/${assetId}/preview`
     const image = new Uint8Array([1, 2, 3])
+    // Uploads reserve their object keys before writing; the record takes that reservation over.
+    await reserveObjects([objectKey, previewObjectKey])
     for (const key of [objectKey, previewObjectKey])
       await putObject({ key, body: image, contentType: "image/png" })
     await createDecorativeAssetRecord({

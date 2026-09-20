@@ -1,8 +1,8 @@
 import * as m from "#/paraglide/messages.js"
 import { HttpError } from "./http"
 import { isAcceptedImage, normalizeImage } from "./image-pipeline"
-import { deleteObjects, putObject } from "./object-store"
-import { createDecorativeAssetRecord } from "./repository"
+import { putObject } from "./object-store"
+import { createDecorativeAssetRecord, discardReservedObjects, reserveObjects } from "./repository"
 
 export async function uploadDecorativeAsset(projectId: string, request: Request) {
   const data = await request.formData()
@@ -24,18 +24,20 @@ export async function uploadDecorativeAsset(projectId: string, request: Request)
     const extension = normalized.masterMimeType === "image/png" ? "png" : "jpg"
     const objectKey = `projects/${projectId}/decorative/${id}/master.${extension}`
     const previewObjectKey = `projects/${projectId}/decorative/${id}/preview.webp`
+    // Claim the keys as removable before writing: only the asset row makes these objects
+    // discoverable, so anything that fails before it exists must leave the sweep a trail.
+    await reserveObjects([objectKey, previewObjectKey])
+    keys.push(objectKey, previewObjectKey)
     await putObject({
       key: objectKey,
       body: normalized.master,
       contentType: normalized.masterMimeType,
     })
-    keys.push(objectKey)
     await putObject({
       key: previewObjectKey,
       body: normalized.preview,
       contentType: normalized.previewMimeType,
     })
-    keys.push(previewObjectKey)
     const record = await createDecorativeAssetRecord({
       id,
       projectId,
@@ -56,7 +58,7 @@ export async function uploadDecorativeAsset(projectId: string, request: Request)
       previewUrl: `/api/assets/${record.id}?variant=preview`,
     }
   } catch (error) {
-    await deleteObjects(keys)
+    await discardReservedObjects(keys)
     if (error instanceof HttpError) throw error
     throw new HttpError(422, m.ui_the_decorative_image_could_not_be_processed())
   }

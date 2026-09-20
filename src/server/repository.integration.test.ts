@@ -7,9 +7,11 @@ import {
   closeProject,
   createLayout,
   createProject,
+  createDecorativeAssetRecord,
   createSubmissionRecord,
   deleteLayout,
   deleteProject,
+  discardReservedObjects,
   duplicateLayout,
   duplicateProject,
   findPublicProject,
@@ -383,6 +385,11 @@ describe("photo crop centres", () => {
     })
     await publishProject(project.id)
     const assetId = crypto.randomUUID()
+    // Uploads reserve their object keys before writing; the record takes that reservation over.
+    await reserveObjects([
+      `projects/${project.id}/master.jpg`,
+      `projects/${project.id}/preview.jpg`,
+    ])
     await createSubmissionRecord({
       projectId: project.id,
       idempotencyKey: crypto.randomUUID(),
@@ -948,6 +955,162 @@ async function reservedKeys(keys: string[]): Promise<string[]> {
     .where(inArray(assetTombstones.objectKey, keys))
   return rows.map((row) => row.objectKey).sort()
 }
+
+describe("upload object reservations", () => {
+  async function publishedProject(title: string) {
+    const project = await createProject({ title })
+    createdProjectIds.add(project.id)
+    await updateProject({ projectId: project.id, formSchema: completeForm, expectedRevision: 0 })
+    await publishProject(project.id)
+    return project
+  }
+
+  function pendingAsset(projectId: string, id: string) {
+    return {
+      id,
+      questionId: "photos",
+      objectKey: `projects/${projectId}/pending/${id}/master.jpg`,
+      previewObjectKey: `projects/${projectId}/pending/${id}/preview.webp`,
+      masterMimeType: "image/jpeg",
+      sourceMimeType: "image/jpeg",
+      sourceName: "portrait.jpg",
+      sizeBytes: 2_048,
+      width: 1_200,
+      height: 900,
+    }
+  }
+
+  const answers = { name: "Nora", memory: "A memory", role: ["friend"], traits: ["kind"] }
+
+  it("hands a contributor upload's reserved keys over to the response that owns them", async () => {
+    const project = await publishedProject("Reserved upload")
+    const asset = pendingAsset(project.id, crypto.randomUUID())
+    const keys = [asset.objectKey, asset.previewObjectKey]
+
+    await reserveObjects(keys)
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+
+    await createSubmissionRecord({
+      projectId: project.id,
+      idempotencyKey: crypto.randomUUID(),
+      answers,
+      pendingAssets: [asset],
+    })
+
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("keeps the reservation when the response record cannot be written", async () => {
+    const project = await publishedProject("Unwritten response")
+    const asset = pendingAsset(project.id, crypto.randomUUID())
+    const keys = [asset.objectKey, asset.previewObjectKey]
+
+    await reserveObjects(keys)
+    // Collection closes between the upload and the record, so no row ever owns these files.
+    await closeProject(project.id)
+    await expect(
+      createSubmissionRecord({
+        projectId: project.id,
+        idempotencyKey: crypto.randomUUID(),
+        answers,
+        pendingAssets: [asset],
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+  })
+
+  it("refuses a response whose uploads a sweep already claimed", async () => {
+    const project = await publishedProject("Swept upload")
+    const asset = pendingAsset(project.id, crypto.randomUUID())
+    const keys = [asset.objectKey, asset.previewObjectKey]
+
+    await reserveObjects(keys)
+    await db
+      .update(assetTombstones)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(inArray(assetTombstones.objectKey, keys))
+    await cleanupOrphanedObjects()
+
+    await expect(
+      createSubmissionRecord({
+        projectId: project.id,
+        idempotencyKey: crypto.randomUUID(),
+        answers,
+        pendingAssets: [asset],
+      })
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it("hands a decoration's reserved keys over to its asset record", async () => {
+    const project = await publishedProject("Reserved decoration")
+    await closeProject(project.id)
+    const id = crypto.randomUUID()
+    const keys = [
+      `projects/${project.id}/decorative/${id}/master.png`,
+      `projects/${project.id}/decorative/${id}/preview.webp`,
+    ]
+
+    await reserveObjects(keys)
+    await createDecorativeAssetRecord({
+      id,
+      projectId: project.id,
+      objectKey: keys[0]!,
+      previewObjectKey: keys[1]!,
+      masterMimeType: "image/png",
+      sourceMimeType: "image/png",
+      sourceName: "ornament.png",
+      sizeBytes: 3,
+      width: 600,
+      height: 400,
+    })
+
+    expect(await reservedKeys(keys)).toEqual([])
+  })
+
+  it("keeps a decoration's reservation when its asset record cannot be written", async () => {
+    const project = await publishedProject("Unwritten decoration")
+    const id = crypto.randomUUID()
+    const keys = [
+      `projects/${project.id}/decorative/${id}/master.png`,
+      `projects/${project.id}/decorative/${id}/preview.webp`,
+    ]
+
+    await reserveObjects(keys)
+    // Still collecting, so layout authoring is refused and nothing takes the files on.
+    await expect(
+      createDecorativeAssetRecord({
+        id,
+        projectId: project.id,
+        objectKey: keys[0]!,
+        previewObjectKey: keys[1]!,
+        masterMimeType: "image/png",
+        sourceMimeType: "image/png",
+        sourceName: "ornament.png",
+        sizeBytes: 3,
+        width: 600,
+        height: 400,
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    expect(await reservedKeys(keys)).toEqual([...keys].sort())
+  })
+
+  it("leaves a refused deletion for the sweep instead of losing the object", async () => {
+    const project = await publishedProject("Undeletable upload")
+    // A key the object store will not accept stands in for any deletion it refuses.
+    const refused = `projects/${project.id}/pending/${"x".repeat(2_000)}/master.jpg`
+    const removable = `projects/${project.id}/pending/${crypto.randomUUID()}/preview.webp`
+
+    await reserveObjects([refused, removable])
+    await discardReservedObjects([refused, removable])
+
+    // The object that went away lost its tombstone; the one that did not keeps something
+    // for the sweep to retry.
+    expect(await reservedKeys([refused, removable])).toEqual([refused])
+    await db.delete(assetTombstones).where(inArray(assetTombstones.objectKey, [refused]))
+  })
+})
 
 describe("export object reservations", () => {
   it("hands reserved keys over to the export row that takes ownership", async () => {
