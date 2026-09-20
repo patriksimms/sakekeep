@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import type { GenerationSettings, Project } from "#/domain/types.ts"
 import { captureAnalyticsEvent } from "#/lib/analytics.ts"
-import { projectApi } from "#/lib/api.ts"
+import { ApiError, projectApi } from "#/lib/api.ts"
 
 export type RegenerationCause =
   | "saved_inputs"
@@ -15,6 +15,9 @@ export type RegenerationCause =
   | "standalone_page"
 
 type Trigger = "review_open" | "book_change" | "retry"
+
+/** The hook supplies `expectedRevision` from the book it currently holds. */
+export type BookUpdate = Omit<Parameters<typeof projectApi.updateBook>[1], "expectedRevision">
 
 export function useBookGeneration({
   project,
@@ -111,14 +114,16 @@ export function useBookGeneration({
     }
   }, [active, project.book, project.bookStatus, generate])
 
-  const updateBook = async (
-    input: Parameters<typeof projectApi.updateBook>[1],
-    staleCause: RegenerationCause
-  ) => {
+  const updateBook = async (input: BookUpdate, staleCause: RegenerationCause) => {
     if (locked.current) throw new Error(m.book_wait_for_update())
+    const current = latest.current.project.book
+    if (!current) throw new Error(m.ui_generation_returned_no_book())
     setWorking(true)
     try {
-      const updated = await projectApi.updateBook(latest.current.project.id, input)
+      const updated = await projectApi.updateBook(latest.current.project.id, {
+        ...input,
+        expectedRevision: current.revision,
+      })
       cause.current = staleCause
       failure.current = false
       setError(null)
@@ -127,6 +132,16 @@ export function useBookGeneration({
         book: updated,
         bookStatus: "stale",
       })
+    } catch (caught) {
+      // A collaborator saved first. Pull their book in so the organizer edits current work
+      // instead of re-sending a save that would drop it, and say so rather than failing silently.
+      if (caught instanceof ApiError && caught.status === 409) {
+        captureAnalyticsEvent("book_review:save_conflict", { stale_cause: staleCause })
+        const fresh = await projectApi.get(latest.current.project.id, true).catch(() => null)
+        if (fresh) latest.current.onProjectChange(fresh)
+        throw new ApiError(caught.status, m.book_conflict_reloaded(), caught.details)
+      }
+      throw caught
     } finally {
       setWorking(false)
     }

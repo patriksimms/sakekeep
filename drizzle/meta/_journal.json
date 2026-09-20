@@ -85,6 +85,13 @@
       "when": 1788882316888,
       "tag": "20260908154516_nice_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789907881536,
+      "tag": "20260920123801_book-revision",
+      "breakpoints": true
     }
   ]
 }

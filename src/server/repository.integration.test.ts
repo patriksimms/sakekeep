@@ -741,6 +741,7 @@ describe("cover and standalone layouts", () => {
     await expect(
       updateProjectBook({
         projectId: project.id,
+        expectedRevision: book.revision,
         pages: [
           ...book.pages,
           {
@@ -757,6 +758,7 @@ describe("cover and standalone layouts", () => {
     await expect(
       updateProjectBook({
         projectId: project.id,
+        expectedRevision: book.revision,
         pages: book.pages.map((page) =>
           page.id === responsePage.id ? { ...page, layoutId: front.id } : page
         ),
@@ -767,6 +769,7 @@ describe("cover and standalone layouts", () => {
     await expect(
       updateProjectBook({
         projectId: project.id,
+        expectedRevision: book.revision,
         pages: [
           ...book.pages,
           {
@@ -782,6 +785,58 @@ describe("cover and standalone layouts", () => {
     expect((await getProject(project.id)).book!.pages).toEqual(book.pages)
   })
 
+  it("refuses a book save built from a revision a collaborator already replaced", async () => {
+    const project = await closedProject("Concurrent editors")
+    await createLayout(project.id, "Response", "blank", "submission")
+    const note = await createLayout(project.id, "Note", "blank", "static")
+    // Both organizers open the same book, so both hold the same revision.
+    const loaded = await generateProjectBook(project.id, settings)
+
+    const withNote = await updateProjectBook({
+      projectId: project.id,
+      expectedRevision: loaded.revision,
+      pages: [
+        ...loaded.pages,
+        {
+          id: `standalone:${note.id}`,
+          kind: "standalone" as const,
+          layoutId: note.id,
+          problems: [],
+        },
+      ],
+    })
+
+    // The second organizer reorders the page list they loaded before the standalone page existed.
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        expectedRevision: loaded.revision,
+        pages: [...loaded.pages].reverse(),
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    // A settings-only save from the same outdated book is refused for the same reason.
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        expectedRevision: loaded.revision,
+        settings: { ...settings, seed: "second-organizer" },
+      })
+    ).rejects.toMatchObject({ status: 409 })
+
+    const stored = (await getProject(project.id)).book!
+    expect(stored.pages.map((page) => page.id)).toEqual(withNote.pages.map((page) => page.id))
+    expect(stored.settings.seed).toBe(settings.seed)
+
+    // Reloading hands the second organizer a revision their reorder is accepted against.
+    const reordered = await updateProjectBook({
+      projectId: project.id,
+      expectedRevision: stored.revision,
+      pages: [...stored.pages].reverse(),
+    })
+    expect(reordered.pages).toHaveLength(stored.pages.length)
+  })
+
   it("still accepts reordering a stale book whose layout was deleted", async () => {
     const project = await closedProject("Stale reorder")
     const response = await createLayout(project.id, "Response", "blank", "submission")
@@ -792,12 +847,17 @@ describe("cover and standalone layouts", () => {
       ...generated.pages,
       { id: "standalone:note", kind: "standalone" as const, layoutId: note.id, problems: [] },
     ]
-    await updateProjectBook({ projectId: project.id, pages: withNote })
+    await updateProjectBook({
+      projectId: project.id,
+      expectedRevision: generated.revision,
+      pages: withNote,
+    })
     await deleteLayout(project.id, response.id)
 
     const stored = (await getProject(project.id)).book!
     const reordered = await updateProjectBook({
       projectId: project.id,
+      expectedRevision: stored.revision,
       pages: [...stored.pages].reverse(),
     })
 

@@ -41,6 +41,9 @@ interface AnalyticsEvents {
   "book_review:regeneration_success": RegenerationProperties & { duration_ms: number }
   "book_review:regeneration_failure": RegenerationProperties & { duration_ms: number }
   "book_review:regeneration_retry": Pick<RegenerationProperties, "stale_cause">
+  // Tells us how often organizers actually collide on one book, which decides whether the
+  // reload-and-retry recovery needs to become a merge.
+  "book_review:save_conflict": Pick<RegenerationProperties, "stale_cause">
   "responses:edit_saved": {
     changed_answer_count: number
     previous_edit_count: number

@@ -1,6 +1,12 @@
 import * as m from "#/paraglide/messages.js"
 import { type Locale } from "#/lib/locale.ts"
-import { type ExportArtifact, type Project, type ProjectSummary } from "#/domain/types.ts"
+import {
+  type BookPage,
+  type ExportArtifact,
+  type GenerationSettings,
+  type Project,
+  type ProjectSummary,
+} from "#/domain/types.ts"
 
 export class ApiError extends Error {
   constructor(
@@ -79,7 +85,14 @@ export const projectApi = {
       method: "POST",
       body: JSON.stringify(settings),
     }),
-  updateBook: (projectId: string, input: object) =>
+  updateBook: (
+    projectId: string,
+    input: {
+      pages?: BookPage[]
+      settings?: GenerationSettings
+      expectedRevision: number
+    }
+  ) =>
     api<NonNullable<Project["book"]>>(`/api/projects/${projectId}/book`, {
       method: "PATCH",
       body: JSON.stringify(input),

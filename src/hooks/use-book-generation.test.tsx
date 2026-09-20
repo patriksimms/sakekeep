@@ -6,14 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { GeneratedBook, Project } from "#/domain/types.ts"
 import { completeForm, cycleSettings, layoutFixture } from "#/test/fixtures.ts"
+import { ApiError } from "#/lib/api.ts"
 import { useBookGeneration } from "./use-book-generation.ts"
 
-const { generate, updateBook, capture } = vi.hoisted(() => ({
+const { generate, updateBook, get, capture } = vi.hoisted(() => ({
   generate: vi.fn(),
   updateBook: vi.fn(),
+  get: vi.fn(),
   capture: vi.fn(),
 }))
-vi.mock("#/lib/api.ts", () => ({ projectApi: { generate, updateBook } }))
+vi.mock("#/lib/api.ts", async () => {
+  const actual = await vi.importActual<typeof import("#/lib/api.ts")>("#/lib/api.ts")
+  return { ...actual, projectApi: { generate, updateBook, get } }
+})
 vi.mock("#/lib/analytics.ts", () => ({ captureAnalyticsEvent: capture }))
 
 function fixture(): Project {
@@ -41,6 +46,7 @@ function fixture(): Project {
       settings: cycleSettings,
       pages: [],
       sourceFingerprint: "old",
+      revision: 1,
       generatedAt: "",
       updatedAt: "",
     },
@@ -181,6 +187,31 @@ describe("automatic book generation", () => {
     expect(generate).not.toHaveBeenCalled()
     await act(async () => result.current.updateBook({}, "page_order"))
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
+  })
+
+  it("reloads a book a collaborator saved first instead of overwriting it", async () => {
+    const initial = { ...fixture(), bookStatus: "current" as const }
+    const theirs: Project = {
+      ...initial,
+      book: { ...initial.book!, revision: 5, sourceFingerprint: "theirs" },
+    }
+    updateBook.mockRejectedValue(new ApiError(409, "Someone else saved the book first."))
+    get.mockResolvedValue(theirs)
+    const { result } = mount(initial)
+
+    await act(async () => {
+      await expect(result.current.updateBook({}, "page_order")).rejects.toThrow(
+        "The latest version was reloaded"
+      )
+    })
+
+    expect(updateBook).toHaveBeenCalledWith(initial.id, {
+      expectedRevision: initial.book!.revision,
+    })
+    // The collaborator's book replaces the local one, so the next save carries their revision.
+    expect(result.current.project.book!.revision).toBe(5)
+    expect(capture).toHaveBeenCalledWith("book_review:save_conflict", { stale_cause: "page_order" })
+    expect(generate).not.toHaveBeenCalled()
   })
 
   it("does not generate if layout flushing fails", async () => {

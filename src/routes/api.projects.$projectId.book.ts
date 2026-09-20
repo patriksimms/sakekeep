@@ -8,6 +8,7 @@ import { generateProjectBook, updateProjectBook } from "#/server/repository.ts"
 const updateSchema = z.object({
   pages: z.array(bookPageValidator).optional(),
   settings: generationSettingsValidator.optional(),
+  expectedRevision: z.number().int().nonnegative(),
 })
 
 export const Route = createFileRoute("/api/projects/$projectId/book")({

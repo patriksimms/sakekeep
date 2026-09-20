@@ -90,6 +90,7 @@ describe("book review problems", () => {
           problems: index === 1 ? [problem] : [],
         })),
         sourceFingerprint: "test",
+        revision: 1,
         generatedAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),
       },
@@ -145,6 +146,7 @@ describe("book review problems", () => {
       settings: cycleSettings,
       pages: [page],
       sourceFingerprint: "test",
+      revision: 1,
       generatedAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
     }
@@ -235,6 +237,7 @@ describe("book review page grid", () => {
         settings: cycleSettings,
         pages,
         sourceFingerprint: "test",
+        revision: 1,
         generatedAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),
       },
@@ -332,6 +335,7 @@ it("records a resolution override and automatically replaces its blocking previe
         },
       ],
       sourceFingerprint: "old",
+      revision: 1,
       generatedAt: "",
       updatedAt: "",
     },
@@ -350,7 +354,10 @@ it("records a resolution override and automatically replaces its blocking previe
   render(<Review />)
   fireEvent.click(screen.getByRole("button", { name: "Record resolution override" }))
   await waitFor(() => expect(screen.getByText("No page problems")).toBeTruthy())
-  expect(updateBook).toHaveBeenCalledExactlyOnceWith(initial.id, { settings })
+  expect(updateBook).toHaveBeenCalledExactlyOnceWith(initial.id, {
+    settings,
+    expectedRevision: initial.book!.revision,
+  })
   expect(generate).toHaveBeenCalledExactlyOnceWith(initial.id, settings)
 })
 
@@ -377,6 +384,7 @@ it("keeps the stored preview and retry available after the last layout is delete
       settings: cycleSettings,
       pages: [{ id: "standalone:old", kind: "standalone", layoutId: "deleted", problems: [] }],
       sourceFingerprint: "old",
+      revision: 1,
       generatedAt: "",
       updatedAt: "",
     },

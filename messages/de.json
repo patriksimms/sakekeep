@@ -935,5 +935,7 @@
   "invitation_link_label": "Einladungslink",
   "invitation_copy": "Link kopieren",
   "invitation_copied": "Link kopiert",
-  "invitation_copy_failed": "Kopieren fehlgeschlagen. Wähle den Link unten aus und kopiere ihn."
+  "invitation_copy_failed": "Kopieren fehlgeschlagen. Wähle den Link unten aus und kopiere ihn.",
+  "book_conflict_newer_revision_saved_first": "Jemand anderes hat das Buch zuerst gespeichert. Deine Änderung wurde nicht übernommen.",
+  "book_conflict_reloaded": "Jemand anderes hat das Buch zuerst gespeichert. Die neueste Version wurde geladen, wende deine Änderung erneut an."
 }

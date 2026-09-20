@@ -535,6 +535,9 @@ export function generateBook(input: {
     sourceFingerprint,
     generatedAt: now,
     updatedAt: now,
+    // Regeneration replaces the stored book, so it counts as a write: bumping the revision
+    // invalidates edits a collaborator prepared against the previous book.
+    revision: (input.previousBook?.revision ?? 0) + 1,
   }
 }
 
