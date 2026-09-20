@@ -2,6 +2,8 @@ import { generateKeyPairSync, sign } from "node:crypto"
 
 import { defineConfig } from "@playwright/test"
 
+import { testTargetEnvironment } from "./src/test/target.ts"
+
 const port = Number(process.env.SAKEKEEP_E2E_PORT ?? 3000)
 const authPort = port + 1
 const authBaseUrl = `http://localhost:${authPort}`
@@ -46,6 +48,9 @@ function createTestClerkConfiguration() {
 }
 
 const testClerk = createTestClerkConfiguration()
+// Both servers write through the application, so they have to see the same test database and
+// bucket the seed prepares. Without this they would use whatever the shell happens to export.
+const testTarget = testTargetEnvironment()
 
 export default defineConfig({
   testDir: "./e2e",
@@ -75,12 +80,16 @@ export default defineConfig({
       command: `bunx vite dev --port ${port}`,
       env: {
         ...process.env,
+        ...testTarget,
         VITE_SAKEKEEP_DEMO_MODE: "true",
         // Keep e2e deterministic: no PostHog init and no consent banner, even with a local token.
         VITE_POSTHOG_PROJECT_TOKEN: "",
       },
       url: `http://localhost:${port}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      // Never reuse a server someone started by hand: it would be pointed at the development
+      // database while the seed above prepared the test one. Set SAKEKEEP_E2E_PORT to run the
+      // suite next to a development server.
+      reuseExistingServer: false,
       timeout: 120_000,
     },
     {
@@ -88,6 +97,7 @@ export default defineConfig({
       command: `bunx vite dev --port ${authPort}`,
       env: {
         ...process.env,
+        ...testTarget,
         CLERK_JWT_KEY: testClerk.publicKey,
         CLERK_API_URL: `http://127.0.0.1:${port + 2}`,
         CLERK_SECRET_KEY: clerkSecretKey,

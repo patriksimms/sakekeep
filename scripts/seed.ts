@@ -4,6 +4,7 @@ import { FORM_SCHEMA_VERSION, LAYOUT_SCHEMA_VERSION } from "../src/domain/types"
 import { DEFAULT_TEXT_SETTINGS } from "../src/domain/layout"
 import { db, pool } from "../src/server/db"
 import { layouts, projects, submissions } from "../src/server/db/schema"
+import { env } from "../src/server/env"
 import { ensureBucket, s3 } from "../src/server/object-store"
 import { generateProjectBook } from "../src/server/repository"
 import { shareTokenForProject, shareTokenHash } from "../src/server/share-token"
@@ -65,6 +66,11 @@ const formSchema = {
 }
 
 await ensureBucket()
+// Seeding replaces both demo projects wholesale, which is what a developer wants locally and
+// what a test run wants against its own target. The caller decides which; this only reports it.
+console.log(
+  `Seeding ${new URL(env().DATABASE_URL).pathname.replace(/^\//, "")} / ${env().S3_BUCKET}.`
+)
 await db.delete(projects).where(inArray(projects.id, [CLOSED_PROJECT_ID, COLLECTING_PROJECT_ID]))
 
 // Keep the English-authored fixtures in English to exercise book/UI language separation.

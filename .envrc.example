@@ -17,3 +17,8 @@ export CLERK_SECRET_KEY=
 # feature (consent banner, ingest proxy, server error reporting).
 export VITE_POSTHOG_PROJECT_TOKEN=
 export POSTHOG_HOST=https://eu.i.posthog.com
+
+# Optional. Integration and browser tests default to these targets, derived from
+# the values above with a `-test` suffix. Set them to move the tests elsewhere.
+# export TEST_DATABASE_URL=postgresql://sakekeep:sakekeep@127.0.0.1:54321/sakekeep-test
+# export TEST_S3_BUCKET=sakekeep-test
