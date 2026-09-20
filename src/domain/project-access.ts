@@ -9,5 +9,10 @@ export interface ProjectAccess {
   role: ProjectRole
   ownerUserId: string
   members: Array<{ userId: string; email: string; role: CollaboratorRole }>
-  invitations: Array<{ id: string; email: string; role: CollaboratorRole; expiresAt: string }>
+  invitations: Array<{
+    id: string
+    email: string | null
+    role: CollaboratorRole
+    expiresAt: string
+  }>
 }

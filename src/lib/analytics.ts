@@ -28,9 +28,12 @@ type RegenerationProperties = {
 
 interface AnalyticsEvents {
   "collaborators:changed": {
-    action: "invite" | "change" | "revoke" | "transfer"
+    action: "invite" | "link" | "change" | "revoke" | "transfer"
     role: "organizer" | "editor" | null
   }
+  "invitation:dismissed": Record<string, never>
+  "invitation:account_switch": Record<string, never>
+  "invitation:accept_failed": Record<string, never>
   "invitation:accepted": Record<string, never>
   "locale:changed": { previous_locale: Locale; locale: Locale }
   "project:created": { book_language: Locale; ui_locale: Locale }
@@ -111,6 +114,9 @@ async function startAnalytics() {
     defaults: "2025-05-24",
     capture_pageview: "history_change",
     capture_exceptions: true,
+    // Invitation URLs are bearer credentials, including in referrer/initial URL properties.
+    before_send: (event) =>
+      event && /(?:\/|%2f)invitations(?:\/|%2f)/i.test(JSON.stringify(event)) ? null : event,
     disable_session_recording: true,
     persistence: "localStorage+cookie",
   })

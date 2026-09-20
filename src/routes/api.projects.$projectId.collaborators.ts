@@ -22,6 +22,7 @@ const actionSchema = z.discriminatedUnion("action", [
     email: invitationEmailSchema,
     role: collaboratorRoleSchema,
   }),
+  z.object({ action: z.literal("link") }),
   z.object({
     action: z.literal("change"),
     userId: z.string().min(1),
@@ -70,6 +71,13 @@ export const Route = createFileRoute("/api/projects/$projectId/collaborators")({
                 }
               )
               break
+            case "link": {
+              const { token } = await inviteCollaborator(params.projectId, userId, null, "editor")
+              return Response.json(
+                { url: `${env().APP_ORIGIN}/invitations/${token}` },
+                { headers: { "Cache-Control": "no-store" } }
+              )
+            }
             case "change":
               await changeCollaborator(params.projectId, userId, input.userId, input.role)
               break

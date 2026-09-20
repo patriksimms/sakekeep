@@ -88,13 +88,14 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
     }
     expect((await owner.get(`/API/Projects/${id}`)).status()).toBe(200)
     const editorToken = await invite(owner, id!, "user_editor", "editor")
-    expect((await stranger.post(`/api/invitations/${editorToken}`)).status()).toBe(403)
+    expect((await stranger.get(`/api/invitations/${editorToken}`)).status()).toBe(200)
+    expect((await stranger.get(path)).status()).toBe(404)
     expect((await editor.post(`/api/invitations/${editorToken}`)).status()).toBe(200)
     expect((await editor.post(`/api/invitations/${editorToken}`)).status()).toBe(200)
     const orgToken = await invite(owner, id!, "user_organizer", "organizer")
     expect((await organizer.post(`/api/invitations/${orgToken}`)).status()).toBe(200)
     const badToken = await invite(owner, id!, "user_unverified", "editor")
-    expect((await unverified.post(`/api/invitations/${badToken}`)).status()).toBe(403)
+    expect((await unverified.post(`/api/invitations/${badToken}`)).status()).toBe(200)
     expect((await editor.patch(path, { data: { title: "Forbidden" } })).status()).toBe(403)
     expect((await editor.post(`${path}/publish`)).status()).toBe(403)
     expect((await editor.post(`/API/Projects/${id}/PUBLISH`)).status()).toBe(403)
@@ -302,4 +303,69 @@ test("a new account starts in project creation and editor controls stay limited"
   await page.goto("/projects/22222222-2222-4222-8222-222222222222?tab=responses")
   await expect(page.getByTestId("workspace-responses")).toHaveAttribute("aria-selected", "true")
   await expect(page.getByTestId("button-lock-collection")).toHaveCount(0)
+})
+
+test("invitation landing preserves valid links without granting access and explains malformed links", async ({
+  page,
+}) => {
+  await page.route("**/api/projects", (route) => route.fulfill({ json: { projects: [] } }))
+  const invitationToken = "a".repeat(43)
+  const acceptRequests: string[] = []
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/invitations/"))
+      acceptRequests.push(request.url())
+  })
+  await page.goto(
+    `/invitations/${invitationToken}?__clerk_ticket=email-bound-ticket&__clerk_status=sign_up`
+  )
+  await expect(page).toHaveURL(/\/projects$/)
+  await expect(page.getByTestId("heading-no-keepsakes-yet")).toBeVisible()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("sakekeep-pending-invitations")!))
+  ).toEqual([{ token: invitationToken, dismissed: false }])
+  await page.reload()
+  await expect(page.getByTestId("heading-no-keepsakes-yet")).toBeVisible()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  expect(acceptRequests).toEqual([])
+  await page.goto("/invitations/not-a-token")
+  await expect(page.getByRole("alert")).toHaveText("Invitation not found.")
+})
+
+test("copied links use authenticated preview and explicit single-account acceptance", async () => {
+  const owner = await account("user_owner")
+  const invitee = await account("user_chosen")
+  const other = await account("user_other")
+  let id: string | undefined
+  try {
+    const created = await owner.post("/api/projects", {
+      data: { title: "Copied invitation", bookLanguage: "en" },
+    })
+    id = (await created.json()).id
+    const response = await owner.post(`/api/projects/${id}/collaborators`, {
+      data: { action: "link" },
+    })
+    expect(response.status()).toBe(200)
+    const path = new URL((await response.json()).url).pathname.replace(
+      "/invitations/",
+      "/api/invitations/"
+    )
+    expect((await invitee.get(path)).status()).toBe(200)
+    expect((await invitee.get(`/api/projects/${id}`)).status()).toBe(404)
+    expect((await invitee.post(path)).status()).toBe(200)
+    expect((await other.post(path)).status()).toBe(410)
+    expect((await invitee.post(path)).status()).toBe(200)
+    const access = await (await owner.get(`/api/projects/${id}/collaborators`)).json()
+    expect(access.members).toEqual([
+      { userId: "user_chosen", email: "user_chosen@example.com", role: "editor" },
+    ])
+    expect(
+      (
+        await invitee.post(`/api/projects/${id}/collaborators`, { data: { action: "link" } })
+      ).status()
+    ).toBe(403)
+  } finally {
+    if (id) await owner.delete(`/api/projects/${id}`)
+    await Promise.all([owner, invitee, other].map((context) => context.dispose()))
+  }
 })
