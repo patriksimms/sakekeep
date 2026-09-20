@@ -140,23 +140,31 @@ curl --fail --silent https://<hostname>/api/health
 The endpoint returns `200` only when both PostgreSQL and the object store respond.
 Stopping either dependency must change it to `503`.
 
-For a destructive, isolated local production-stack smoke test, create a Clerk
-test instance that allows `http://127.0.0.1:33000`, set
-`VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_TEST_USER_EMAIL`, and
-`CLERK_TEST_USER_PASSWORD`, then run:
+For a destructive, isolated local smoke test of the shipped image, run:
 
 ```sh
 bun run smoke:production
 ```
 
+It needs no Clerk tenant and no test account credentials, so it also runs on
+every push in CI. The image verifies real signed JWTs exactly as it does in
+production; only the account provider behind it is a local fixture, reached over
+the Compose network. The smoke configures a production-style publishable key on
+purpose: a Clerk development instance sends every browser navigation through its
+hosted handshake, and that host does not exist here, so the public contribution
+form would never load.
+
 The smoke test uses a uniquely named Compose project, builds the production
 targets, adds an isolated RustFS service through `docker-compose.smoke.yml`,
-starts an empty stack, runs migrations without an automatic seed,
-inserts test fixtures explicitly, signs into the organizer UI, exercises an
-anonymous image submission, and creates a PDF export. It then recreates the app
-container and retrieves the submission, uploaded image, and PDF before removing
-its test volumes. The override tests the S3 integration without reading from or
-writing to the production object store. It never uses production credentials or volumes.
+starts an empty stack, runs migrations without an automatic seed, inserts test
+fixtures explicitly, gives the seeded projects an owner through the shipped
+backfill command, exercises an anonymous image submission through the
+contribution form including its required consent, and creates a PDF export. It
+then recreates the app container and, still signed in, retrieves the submission,
+uploaded image, and PDF before removing its test volumes. Set
+`PRODUCTION_SMOKE_KEEP=1` to leave a failed run's stack up for inspection. The
+override tests the S3 integration without reading from or writing to the
+production object store. It never uses production credentials or volumes.
 
 ## Backups and restore
 
