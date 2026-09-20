@@ -788,6 +788,8 @@ export async function inspectPdf(
   pdfxMetadata: boolean
   assetResolutionMetadata: boolean
   assetResolutionCount: number
+  /** What the export actually placed, so preflight can measure it instead of trusting inputs. */
+  assetResolutions: AssetResolutionMetadata[]
   assetPlacements: Array<{ assetId: string; elementId: string }>
 }> {
   const document = await PDFDocument.load(bytes)
@@ -848,6 +850,7 @@ export async function inspectPdf(
     pdfxMetadata: /GTS_PDFXVersion/.test(raw) && /PDF\/X-4/.test(raw),
     assetResolutionMetadata,
     assetResolutionCount: assetResolutionEntries.length,
+    assetResolutions: assetResolutionsOf(document),
     // Which photo the export actually placed in which frame, so distribution is verifiable
     // from the produced PDF rather than only from the renderer's inputs.
     assetPlacements: assetResolutionEntries.flatMap((entry) => {

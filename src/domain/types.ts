@@ -45,6 +45,18 @@ export interface FormSchema {
   questions: FormQuestion[]
 }
 
+/**
+ * What a print-resolution check needs about any raster placed on a page, whether it came from a
+ * contributor's answer or from a layout decoration.
+ */
+export interface PlacedImage {
+  assetId: string
+  name: string
+  mimeType: string
+  width: number
+  height: number
+}
+
 export interface ImageAnswer {
   assetId: string
   name: string

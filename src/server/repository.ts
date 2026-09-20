@@ -1244,6 +1244,18 @@ export async function generateProjectBook(
       .where(eq(submissions.projectId, projectId))
       .orderBy(asc(submissions.sequence))
     const previousRows = await tx.select().from(books).where(eq(books.projectId, projectId))
+    // Decoration pixel sizes live on the asset records, not in the layout, so inspection can only
+    // measure a placed ornament if they are read here.
+    const decorativeRows = await tx
+      .select({
+        assetId: assets.id,
+        name: assets.sourceName,
+        mimeType: assets.mimeType,
+        width: assets.width,
+        height: assets.height,
+      })
+      .from(assets)
+      .where(and(eq(assets.projectId, projectId), eq(assets.kind, "decorative-image")))
     const book = generateBook({
       projectId,
       form: project.formSchema,
@@ -1251,6 +1263,7 @@ export async function generateProjectBook(
       submissions: submissionRows.map((submission) => submissionSummary(submission)),
       layouts: layoutRows.map(layoutRecord),
       settings,
+      decorativeImages: decorativeRows,
       previousBook: previousRows[0]?.generatedBook,
     })
     await tx
