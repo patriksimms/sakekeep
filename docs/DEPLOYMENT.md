@@ -196,7 +196,8 @@ Deploy the corrected forward migration rather than editing already-applied
 migration history.
 
 Schedule orphan cleanup through Coolify or the host scheduler during a quiet
-period:
+period. The command runs the cleanup entry the runtime image ships, and `bun run
+verify` checks that this exact command works against that image's file set:
 
 ```sh
 docker compose -f docker-compose.coolify.yml exec -T app bun run storage:cleanup
