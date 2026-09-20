@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, request, test, type APIRequestContext } from "@playwright/test"
 import { readFile, writeFile } from "node:fs/promises"
 
 import { type ImageAnswer, type Project } from "../src/domain/types"
@@ -14,64 +14,75 @@ if (process.env.PRODUCTION_SMOKE === "true" && !statePath) {
   throw new Error("PRODUCTION_SMOKE_STATE_PATH is required.")
 }
 
-test("creates persistent production data before app recreation", async ({ page, request }) => {
-  test.skip(process.env.PRODUCTION_SMOKE_PHASE !== "create", "Only run during the create phase.")
-  test.setTimeout(120_000)
-  const email = process.env.CLERK_TEST_USER_EMAIL
-  const password = process.env.CLERK_TEST_USER_PASSWORD
-  if (!email || !password) throw new Error("Clerk smoke-test user credentials are required.")
+/**
+ * The organizer's signed-in state, as the shipped image sees it. Both phases build it the same
+ * way from the same session token, so recreating the container does not lose the sign-in: the
+ * verify phase is authenticated exactly like the create phase was.
+ */
+async function organizer(): Promise<APIRequestContext> {
+  const token = process.env.PRODUCTION_SMOKE_AUTH_TOKEN
+  if (!token) throw new Error("PRODUCTION_SMOKE_AUTH_TOKEN is required.")
+  return request.newContext({
+    baseURL: process.env.PRODUCTION_SMOKE_ORIGIN,
+    extraHTTPHeaders: { Authorization: `Bearer ${token}`, "Accept-Language": "en" },
+  })
+}
 
-  await page.goto("/sign-in")
-  await page.getByLabel(/email address/i).fill(email)
-  await page.getByRole("button", { name: /continue/i }).click()
-  await page.getByLabel(/password/i).fill(password)
-  await page.getByRole("button", { name: /continue/i }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"))
-  await page.goto("/projects")
-  await expect(page.getByText("Lea’s farewell book")).toBeVisible()
-
-  const collectingToken = shareTokenForProject(collectingProjectId)
-  const publicResponse = await request.get(`/s/${collectingToken}`)
-  expect(publicResponse.ok()).toBe(true)
-
-  const publicPage = await page.context().browser()!.newPage()
-  await publicPage.goto(`/s/${collectingToken}`)
-  await publicPage.getByTestId("answer-name").fill("Production smoke")
-  await publicPage.getByTestId("answer-memory").fill(submissionMarker)
-  await publicPage.getByRole("radio", { name: "Making chaos feel calm" }).click()
-  await publicPage.getByRole("checkbox", { name: "A little travel" }).click()
-  await publicPage.locator('input[type="file"]').setInputFiles("public/logo512.png")
-  await publicPage.getByTestId("submit-contribution").click()
-  await expect(publicPage.getByText("Your response was submitted.")).toBeVisible()
-
-  const health = await request.get("/api/health")
+async function expectHealthy(api: APIRequestContext) {
+  const health = await api.get("/api/health")
   expect(health.ok()).toBe(true)
   await expect(health.json()).resolves.toMatchObject({
     status: "ok",
     checks: { database: { status: "ok" }, objectStore: { status: "ok" } },
   })
+}
 
-  const exportResponse = await request.post(`/api/projects/${exportProjectId}/export`, { data: {} })
+test("creates persistent production data before app recreation", async ({ page }) => {
+  test.skip(process.env.PRODUCTION_SMOKE_PHASE !== "create", "Only run during the create phase.")
+  test.setTimeout(180_000)
+  const api = await organizer()
+
+  // The organizer's own projects are only visible to a signed-in account.
+  const projects = await api.get("/api/projects")
+  expect(projects.ok()).toBe(true)
+  await expect(projects.json()).resolves.toMatchObject({
+    projects: expect.arrayContaining([expect.objectContaining({ title: "Lea’s farewell book" })]),
+  })
+
+  const collectingToken = shareTokenForProject(collectingProjectId)
+  await page.goto(`/s/${collectingToken}`)
+  await page.getByTestId("answer-name").fill("Production smoke")
+  await page.getByTestId("answer-memory").fill(submissionMarker)
+  await page.getByRole("radio", { name: "Making chaos feel calm" }).click()
+  await page.getByRole("checkbox", { name: "A little travel" }).click()
+  await page.locator('input[type="file"]').setInputFiles("public/logo512.png")
+  // Consent is required, and without it the submit button stays disabled.
+  await page.getByTestId("contribution-consent").click()
+  const submit = page.getByTestId("submit-contribution")
+  await expect(submit).toBeEnabled()
+  await submit.click()
+  await expect(page.getByText("Your response was submitted.")).toBeVisible()
+
+  await expectHealthy(api)
+
+  const exportResponse = await api.post(`/api/projects/${exportProjectId}/export`, { data: {} })
   expect(exportResponse.ok()).toBe(true)
   const { id } = (await exportResponse.json()) as { id: string }
-  const download = await request.get(`/api/exports/${id}`)
+  const download = await api.get(`/api/exports/${id}`)
   expect(download.ok()).toBe(true)
   expect(download.headers()["content-type"]).toContain("application/pdf")
+  expect((await download.body()).byteLength).toBeGreaterThan(0)
   await writeFile(statePath!, JSON.stringify({ exportId: id }))
 })
 
-test("retrieves production data after app recreation", async ({ request }) => {
+test("retrieves production data after app recreation", async () => {
   test.skip(process.env.PRODUCTION_SMOKE_PHASE !== "verify", "Only run during the verify phase.")
-  test.setTimeout(120_000)
+  test.setTimeout(180_000)
+  const api = await organizer()
 
-  const health = await request.get("/api/health")
-  expect(health.ok()).toBe(true)
-  await expect(health.json()).resolves.toMatchObject({
-    status: "ok",
-    checks: { database: { status: "ok" }, objectStore: { status: "ok" } },
-  })
+  await expectHealthy(api)
 
-  const projectResponse = await request.get(`/api/projects/${collectingProjectId}?submissions=true`)
+  const projectResponse = await api.get(`/api/projects/${collectingProjectId}?submissions=true`)
   expect(projectResponse.ok()).toBe(true)
   const project = (await projectResponse.json()) as Project
   const submission = project.submissions?.find((candidate) =>
@@ -87,11 +98,12 @@ test("retrieves production data after app recreation", async ({ request }) => {
     )
   expect(image?.previewUrl).toBeTruthy()
   expect(image?.masterUrl).toBeTruthy()
-  expect((await request.get(image!.previewUrl!)).ok()).toBe(true)
-  expect((await request.get(image!.masterUrl!)).ok()).toBe(true)
+  expect((await api.get(image!.previewUrl!)).ok()).toBe(true)
+  expect((await api.get(image!.masterUrl!)).ok()).toBe(true)
 
   const { exportId } = JSON.parse(await readFile(statePath!, "utf8")) as { exportId: string }
-  const download = await request.get(`/api/exports/${exportId}`)
+  const download = await api.get(`/api/exports/${exportId}`)
   expect(download.ok()).toBe(true)
   expect(download.headers()["content-type"]).toContain("application/pdf")
+  expect((await download.body()).byteLength).toBeGreaterThan(0)
 })

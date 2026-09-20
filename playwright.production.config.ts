@@ -7,7 +7,9 @@ export default defineConfig({
   workers: 1,
   reporter: "line",
   use: {
-    baseURL: "http://localhost:33000",
+    // The image publishes on 127.0.0.1 only; Chromium does not fall back from ::1 the way
+    // Node does, so the address has to be explicit.
+    baseURL: "http://127.0.0.1:33000",
     colorScheme: "light",
     trace: "retain-on-failure",
   },

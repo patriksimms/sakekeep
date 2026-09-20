@@ -86,7 +86,7 @@ bun run setup:icc         # fetch and checksum-verify the ECI ICC profile
 bun run dev               # development server on localhost:3000
 bun run build             # production client and server build
 bun run start             # native Bun production server after a build
-bun run smoke:production  # isolated production Compose smoke test (requires Clerk test credentials)
+bun run smoke:production  # isolated production Compose smoke test of the shipped image
 bun run test:unit         # tests that need no services
 bun run test:integration  # database- and storage-backed tests, on their own targets
 bun run verify            # every required repository gate

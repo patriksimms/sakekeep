@@ -53,3 +53,31 @@ jobs:
       - run: bun run verify
       - if: always()
         run: docker compose logs --no-color
+
+  # The shipped image, end to end: contribute, export, recreate the container, check everything
+  # survived. Its own job because it builds images and brings up its own services; it needs no
+  # Clerk tenant and no account credentials, so it runs on every push like the rest.
+  production-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      NEEDRESTART_MODE: a
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+      - run: bun install --frozen-lockfile
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install Chromium and its system dependencies
+        timeout-minutes: 10
+        run: bunx playwright install --with-deps chromium
+      - run: bun run smoke:production
