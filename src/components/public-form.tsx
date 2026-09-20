@@ -10,8 +10,9 @@ import {
   RefreshCwIcon,
   SendIcon,
   Trash2Icon,
+  TriangleAlertIcon,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 
 import { type FormQuestion, type FormSchema, type SubmissionAnswers } from "#/domain/types.ts"
 import {
@@ -342,6 +343,10 @@ export function PublicForm({ token, title, formSchema, locale = "en" }: PublicFo
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
   const [loaded, setLoaded] = useState(false)
   const [recovered, setRecovered] = useState(false)
+  // Browsers refuse IndexedDB in private windows and when site data is blocked. The form has to
+  // stay usable there; only the local copy of the answers is lost.
+  const [draftStorageWorks, setDraftStorageWorks] = useState(true)
+  const [draftRetained, setDraftRetained] = useState(false)
   const [consented, setConsented] = useState(false)
   const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [status, setStatus] = useState<"editing" | "submitting" | "success" | "error">("editing")
@@ -350,52 +355,51 @@ export function PublicForm({ token, title, formSchema, locale = "en" }: PublicFo
 
   useEffect(() => {
     let active = true
-    void loadContributorDraft(token).then((draft) => {
-      if (!active) return
-      if (draft) {
+    loadContributorDraft(token)
+      .then((draft) => {
+        if (!active || !draft) return
         setAnswers({ ...initialAnswers(formSchema), ...draft.answers })
         setFiles(draft.files)
         setIdempotencyKey(draft.idempotencyKey)
         setRecovered(true)
-      }
-      setLoaded(true)
-    })
+      })
+      .catch(() => {
+        if (active) setDraftStorageWorks(false)
+      })
+      .finally(() => {
+        if (active) setLoaded(true)
+      })
     return () => {
       active = false
     }
   }, [formSchema, token])
 
-  useEffect(() => {
-    if (!loaded || status === "success") return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      void saveContributorDraft({
-        token,
-        answers,
-        files,
-        idempotencyKey,
-        updatedAt: new Date().toISOString(),
-      })
-    }, 450)
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-    }
-  }, [answers, files, idempotencyKey, loaded, status, token])
+  const persistDraft = useCallback(() => {
+    saveContributorDraft({
+      token,
+      answers,
+      files,
+      idempotencyKey,
+      updatedAt: new Date().toISOString(),
+    })
+      .then(() => setDraftStorageWorks(true))
+      .catch(() => setDraftStorageWorks(false))
+  }, [answers, files, idempotencyKey, token])
 
   useEffect(() => {
     if (!loaded || status === "success") return
-    const flushDraft = () => {
-      void saveContributorDraft({
-        token,
-        answers,
-        files,
-        idempotencyKey,
-        updatedAt: new Date().toISOString(),
-      })
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(persistDraft, 450)
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
     }
-    window.addEventListener("pagehide", flushDraft)
-    return () => window.removeEventListener("pagehide", flushDraft)
-  }, [answers, files, idempotencyKey, loaded, status, token])
+  }, [loaded, persistDraft, status])
+
+  useEffect(() => {
+    if (!loaded || status === "success") return
+    window.addEventListener("pagehide", persistDraft)
+    return () => window.removeEventListener("pagehide", persistDraft)
+  }, [loaded, persistDraft, status])
 
   const answeredCount = useMemo(
     () =>
@@ -446,7 +450,13 @@ export function PublicForm({ token, title, formSchema, locale = "en" }: PublicFo
         message?: string
       }
       if (!response.ok) throw new Error(payload.error ?? m.ui_submission_failed({}, { locale }))
-      await clearContributorDraft(token)
+      // The response is saved. A browser that will not let go of the local copy is worth telling
+      // the contributor about, but it must never turn a successful submission into a failure.
+      const cleared = await clearContributorDraft(token).then(
+        () => true,
+        () => false
+      )
+      setDraftRetained(!cleared)
       setStatus("success")
       setMessage(payload.message ?? m.ui_your_response_was_submitted({}, { locale }))
     } catch (error) {
@@ -484,10 +494,12 @@ export function PublicForm({ token, title, formSchema, locale = "en" }: PublicFo
         <CardContent className="flex flex-col gap-3">
           <p>{message}</p>
           <p className="text-sm text-muted-foreground">
-            {m.ui_your_saved_browser_draft_and_local_image_copies_have_been_cleared(
-              {},
-              { locale }
-            )}{" "}
+            {draftRetained
+              ? m.draft_could_not_be_cleared({}, { locale })
+              : m.ui_your_saved_browser_draft_and_local_image_copies_have_been_cleared(
+                  {},
+                  { locale }
+                )}{" "}
           </p>
         </CardContent>
       </Card>
@@ -513,6 +525,16 @@ export function PublicForm({ token, title, formSchema, locale = "en" }: PublicFo
           )}{" "}
         </p>
       </div>
+
+      {!draftStorageWorks && (
+        <Alert className="mb-5">
+          <TriangleAlertIcon />
+          <AlertTitle data-testid="text-draft_storage_unavailable">
+            {m.draft_storage_unavailable({}, { locale })}
+          </AlertTitle>
+          <AlertDescription>{m.draft_storage_unavailable_detail({}, { locale })}</AlertDescription>
+        </Alert>
+      )}
 
       {recovered && (
         <Alert className="mb-5">
