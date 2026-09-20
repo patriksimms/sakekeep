@@ -1,6 +1,6 @@
 import * as m from "#/paraglide/messages.js"
 import { problemMessage } from "#/domain/problem-message.ts"
-import { blockingProblems } from "./generation"
+import { blockingProblems, BLOCKING_PPI, TARGET_PPI } from "./generation"
 import { pageSpecification, type PageSpecification } from "./page-format.ts"
 import { type ExportReport, type GeneratedBook, type PreflightCheck } from "./types"
 
@@ -14,6 +14,8 @@ export function createPreflightReport(input: {
   pageBoxesValid: boolean
   assetResolutionMetadata: boolean
   assetResolutionCount: number
+  /** Effective resolutions read back out of the produced PDF, one per placed raster. */
+  assetResolutions?: ReadonlyArray<{ assetId: string; effectivePpi: number }>
   marks: boolean
   allowBlockingProblems?: boolean
   pageSpecification?: PageSpecification
@@ -25,6 +27,22 @@ export function createPreflightReport(input: {
   const emptyDecorativeImages = input.book.pages.flatMap((page) =>
     page.problems.filter((problem) => problem.code === "empty-decorative-image")
   )
+  // The produced PDF is the last word on what was printed and how large. Reading the measured
+  // entries catches a placement the generated problem list never covered.
+  const accepted = new Set(input.book.settings.resolutionOverrides)
+  const measured = input.assetResolutions ?? []
+  const belowBlocking = measured.filter(
+    (entry) => entry.effectivePpi < BLOCKING_PPI && !accepted.has(entry.assetId)
+  )
+  const belowTarget = measured.filter((entry) => entry.effectivePpi < TARGET_PPI)
+  const resolutionBlocked =
+    belowBlocking.length > 0 ||
+    problems.some((problem) => problem.code === "image-blocking-resolution")
+  const resolutionWarned =
+    belowTarget.length > 0 ||
+    input.book.pages.some((page) =>
+      page.problems.some((problem) => problem.code === "image-low-resolution")
+    )
   const checks: PreflightCheck[] = [
     {
       id: "generation-current",
@@ -82,18 +100,21 @@ export function createPreflightReport(input: {
       label: m.ui_effective_image_resolution(),
       status: !input.assetResolutionMetadata
         ? "fail"
-        : problems.some((problem) => problem.code === "image-blocking-resolution")
+        : resolutionBlocked
           ? blockingProblemsAccepted
             ? "warning"
             : "fail"
-          : input.book.pages.some((page) =>
-                page.problems.some((problem) => problem.code === "image-low-resolution")
-              )
+          : resolutionWarned
             ? "warning"
             : "pass",
-      detail: input.assetResolutionMetadata
-        ? m.resolution_metadata_detail({ value0: input.assetResolutionCount })
-        : m.ui_the_pdf_is_missing_machine_readable_effective_resolution_metadata(),
+      detail: !input.assetResolutionMetadata
+        ? m.ui_the_pdf_is_missing_machine_readable_effective_resolution_metadata()
+        : belowBlocking.length > 0
+          ? m.resolution_below_blocking_detail({
+              value0: belowBlocking.length,
+              value1: BLOCKING_PPI,
+            })
+          : m.resolution_metadata_detail({ value0: input.assetResolutionCount }),
     },
     {
       id: "empty-decorative-images",
@@ -122,8 +143,8 @@ export function createPreflightReport(input: {
       bleedMm: 3,
       mediaBoxMm: [specification.mediaWidthMm, specification.mediaHeightMm],
       safeMarginMm: 6,
-      targetPpi: 300,
-      blockingPpi: 150,
+      targetPpi: TARGET_PPI,
+      blockingPpi: BLOCKING_PPI,
       printCondition: "PSO Coated v3 / FOGRA51",
       marks: input.marks,
     },

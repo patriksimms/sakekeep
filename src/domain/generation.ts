@@ -9,6 +9,7 @@ import {
   type LayoutElement,
   type LayoutRecord,
   type PageProblem,
+  type PlacedImage,
   type StandaloneBookPage,
   type SubmissionBookPage,
   type SubmissionSummary,
@@ -147,6 +148,11 @@ function frameSlots(element: PhotoFrameElement): Array<{ width: number; height: 
   )
 }
 
+/** Below this an image must not be printed without an explicit override. */
+export const BLOCKING_PPI = 150
+/** Below this it prints, but the organizer is warned. */
+export const TARGET_PPI = 300
+
 function problem(
   pageId: string,
   code: PageProblem["code"],
@@ -166,13 +172,53 @@ function problem(
 }
 
 /**
+ * The resolution verdict for one placed raster. A decoration prints exactly like a contributor
+ * photo, so the same thresholds apply to both: a 20 x 20 pixel ornament stretched across a page
+ * is as unprintable as a tiny photo in a frame.
+ */
+function inspectPlacedImage(input: {
+  pageId: string
+  elementId: string
+  image: PlacedImage
+  placedWidthMm: number
+  placedHeightMm: number
+  overrides: ReadonlySet<string>
+}): PageProblem[] {
+  const { image, pageId, elementId } = input
+  const scope = { elementId, assetId: image.assetId }
+  if (image.mimeType !== "image/jpeg" && image.mimeType !== "image/png") {
+    return [problem(pageId, "unsupported-asset", { name: image.name }, true, scope)]
+  }
+  const ppi = effectivePpi(image.width, image.height, input.placedWidthMm, input.placedHeightMm)
+  if (ppi < BLOCKING_PPI && !input.overrides.has(image.assetId)) {
+    return [problem(pageId, "image-blocking-resolution", { name: image.name, ppi }, true, scope)]
+  }
+  if (ppi < TARGET_PPI) {
+    return [problem(pageId, "image-low-resolution", { name: image.name, ppi }, false, scope)]
+  }
+  return []
+}
+
+/**
+ * What page inspection needs beyond the layout itself: the language its text is measured in, and
+ * the decoration pixel sizes that only the project's asset records know.
+ */
+export interface PageInspection {
+  locale?: Locale
+  decorativeImages?: ReadonlyMap<string, PlacedImage>
+  resolutionOverrides?: readonly string[]
+}
+
+/**
  * The checks that depend only on where an element sits, not on the response behind the page.
  * Shared by response pages and standalone pages.
  */
 function inspectElementPlacement(
   pageId: string,
   element: LayoutElement,
-  specification: PageSpecification
+  specification: PageSpecification,
+  decorativeImages: ReadonlyMap<string, PlacedImage>,
+  overrides: ReadonlySet<string>
 ): PageProblem[] {
   const problems: PageProblem[] = []
   if (elementExtendsBeyondBleed(element, specification)) {
@@ -186,8 +232,26 @@ function inspectElementPlacement(
       problem(pageId, "outside-print-area", { boundary: "safe" }, true, { elementId: element.id })
     )
   }
-  if (element.type === "decorative-image" && !element.assetId) {
-    problems.push(problem(pageId, "empty-decorative-image", {}, false, { elementId: element.id }))
+  if (element.type === "decorative-image") {
+    if (!element.assetId) {
+      problems.push(problem(pageId, "empty-decorative-image", {}, false, { elementId: element.id }))
+    } else {
+      // A decoration whose asset record is missing cannot be measured; the render path reports
+      // that separately, so inspection stays quiet rather than inventing a resolution.
+      const image = decorativeImages.get(element.assetId)
+      if (image) {
+        problems.push(
+          ...inspectPlacedImage({
+            pageId,
+            elementId: element.id,
+            image,
+            placedWidthMm: element.geometry.width,
+            placedHeightMm: element.geometry.height,
+            overrides,
+          })
+        )
+      }
+    }
   }
   return problems
 }
@@ -201,13 +265,18 @@ const EMPTY_FORM: FormSchema = { version: FORM_SCHEMA_VERSION, questions: [] }
 export function inspectStandalonePage(
   pageId: string,
   layout: LayoutRecord,
-  locale: Locale = "en"
+  inspection: PageInspection = {}
 ): PageProblem[] {
+  const locale = inspection.locale ?? "en"
+  const decorativeImages = inspection.decorativeImages ?? new Map<string, PlacedImage>()
+  const overrides = new Set(inspection.resolutionOverrides ?? [])
   const specification = pageSpecificationForLayout(layout.schema)
   const problemNames = textProblemNames(layout.schema.elements, EMPTY_FORM)
   const problems: PageProblem[] = []
   for (const element of layout.schema.elements) {
-    problems.push(...inspectElementPlacement(pageId, element, specification))
+    problems.push(
+      ...inspectElementPlacement(pageId, element, specification, decorativeImages, overrides)
+    )
     if (element.type !== "static-text") continue
     const runs = textRunsForElement(element, undefined, undefined, "", locale)
     const content = runs.map((run) => run.text).join("\n")
@@ -244,11 +313,12 @@ export function inspectSubmissionPage(
   layout: LayoutRecord,
   submission: SubmissionSummary,
   form: FormSchema,
-  resolutionOverrides: string[],
-  locale: Locale = "en"
+  inspection: PageInspection = {}
 ): PageProblem[] {
+  const locale = inspection.locale ?? "en"
+  const decorativeImages = inspection.decorativeImages ?? new Map<string, PlacedImage>()
   const problems: PageProblem[] = []
-  const overrides = new Set(resolutionOverrides)
+  const overrides = new Set(inspection.resolutionOverrides ?? [])
   const assignment = assignPhotosToFrames(layout.schema.elements, submission.answers)
   const problemNames = textProblemNames(layout.schema.elements, form)
   const requiredQuestions = new Map(
@@ -259,7 +329,9 @@ export function inspectSubmissionPage(
   const pageSpecification = pageSpecificationForLayout(layout.schema)
 
   for (const element of layout.schema.elements) {
-    problems.push(...inspectElementPlacement(pageId, element, pageSpecification))
+    problems.push(
+      ...inspectElementPlacement(pageId, element, pageSpecification, decorativeImages, overrides)
+    )
 
     if (element.type === "bound-text" || element.type === "static-text") {
       const question =
@@ -313,32 +385,17 @@ export function inspectSubmissionPage(
       const slots = frameSlots(element)
       framePhotos(assignment, element.id).forEach((image, index) => {
         if (!image) return
-        if (image.mimeType !== "image/jpeg" && image.mimeType !== "image/png") {
-          problems.push(
-            problem(pageId, "unsupported-asset", { name: image.name }, true, {
-              elementId: element.id,
-              assetId: image.assetId,
-            })
-          )
-          return
-        }
         const slot = slots[index]!
-        const ppi = effectivePpi(image.width, image.height, slot.width, slot.height)
-        if (ppi < 150 && !overrides.has(image.assetId)) {
-          problems.push(
-            problem(pageId, "image-blocking-resolution", { name: image.name, ppi }, true, {
-              elementId: element.id,
-              assetId: image.assetId,
-            })
-          )
-        } else if (ppi < 300) {
-          problems.push(
-            problem(pageId, "image-low-resolution", { name: image.name, ppi }, false, {
-              elementId: element.id,
-              assetId: image.assetId,
-            })
-          )
-        }
+        problems.push(
+          ...inspectPlacedImage({
+            pageId,
+            elementId: element.id,
+            image,
+            placedWidthMm: slot.width,
+            placedHeightMm: slot.height,
+            overrides,
+          })
+        )
       })
     }
   }
@@ -433,7 +490,7 @@ export function pinCoverPages(pages: BookPage[], layouts: LayoutRecord[]): BookP
 function coverPages(
   layouts: LayoutRecord[],
   role: "front-cover" | "back-cover",
-  locale: Locale = "en"
+  inspection: PageInspection = {}
 ): BookPage[] {
   const layout = findLayoutByRole(layouts, role)
   if (!layout) return []
@@ -443,7 +500,7 @@ function coverPages(
       id,
       kind: "standalone",
       layoutId: layout.id,
-      problems: inspectStandalonePage(id, layout, locale),
+      problems: inspectStandalonePage(id, layout, inspection),
     },
   ]
 }
@@ -455,6 +512,8 @@ export function generateBook(input: {
   submissions: SubmissionSummary[]
   layouts: LayoutRecord[]
   settings: GenerationSettings
+  /** Every decoration the project owns, so placed ornaments can be measured like photos. */
+  decorativeImages?: readonly PlacedImage[]
   previousBook?: GeneratedBook | null
   now?: string
 }): GeneratedBook {
@@ -469,6 +528,13 @@ export function generateBook(input: {
   }
   const assignments = deterministicLayoutAssignments(submissions, layouts, input.settings)
   const layoutById = new Map(layouts.map((layout) => [layout.id, layout]))
+  const inspection: PageInspection = {
+    locale: input.locale,
+    decorativeImages: new Map(
+      (input.decorativeImages ?? []).map((image) => [image.assetId, image])
+    ),
+    resolutionOverrides: input.settings.resolutionOverrides,
+  }
 
   const submissionPages: SubmissionBookPage[] = submissions.map((submission) => {
     const id = `submission:${submission.id}`
@@ -479,14 +545,7 @@ export function generateBook(input: {
       kind: "submission",
       submissionId: submission.id,
       layoutId,
-      problems: inspectSubmissionPage(
-        id,
-        layout,
-        submission,
-        input.form,
-        input.settings.resolutionOverrides,
-        input.locale
-      ),
+      problems: inspectSubmissionPage(id, layout, submission, input.form, inspection),
     }
   })
 
@@ -496,7 +555,7 @@ export function generateBook(input: {
       if (page.kind !== "standalone") return []
       const layout = layoutById.get(page.layoutId)
       if (!layout || layout.role !== "static") return []
-      return [{ ...page, problems: inspectStandalonePage(page.id, layout, input.locale) }]
+      return [{ ...page, problems: inspectStandalonePage(page.id, layout, inspection) }]
     }
   )
   const bodyPages: BookPage[] = [...submissionPages, ...standalonePages]
@@ -513,9 +572,9 @@ export function generateBook(input: {
   })
 
   const allPages: BookPage[] = [
-    ...coverPages(layouts, "front-cover", input.locale),
+    ...coverPages(layouts, "front-cover", inspection),
     ...bodyPages,
-    ...coverPages(layouts, "back-cover", input.locale),
+    ...coverPages(layouts, "back-cover", inspection),
   ]
 
   const now = input.now ?? new Date().toISOString()

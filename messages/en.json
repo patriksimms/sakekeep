@@ -937,5 +937,6 @@
   "invitation_copied": "Link copied",
   "invitation_copy_failed": "Copy failed. Select and copy the link below.",
   "book_conflict_newer_revision_saved_first": "Someone else saved the book first. Your change was not applied.",
-  "book_conflict_reloaded": "Someone else saved the book first. The latest version was reloaded, so apply your change again."
+  "book_conflict_reloaded": "Someone else saved the book first. The latest version was reloaded, so apply your change again.",
+  "resolution_below_blocking_detail": "{value0} placed images print below {value1} effective PPI"
 }

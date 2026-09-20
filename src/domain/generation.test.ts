@@ -406,7 +406,7 @@ describe("book generation", () => {
       const submission = submissionFixture(submissionIds[0]!, 1)
       submission.answers.memory = "one\ntwo\nthree"
 
-      expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+      expect(inspectSubmissionPage("page", layout, submission, completeForm)).toContainEqual(
         expect.objectContaining({
           code: "text-overflow",
           elementId: element.id,
@@ -433,7 +433,7 @@ describe("book generation", () => {
     const submission = submissionFixture(submissionIds[0]!, 1)
     submission.answers.memory = "one"
 
-    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+    expect(inspectSubmissionPage("page", layout, submission, completeForm)).toContainEqual(
       expect.objectContaining({
         params: expect.objectContaining({
           name: "Best memory",
@@ -457,7 +457,7 @@ describe("book generation", () => {
     const submission = submissionFixture(submissionIds[0]!, 1)
     submission.answers.memory = "one"
 
-    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+    expect(inspectSubmissionPage("page", layout, submission, completeForm)).toContainEqual(
       expect.objectContaining({
         code: "text-overflow",
         params: expect.objectContaining({
@@ -479,7 +479,7 @@ describe("book generation", () => {
     const submission = submissionFixture(submissionIds[0]!, 1)
     submission.answers.memory = ""
 
-    expect(inspectSubmissionPage("page", layout, submission, completeForm, [])).toContainEqual(
+    expect(inspectSubmissionPage("page", layout, submission, completeForm)).toContainEqual(
       expect.objectContaining({
         code: "missing-required-answer",
         elementId: element.id,
@@ -507,13 +507,7 @@ describe("book generation", () => {
     element.geometry = { ...element.geometry, x: -4 }
 
     expect(
-      inspectSubmissionPage(
-        "page",
-        layout,
-        submissionFixture(submissionIds[0]!, 1),
-        completeForm,
-        []
-      )
+      inspectSubmissionPage("page", layout, submissionFixture(submissionIds[0]!, 1), completeForm)
     ).toContainEqual(
       expect.objectContaining({
         code: "outside-print-area",
@@ -529,13 +523,7 @@ describe("book generation", () => {
     element.geometry = { ...element.geometry, x: -4 }
 
     expect(
-      inspectSubmissionPage(
-        "page",
-        layout,
-        submissionFixture(submissionIds[0]!, 1),
-        completeForm,
-        []
-      )
+      inspectSubmissionPage("page", layout, submissionFixture(submissionIds[0]!, 1), completeForm)
     ).toContainEqual(
       expect.objectContaining({
         code: "outside-print-area",
@@ -557,8 +545,7 @@ describe("book generation", () => {
       "page",
       layout,
       submissionFixture(submissionIds[0]!, 1),
-      completeForm,
-      []
+      completeForm
     ).filter((problem) => problem.code === "text-overflow")
 
     expect(problems.map((problem) => problemMessage(problem, "en"))).toEqual([
@@ -588,13 +575,13 @@ describe("book generation", () => {
         ],
       },
     }
-    const blocked = inspectSubmissionPage("page", layout, submission, completeForm, [])
+    const blocked = inspectSubmissionPage("page", layout, submission, completeForm)
     expect(
       blocked.some((problem) => problem.code === "image-blocking-resolution" && problem.blocking)
     ).toBe(true)
-    const overridden = inspectSubmissionPage("page", layout, submission, completeForm, [
-      "asset-low",
-    ])
+    const overridden = inspectSubmissionPage("page", layout, submission, completeForm, {
+      resolutionOverrides: ["asset-low"],
+    })
     expect(overridden.some((problem) => problem.code === "image-blocking-resolution")).toBe(false)
     expect(overridden.some((problem) => problem.code === "image-low-resolution")).toBe(true)
   })
@@ -614,9 +601,7 @@ describe("book generation", () => {
       },
     ]
 
-    expect(
-      inspectSubmissionPage("page", layoutFixture(), submission, completeForm, [])
-    ).toContainEqual(
+    expect(inspectSubmissionPage("page", layoutFixture(), submission, completeForm)).toContainEqual(
       expect.objectContaining({
         assetId: "asset-legacy",
         code: "unsupported-asset",
@@ -625,17 +610,77 @@ describe("book generation", () => {
     )
   })
 
+  it("applies the print-resolution thresholds to decorations, override included", () => {
+    const layout = standaloneLayoutFixture()
+    layout.schema = addElement(layout.schema, "decorative-image")
+    const decoration = layout.schema.elements.find(
+      (element) => element.type === "decorative-image"
+    )!
+    decoration.assetId = "asset-ornament"
+    // 70 mm wide from 20 pixels is about 7 effective PPI: unprintable, and until now invisible.
+    decoration.geometry = { ...decoration.geometry, width: 70, height: 35 }
+    const decorativeImages = new Map([
+      [
+        "asset-ornament",
+        {
+          assetId: "asset-ornament",
+          name: "ornament.jpg",
+          mimeType: "image/jpeg",
+          width: 20,
+          height: 20,
+        },
+      ],
+    ])
+
+    const blocked = inspectStandalonePage("standalone:page", layout, { decorativeImages })
+    expect(blocked).toContainEqual(
+      expect.objectContaining({
+        code: "image-blocking-resolution",
+        assetId: "asset-ornament",
+        elementId: decoration.id,
+        blocking: true,
+      })
+    )
+
+    const overridden = inspectStandalonePage("standalone:page", layout, {
+      decorativeImages,
+      resolutionOverrides: ["asset-ornament"],
+    })
+    expect(overridden.some((problem) => problem.code === "image-blocking-resolution")).toBe(false)
+    expect(overridden).toContainEqual(
+      expect.objectContaining({ code: "image-low-resolution", blocking: false })
+    )
+  })
+
+  it("leaves a decoration alone when it prints at full resolution", () => {
+    const layout = standaloneLayoutFixture()
+    layout.schema = addElement(layout.schema, "decorative-image")
+    const decoration = layout.schema.elements.find(
+      (element) => element.type === "decorative-image"
+    )!
+    decoration.assetId = "asset-sharp"
+    const problems = inspectStandalonePage("standalone:page", layout, {
+      decorativeImages: new Map([
+        [
+          "asset-sharp",
+          {
+            assetId: "asset-sharp",
+            name: "sharp.png",
+            mimeType: "image/png",
+            width: 2400,
+            height: 1200,
+          },
+        ],
+      ]),
+    })
+    expect(problems.some((problem) => problem.code.startsWith("image-"))).toBe(false)
+  })
+
   it("warns about empty decorative images without blocking generation", () => {
     const layout = layoutFixture()
     layout.schema = addElement(layout.schema, "decorative-image")
     expect(
-      inspectSubmissionPage(
-        "page",
-        layout,
-        submissionFixture(submissionIds[0]!, 0),
-        completeForm,
-        []
-      )
+      inspectSubmissionPage("page", layout, submissionFixture(submissionIds[0]!, 0), completeForm)
     ).toContainEqual(
       expect.objectContaining({
         code: "empty-decorative-image",
@@ -677,7 +722,7 @@ describe("photo distribution problems", () => {
     const submission = submissionFixture(submissionIds[0]!, 3)
     submission.answers.photos = ["a", "b", "c", "d"].map((assetId) => photo(assetId))
 
-    const problems = inspectSubmissionPage("page", layout, submission, completeForm, []).filter(
+    const problems = inspectSubmissionPage("page", layout, submission, completeForm).filter(
       (problem) => problem.code === "photo-slot-mismatch"
     )
 
@@ -753,7 +798,7 @@ describe("photo distribution problems", () => {
     submission.answers.photos = [photo("a"), photo("b")]
     submission.answers.portraits = []
 
-    const problems = inspectSubmissionPage("page", layout, submission, form, []).filter(
+    const problems = inspectSubmissionPage("page", layout, submission, form).filter(
       (problem) => problem.code === "photo-slot-mismatch"
     )
 
@@ -774,7 +819,7 @@ describe("photo distribution problems", () => {
     const submission = submissionFixture(submissionIds[0]!, 1)
     submission.answers.photos = [photo("sharp", 3000, 2000), photo("soft", 400, 300)]
 
-    const problems = inspectSubmissionPage("page", layout, submission, completeForm, []).filter(
+    const problems = inspectSubmissionPage("page", layout, submission, completeForm).filter(
       (problem) => problem.code === "image-blocking-resolution"
     )
 

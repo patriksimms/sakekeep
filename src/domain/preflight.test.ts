@@ -36,6 +36,51 @@ describe("preflight", () => {
     expect(report.pdfx.structurallyVerified).toBe(true)
   })
 
+  it("fails on a measured placement the generated book never reported", () => {
+    const base = {
+      projectId: book().projectId,
+      book: book(),
+      bookStatus: "current" as const,
+      pageCount: 1,
+      fontsEmbedded: true,
+      outputIntentEmbedded: true,
+      pageBoxesValid: true,
+      assetResolutionMetadata: true,
+      assetResolutionCount: 1,
+      marks: false,
+      now: "2026-07-18T00:00:00.000Z",
+    }
+    const resolution = (report: ReturnType<typeof createPreflightReport>) =>
+      report.checks.find((check) => check.id === "image-resolution")!
+
+    const blocked = createPreflightReport({
+      ...base,
+      assetResolutions: [{ assetId: "asset-ornament", effectivePpi: 5 }],
+    })
+    expect(resolution(blocked).status).toBe("fail")
+    expect(hasFailedPreflight(blocked)).toBe(true)
+
+    // An organizer who accepted this asset gets the export, with the entry still counted.
+    const acceptedBook = book()
+    acceptedBook.settings = {
+      ...acceptedBook.settings,
+      resolutionOverrides: ["asset-ornament"],
+    }
+    const accepted = createPreflightReport({
+      ...base,
+      book: acceptedBook,
+      assetResolutions: [{ assetId: "asset-ornament", effectivePpi: 5 }],
+    })
+    expect(resolution(accepted).status).toBe("warning")
+    expect(hasFailedPreflight(accepted)).toBe(false)
+
+    const sharp = createPreflightReport({
+      ...base,
+      assetResolutions: [{ assetId: "asset-sharp", effectivePpi: 400 }],
+    })
+    expect(resolution(sharp).status).toBe("pass")
+  })
+
   it("reports the selected DIN format", () => {
     const report = createPreflightReport({
       projectId: book().projectId,

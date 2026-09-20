@@ -127,6 +127,7 @@ async function runExport(
     pageBoxesValid: inspection.pageBoxesValid,
     assetResolutionMetadata: inspection.assetResolutionMetadata,
     assetResolutionCount: inspection.assetResolutionCount,
+    assetResolutions: inspection.assetResolutions,
     marks: options.marks,
     allowBlockingProblems: options.allowBlockingProblems,
     pageSpecification: specification,
