@@ -1,4 +1,17 @@
-# Sakekeep product and implementation plan
+# Historical prototype plan
+
+This plan is deprecated and retained as a record of the original prototype.
+Its requirements, exclusions, and implementation instructions are historical.
+The current implementation is the intended product behavior.
+
+For current workflows and constraints, read the [README](README.md), including
+[authentication and roles](README.md#authentication-and-route-policy) and
+[PDF verification scope](README.md#pdf-verification-scope). Deployment procedures
+live in the [deployment runbook](docs/DEPLOYMENT.md).
+
+The application now uses Clerk authentication and project authorization, with
+owners and invited collaborators. The unauthenticated, local-only boundary and
+collaboration exclusions below no longer describe the product.
 
 ## Goal
 
@@ -10,14 +23,7 @@ a print-ready DIN A4, A5, or A6 PDF in portrait or landscape.
 The primary use cases are personal birthday gifts and farewell gifts for work
 colleagues.
 
-This document is the product source of truth for a long-running Codex goal. The
-entire product described here is in scope. Implementation should proceed in
-verified vertical milestones, leaving the application runnable at the end of
-each milestone. Codex may make small, reversible implementation decisions that
-are consistent with this plan and must record material decisions in the
-repository. It must not silently remove requirements to finish sooner.
-
-## Prototype boundary
+## Historical prototype boundary
 
 This version is an unauthenticated prototype:
 
@@ -469,7 +475,7 @@ representative generated pages, and final PDF pages at desktop, tablet, and
 required mobile sizes. Visual inspection supplements rather than replaces
 behavioral assertions.
 
-## Explicitly out of scope
+## Historical exclusions
 
 Only the following are outside the complete prototype goal:
 

@@ -1,7 +1,8 @@
 # Milestone verification log
 
-This file is updated when each vertical milestone is verified. The authoritative
-scope remains `PLAN.md`.
+This log records verification of the original prototype milestones against the
+[historical plan](../PLAN.md). For current product workflows and constraints,
+read the [README](../README.md).
 
 | Milestone                                   | Status | Verification evidence                                                |
 | ------------------------------------------- | ------ | -------------------------------------------------------------------- |
