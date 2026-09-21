@@ -4,6 +4,28 @@ test.use({ colorScheme: "dark", viewport: { width: 1440, height: 1000 } })
 
 const projectId = "11111111-1111-4111-8111-111111111111"
 
+for (const { tab, module, readyRole, readyName } of [
+  { tab: "layouts", module: "layout-editor", readyRole: "textbox", readyName: "Layout name" },
+  { tab: "book", module: "book-review", readyRole: "combobox", readyName: "Assignment mode" },
+] as const) {
+  test(`${tab} recovers from a failed download by reloading the page`, async ({ page }) => {
+    const moduleUrl = `**/src/components/${module}.tsx*`
+    await page.route(moduleUrl, (route) => route.abort("failed"))
+    await page.goto(`/projects/${projectId}?tab=${tab}`)
+    await expect(page.getByRole("alert")).toContainText("This tool could not load.")
+
+    // A broken tool must not take the rest of the workspace down with it.
+    await page.getByTestId("workspace-form").click()
+    await expect(page.getByRole("heading", { name: "Published form" })).toBeVisible()
+    await page.getByTestId(`workspace-${tab}`).click()
+    await expect(page.getByRole("button", { name: "Reload page" })).toBeVisible()
+
+    await page.unroute(moduleUrl)
+    await page.getByRole("button", { name: "Reload page" }).click()
+    await expect(page.getByRole(readyRole, { name: readyName, exact: true })).toBeVisible()
+  })
+}
+
 test("form and responses defer tools, with loading feedback on each first visit", async ({
   page,
 }) => {

@@ -944,5 +944,7 @@
   "draft_could_not_be_cleared": "Deine Antwort wurde gespeichert. Dieser Browser hat die lokale Kopie nicht freigegeben. Lösche die Websitedaten, wenn du sie entfernen möchtest.",
   "upload_cleaned_up_before_record": "Die hochgeladenen Bilder wurden entfernt, bevor sie gespeichert werden konnten. Versuche es erneut.",
   "ui_loading_layouts": "Layouts werden geladen…",
-  "ui_loading_book_review": "Buchprüfung wird geladen…"
+  "ui_loading_book_review": "Buchprüfung wird geladen…",
+  "ui_workspace_tool_failed": "Dieses Werkzeug konnte nicht geladen werden. Lade die Seite neu, um es erneut zu versuchen.",
+  "ui_reload_page": "Seite neu laden"
 }

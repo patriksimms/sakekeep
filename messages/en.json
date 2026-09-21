@@ -944,5 +944,7 @@
   "draft_could_not_be_cleared": "Your response was saved. This browser would not let go of the local copy, so clear its site data if you want it gone.",
   "upload_cleaned_up_before_record": "The uploaded images were cleaned up before they could be recorded. Try again.",
   "ui_loading_layouts": "Loading layouts…",
-  "ui_loading_book_review": "Loading book review…"
+  "ui_loading_book_review": "Loading book review…",
+  "ui_workspace_tool_failed": "This tool could not load. Reload the page to try again.",
+  "ui_reload_page": "Reload page"
 }

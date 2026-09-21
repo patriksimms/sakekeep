@@ -46,7 +46,7 @@ it("loads only on first visit and retains pending work and local state while hid
       <Tabs value={active ? "tool" : "form"}>
         <TabsContent value="form">Form</TabsContent>
         <TabsContent value="tool" keepMounted>
-          <DeferredWorkspaceTool active={active} loadingLabel="Loading tool…">
+          <DeferredWorkspaceTool tool="layouts" active={active} loadingLabel="Loading tool…">
             <LazyTool />
           </DeferredWorkspaceTool>
         </TabsContent>
@@ -76,7 +76,7 @@ it("loads immediately when the tool is the initial tab", async () => {
   const load = vi.fn(async () => ({ default: () => <p>Tool ready</p> }))
   const Tool = lazy(load)
   render(
-    <DeferredWorkspaceTool active loadingLabel="Loading tool…">
+    <DeferredWorkspaceTool tool="book" active loadingLabel="Loading tool…">
       <Tool />
     </DeferredWorkspaceTool>
   )

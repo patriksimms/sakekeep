@@ -27,6 +27,7 @@ type RegenerationProperties = {
 }
 
 interface AnalyticsEvents {
+  "workspace:tool_failed": { tool: "layouts" | "book" }
   "collaborators:changed": {
     action: "invite" | "link" | "change" | "revoke" | "transfer"
     role: "organizer" | "editor" | null

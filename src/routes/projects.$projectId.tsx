@@ -513,6 +513,7 @@ function ProjectWorkspace() {
         </TabsContent>
         <TabsContent value="layouts" keepMounted inert={bookBusy}>
           <DeferredWorkspaceTool
+            tool="layouts"
             active={activeTab === "layouts"}
             loadingLabel={m.ui_loading_layouts()}
           >
@@ -521,6 +522,7 @@ function ProjectWorkspace() {
         </TabsContent>
         <TabsContent value="book" keepMounted>
           <DeferredWorkspaceTool
+            tool="book"
             active={activeTab === "book"}
             loadingLabel={m.ui_loading_book_review()}
           >
