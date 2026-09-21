@@ -1254,7 +1254,7 @@ const Editor = forwardRef<
   return (
     <div
       aria-label={m.ui_layout_editor_workspace()}
-      className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[230px_minmax(0,1fr)_280px]"
+      className="grid min-h-0 items-start gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:grid-rows-[8rem_auto] xl:grid-cols-[230px_minmax(0,1fr)_280px] xl:grid-rows-1"
       onKeyDown={(event) => {
         const activeObject = canvas.current?.getActiveObject() as
           | { isEditing?: boolean }
@@ -1281,9 +1281,9 @@ const Editor = forwardRef<
     >
       <Card
         aria-label={m.ui_layers()}
-        className="h-48 bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+        className="h-32 bg-card/90 md:col-start-1 md:row-start-1 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
       >
-        <CardHeader>
+        <CardHeader className="flex items-baseline justify-between gap-2 xl:block">
           <CardTitle data-testid="heading-layers">{m.ui_layers()}</CardTitle>
           <CardDescription>{m.ui_topmost_first()}</CardDescription>
         </CardHeader>
@@ -1342,8 +1342,8 @@ const Editor = forwardRef<
         </CardContent>
       </Card>
 
-      <div className="min-w-0">
-        <Card className="mb-4 bg-card/90">
+      <div className="flex min-w-0 flex-col gap-3 md:col-start-1 md:row-start-2 xl:col-start-2 xl:row-start-1">
+        <Card className="bg-card/90">
           <CardContent className="flex flex-col gap-3">
             {responseBound ? (
               <>
@@ -1446,7 +1446,7 @@ const Editor = forwardRef<
 
         <div
           ref={container}
-          className="print-canvas flex min-h-[420px] items-center justify-center overflow-auto rounded-xl border p-3 sm:p-6"
+          className="print-canvas flex items-center justify-center overflow-auto rounded-xl border p-3 md:order-first xl:order-none xl:p-6"
         >
           <LayoutCanvas
             locale={project.bookLanguage}
@@ -1465,7 +1465,7 @@ const Editor = forwardRef<
       <Card
         data-testid="layout-inspector"
         aria-label={m.ui_inspector()}
-        className="h-[28rem] bg-card/90 xl:sticky xl:top-20 xl:h-[calc(100dvh-6rem)]"
+        className="h-[28rem] bg-card/90 md:sticky md:top-20 md:col-start-2 md:row-span-2 md:row-start-1 md:h-[calc(100dvh-6rem)] xl:col-start-3 xl:row-span-1"
       >
         <CardHeader>
           <div className="-mx-1 flex items-center gap-0.5">
