@@ -88,14 +88,18 @@ for (const viewport of [
         true
       )
     } finally {
-      const current = await savedLayout()
-      expect(
-        (
-          await request.patch(`${projectPath}/layouts/${layout.id}`, {
-            data: { expectedRevision: current.revision, schema: layout.schema },
-          })
-        ).ok()
-      ).toBe(true)
+      if (!page.isClosed()) await page.close()
+      // A pagehide save can still race restoration, so retry with the latest revision.
+      await expect
+        .poll(async () => {
+          const current = await savedLayout()
+          return (
+            await request.patch(`${projectPath}/layouts/${layout.id}`, {
+              data: { expectedRevision: current.revision, schema: layout.schema },
+            })
+          ).ok()
+        })
+        .toBe(true)
     }
   })
 }
