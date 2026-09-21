@@ -17,13 +17,12 @@ import {
   PencilIcon,
   Trash2Icon,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { lazy, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { BookReview } from "#/components/book-review.tsx"
+import { DeferredWorkspaceTool } from "#/components/deferred-workspace-tool.tsx"
 import { ExportPanel } from "#/components/export-panel.tsx"
 import { FormBuilder } from "#/components/form-builder.tsx"
-import { LayoutsPanel } from "#/components/layout-editor.tsx"
 import { SubmissionsPanel } from "#/components/submissions-panel.tsx"
 import {
   AlertDialog,
@@ -67,6 +66,13 @@ import {
   type WorkspaceStep,
 } from "#/domain/workspace-tabs.ts"
 import { api, projectApi } from "#/lib/api.ts"
+
+const LayoutsPanel = lazy(() =>
+  import("#/components/layout-editor.tsx").then((module) => ({ default: module.LayoutsPanel }))
+)
+const BookReview = lazy(() =>
+  import("#/components/book-review.tsx").then((module) => ({ default: module.BookReview }))
+)
 
 export const Route = createFileRoute("/projects/$projectId")({
   validateSearch: (search): { tab?: WorkspaceStep; bookView?: BookView } => ({
@@ -506,35 +512,45 @@ function ProjectWorkspace() {
           />
         </TabsContent>
         <TabsContent value="layouts" keepMounted inert={bookBusy}>
-          <LayoutsPanel ref={layoutsRef} project={project} onProjectChange={setProject} />
+          <DeferredWorkspaceTool
+            active={activeTab === "layouts"}
+            loadingLabel={m.ui_loading_layouts()}
+          >
+            <LayoutsPanel ref={layoutsRef} project={project} onProjectChange={setProject} />
+          </DeferredWorkspaceTool>
         </TabsContent>
         <TabsContent value="book" keepMounted>
-          <BookReview
-            active={(search.tab ?? defaultWorkspaceStep(project.state)) === "book"}
-            beforeGenerate={beforeGenerate}
-            onBusyChange={setBookBusy}
-            project={project}
-            onProjectChange={setProject}
-            view={search.bookView ?? "grid"}
-            onEditLayouts={() => {
-              void navigate({
-                to: "/projects/$projectId",
-                params: { projectId },
-                search: (current) => ({ ...current, tab: "layouts" }),
-              })
-            }}
-            onViewChange={(bookView) => {
-              void navigate({
-                to: "/projects/$projectId",
-                params: { projectId },
-                // Grid is the default, so it stays out of the URL.
-                search: (current) => ({
-                  ...current,
-                  bookView: bookView === "grid" ? undefined : bookView,
-                }),
-              })
-            }}
-          />
+          <DeferredWorkspaceTool
+            active={activeTab === "book"}
+            loadingLabel={m.ui_loading_book_review()}
+          >
+            <BookReview
+              active={activeTab === "book"}
+              beforeGenerate={beforeGenerate}
+              onBusyChange={setBookBusy}
+              project={project}
+              onProjectChange={setProject}
+              view={search.bookView ?? "grid"}
+              onEditLayouts={() => {
+                void navigate({
+                  to: "/projects/$projectId",
+                  params: { projectId },
+                  search: (current) => ({ ...current, tab: "layouts" }),
+                })
+              }}
+              onViewChange={(bookView) => {
+                void navigate({
+                  to: "/projects/$projectId",
+                  params: { projectId },
+                  // Grid is the default, so it stays out of the URL.
+                  search: (current) => ({
+                    ...current,
+                    bookView: bookView === "grid" ? undefined : bookView,
+                  }),
+                })
+              }}
+            />
+          </DeferredWorkspaceTool>
         </TabsContent>
         <TabsContent value="export">
           <ExportPanel project={project} bookBusy={bookBusy} />

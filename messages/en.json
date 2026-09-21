@@ -942,5 +942,7 @@
   "draft_storage_unavailable": "This browser is not saving a draft",
   "draft_storage_unavailable_detail": "Your answers stay in this tab only. Submit before you close or reload it.",
   "draft_could_not_be_cleared": "Your response was saved. This browser would not let go of the local copy, so clear its site data if you want it gone.",
-  "upload_cleaned_up_before_record": "The uploaded images were cleaned up before they could be recorded. Try again."
+  "upload_cleaned_up_before_record": "The uploaded images were cleaned up before they could be recorded. Try again.",
+  "ui_loading_layouts": "Loading layouts…",
+  "ui_loading_book_review": "Loading book review…"
 }
