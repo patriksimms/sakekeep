@@ -98,31 +98,6 @@ export function ExportPanel({
         <h2 data-testid="heading-print-export" className="font-heading text-2xl">
           {m.ui_print_export()}
         </h2>
-        <p className="text-sm text-muted-foreground">
-          {m.ui_render_source_assets_and_canonical_geometry_into_individual()}{" "}
-          {specification.standard} {m.ui_pages()}
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {[
-          [m.ui_trim_size(), `${specification.trimWidthMm} × ${specification.trimHeightMm} mm`],
-          [
-            m.ui_page_with_bleed(),
-            `${specification.mediaWidthMm} × ${specification.mediaHeightMm} mm`,
-          ],
-          [m.ui_print_condition(), "PSO Coated v3 · FOGRA51"],
-          [m.ui_image_target(), m.export_image_target()],
-          [m.ui_blocking_threshold(), "< 150 PPI"],
-          [m.ui_output_target(), m.export_output_target()],
-        ].map(([label, value]) => (
-          <Card key={label} className="bg-card/85">
-            <CardHeader>
-              <CardDescription>{label}</CardDescription>
-              <CardTitle>{value}</CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
       </div>
 
       {project.archivedAt ? (
@@ -277,48 +252,8 @@ export function ExportPanel({
               <CheckCircle2Icon aria-hidden="true" />
               {m.ui_export_complete()}{" "}
             </CardTitle>
-            <CardDescription>
-              {m.ui_source_fingerprint()} {artifact.report.sourceFingerprint}
-            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {artifact.report.checks.map((check) => (
-                <div
-                  key={check.id}
-                  className="flex flex-col justify-between gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{check.label}</p>
-                    <p className="text-xs text-muted-foreground">{check.detail}</p>
-                  </div>
-                  <Badge
-                    variant={
-                      check.status === "pass"
-                        ? "default"
-                        : check.status === "warning"
-                          ? "secondary"
-                          : "destructive"
-                    }
-                  >
-                    {
-                      {
-                        pass: m.report_passed(),
-                        fail: m.report_failed(),
-                        warning: m.check_warning(),
-                      }[check.status]
-                    }
-                  </Badge>
-                </div>
-              ))}
-            </div>
-            <Alert className="mt-4">
-              <AlertTriangleIcon />
-              <AlertTitle>{m.ui_pdf_x_verification_scope()}</AlertTitle>
-              <AlertDescription>{artifact.report.pdfx.limitation}</AlertDescription>
-            </Alert>
-          </CardContent>
-          <CardFooter className="flex-col items-stretch gap-3">
+          <CardContent className="flex flex-col gap-3">
             <p className="text-sm font-medium">{m.ui_downloads()}</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {[
@@ -361,9 +296,78 @@ export function ExportPanel({
                 </a>
               ))}
             </div>
-          </CardFooter>
+            <details>
+              <summary className="cursor-pointer text-sm font-medium">
+                {m.export_check_details()}
+              </summary>
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {m.ui_source_fingerprint()} {artifact.report.sourceFingerprint}
+                </p>
+                <div className="grid gap-2">
+                  {artifact.report.checks.map((check) => (
+                    <div
+                      key={check.id}
+                      className="flex flex-col justify-between gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{check.label}</p>
+                        <p className="text-xs text-muted-foreground">{check.detail}</p>
+                      </div>
+                      <Badge
+                        variant={
+                          check.status === "pass"
+                            ? "default"
+                            : check.status === "warning"
+                              ? "secondary"
+                              : "destructive"
+                        }
+                      >
+                        {
+                          {
+                            pass: m.report_passed(),
+                            fail: m.report_failed(),
+                            warning: m.check_warning(),
+                          }[check.status]
+                        }
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+                <Alert className="mt-4">
+                  <AlertTriangleIcon />
+                  <AlertTitle>{m.ui_pdf_x_verification_scope()}</AlertTitle>
+                  <AlertDescription>{artifact.report.pdfx.limitation}</AlertDescription>
+                </Alert>
+              </div>
+            </details>
+          </CardContent>
         </Card>
       )}
+
+      <section aria-labelledby="print-specifications" className="flex flex-col gap-3">
+        <h3 id="print-specifications" className="text-sm font-medium">
+          {m.export_print_specifications()}
+        </h3>
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            [m.ui_trim_size(), `${specification.trimWidthMm} × ${specification.trimHeightMm} mm`],
+            [
+              m.ui_page_with_bleed(),
+              `${specification.mediaWidthMm} × ${specification.mediaHeightMm} mm`,
+            ],
+            [m.ui_print_condition(), "PSO Coated v3 · FOGRA51"],
+            [m.ui_image_target(), m.export_image_target()],
+            [m.ui_blocking_threshold(), "< 150 PPI"],
+            [m.ui_output_target(), m.export_output_target()],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
     </div>
   )
 }

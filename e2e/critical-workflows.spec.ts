@@ -963,6 +963,13 @@ test.describe.serial("critical local prototype workflows", () => {
     await expectAccessible(page)
 
     await page.getByTestId("workspace-export").click()
+    const exportButton = page.getByRole("button", { name: "Export book", exact: true })
+    const specifications = page.getByRole("heading", { name: "Print specifications" })
+    await expect(page.getByText("Ready to export", { exact: true })).toBeVisible()
+    await expect(specifications).toBeVisible()
+    expect((await exportButton.boundingBox())!.y).toBeLessThan(
+      (await specifications.boundingBox())!.y
+    )
     const exportResponse = page.waitForResponse(
       (response) =>
         response.url().includes(`/${closedProjectId}/export`) &&
@@ -985,6 +992,14 @@ test.describe.serial("critical local prototype workflows", () => {
       expect(download.status()).toBe(200)
       expect(download.headers()["content-type"]).toContain(contentType!)
     }
+    const downloads = page.getByRole("link", { name: "Complete book (PDF)" })
+    const checkDetails = page.locator("summary", { hasText: "Print check details" })
+    expect((await downloads.boundingBox())!.y).toBeLessThan((await checkDetails.boundingBox())!.y)
+    expect((await downloads.boundingBox())!.y).toBeLessThan((await specifications.boundingBox())!.y)
+    await expect(page.getByText("Source fingerprint", { exact: false })).toBeHidden()
+    await checkDetails.focus()
+    await page.keyboard.press("Enter")
+    await expect(page.getByText("Source fingerprint", { exact: false })).toBeVisible()
     await expectAccessible(page)
   })
 })
