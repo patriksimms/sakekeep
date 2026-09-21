@@ -5,8 +5,6 @@ memories and photos, composing a friend book, and exporting a print-ready DIN
 A4, A5, or A6 PDF in portrait or landscape.
 
 This README describes the current product workflows and constraints.
-[PLAN.md](PLAN.md) is the deprecated prototype plan, retained for historical
-context.
 
 Clerk authentication protects every organizer page and API. Contributor links
 remain anonymous and token-based.
