@@ -21,6 +21,7 @@ import { pageSpecificationForLayout, type PageSpecification } from "./page-forma
 import {
   assignPhotosToFrames,
   framePhotos,
+  frameSlotCount,
   isPhotoFrame,
   type PhotoFrameElement,
 } from "./photo-assignment.ts"
@@ -461,6 +462,16 @@ export function invalidBookPages(
     if (page.kind === "standalone" && layout.role === "submission") {
       issues.push({ pageId: page.id, reason: "is a standalone page on a response layout" })
       continue
+    }
+    for (const [elementId, choices] of Object.entries(page.emptySlotArt ?? {})) {
+      const element = layout.schema.elements.find((candidate) => candidate.id === elementId)
+      if (
+        !element ||
+        !isPhotoFrame(element) ||
+        Object.keys(choices).some((index) => Number(index) >= frameSlotCount(element))
+      ) {
+        issues.push({ pageId: page.id, reason: "has artwork choices for a missing photo slot" })
+      }
     }
     if (!isCoverRole(layout.role)) continue
     const seen = (coverPageCounts.get(layout.id) ?? 0) + 1

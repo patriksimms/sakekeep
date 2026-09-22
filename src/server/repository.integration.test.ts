@@ -1464,6 +1464,16 @@ it("discards slot choices on saved layout removal before regeneration and reject
   const narrowed = (await getProject(project.id))!.book!
   expect(narrowed.pages[0]!.emptySlotArt).toEqual({ [frame.id]: { 0: "single-bloom" } })
   expect(narrowed.revision).toBe(chosen.revision + 1)
+  for (const emptySlotArt of [{ missing: { 0: "blank" } }, { [frame.id]: { 3: "blank" } }]) {
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        expectedRevision: narrowed.revision,
+        pages: narrowed.pages.map((page) => ({ ...page, emptySlotArt })),
+      })
+    ).rejects.toMatchObject({ status: 422 })
+  }
+
   await expect(
     updateProjectBook({
       projectId: project.id,
