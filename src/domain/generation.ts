@@ -578,9 +578,13 @@ export function generateBook(input: {
     ...coverPages(layouts, "back-cover", inspection),
   ]
 
+  const previousPages = new Map(input.previousBook?.pages.map((page) => [page.id, page]))
   for (const page of allPages) {
-    const previous = input.previousBook?.pages.find((candidate) => candidate.id === page.id)
-    page.emptySlotArt = retainEmptySlotArt(previous?.emptySlotArt, layoutById.get(page.layoutId)!.schema)
+    const previous = previousPages.get(page.id)
+    page.emptySlotArt = retainEmptySlotArt(
+      previous?.emptySlotArt,
+      layoutById.get(page.layoutId)!.schema
+    )
   }
 
   const now = input.now ?? new Date().toISOString()

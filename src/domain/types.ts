@@ -67,7 +67,6 @@ export interface ImageAnswer {
   sizeBytes: number
   previewUrl?: string
   masterUrl?: string
-  fillEmptySlots?: boolean
   focalPoint?: { x: number; y: number }
 }
 

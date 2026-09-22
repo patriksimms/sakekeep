@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { FILLER_MOTIFS, fillerMotif, fillerSeed } from "./filler-art.ts"
-import { gallerySlots } from "./layout.ts"
+import { frameSlotCount } from "./photo-assignment.ts"
 import type { LayoutElement, LayoutSchema } from "./types.ts"
 
 export const emptySlotChoiceSchema = z.union([
@@ -38,10 +38,10 @@ export function retainEmptySlotArt(overrides: EmptySlotArt | undefined, schema: 
     if (element.type !== "image-frame" && element.type !== "gallery-frame") continue
     const choices = overrides[element.id]
     if (!choices) continue
-    const count = element.type === "image-frame" ? 1 : gallerySlots(
-      element.arrangement, element.geometry.width, element.geometry.height, element.gap
-    ).length
-    const slots = Object.fromEntries(Object.entries(choices).filter(([index]) => Number(index) < count))
+    const count = frameSlotCount(element)
+    const slots = Object.fromEntries(
+      Object.entries(choices).filter(([index]) => Number(index) < count)
+    )
     if (Object.keys(slots).length) retained[element.id] = slots
   }
   return Object.keys(retained).length ? retained : undefined

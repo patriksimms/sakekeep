@@ -1,3 +1,4 @@
+import type { EmptyArtControls } from "./empty-art-slot.tsx"
 import * as m from "#/paraglide/messages.js"
 import { problemMessage } from "#/domain/problem-message.ts"
 import {
@@ -111,6 +112,7 @@ export function PagePreview({
   showProblems = true,
   selectedElementId,
   photoFocus,
+  emptyArtControls,
 }: {
   page: BookPage
   project: Project
@@ -119,6 +121,7 @@ export function PagePreview({
   showProblems?: boolean
   selectedElementId?: string
   photoFocus?: PhotoFocusControls
+  emptyArtControls?: EmptyArtControls
 }) {
   const layout = project.layouts.find((candidate) => candidate.id === page.layoutId)
   const submission =
@@ -146,6 +149,8 @@ export function PagePreview({
             submission: submission ?? undefined,
             decorativeAssetUrl,
             photoFocus,
+            emptySlotArt: page.emptySlotArt,
+            emptyArtControls,
           }}
           testId="preview-layout-elements"
           selectedElementId={selectedElementId}
@@ -887,6 +892,29 @@ export function BookReview({
                     project={project}
                     className="w-full"
                     selectedElementId={selectedElementId ?? undefined}
+                    emptyArtControls={
+                      !readOnly
+                        ? {
+                            onChange: (elementId, slotIndex, choice) => {
+                              const emptySlotArt = { ...selected.emptySlotArt }
+                              const slots = { ...emptySlotArt[elementId] }
+                              if (choice === undefined) delete slots[slotIndex]
+                              else slots[slotIndex] = choice
+                              if (Object.keys(slots).length) emptySlotArt[elementId] = slots
+                              else delete emptySlotArt[elementId]
+                              captureAnalyticsEvent("book_review:empty_slot_art_change", {
+                                choice: choice ?? "layout_default",
+                              })
+                              void updatePages(
+                                pages.map((page) =>
+                                  page.id === selected.id ? { ...page, emptySlotArt } : page
+                                ),
+                                "empty_slot_art"
+                              )
+                            },
+                          }
+                        : undefined
+                    }
                     photoFocus={
                       !readOnly && selected.kind === "submission" ? photoFocus : undefined
                     }

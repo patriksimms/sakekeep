@@ -432,6 +432,7 @@ export function addElement(
         opacity: 1,
         questionId: questionId ?? "",
         cornerRadius: 2,
+        fillEmptySlots: true,
         focalPoint: { x: 0.5, y: 0.5 },
       }
       break
@@ -443,6 +444,7 @@ export function addElement(
         opacity: 1,
         questionId: questionId ?? "",
         arrangement: "four-square",
+        fillEmptySlots: true,
         gap: 3,
         focalPoint: { x: 0.5, y: 0.5 },
       }

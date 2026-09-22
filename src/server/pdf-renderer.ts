@@ -1,3 +1,4 @@
+import { resolveEmptySlotArt, type EmptySlotArt } from "../domain/empty-slot-art.ts"
 import * as m from "#/paraglide/messages.js"
 import { type Locale } from "#/lib/locale.ts"
 import { readFile } from "node:fs/promises"
@@ -28,9 +29,8 @@ import {
 } from "pdf-lib"
 
 import {
-  fillerMotif,
+  type FillerMotif,
   fillerPalette,
-  fillerSeed,
   motifPlacement,
   type FillerPalette,
 } from "../domain/filler-art.ts"
@@ -191,10 +191,10 @@ function drawFillerArt(input: {
   geometry: { x: number; y: number; width: number; height: number }
   specification: PageSpecification
   palette: FillerPalette
-  seed: string
-  slotIndex: number
+  motif: FillerMotif | undefined
   opacity: number
 }) {
+  if (!input.motif) return
   const x = pt(input.specification.bleedMm + input.geometry.x)
   const y = pdfY(input.geometry.y, input.geometry.height, input.specification)
   const width = pt(input.geometry.width)
@@ -202,7 +202,7 @@ function drawFillerArt(input: {
   const placement = motifPlacement(width, height)
   const left = x + placement.offsetX
   const top = y + height - placement.offsetY
-  for (const shape of fillerMotif(input.seed, input.slotIndex).shapes) {
+  for (const shape of input.motif.shapes) {
     const tone = color(input.palette[shape.tone])
     input.page.drawSvgPath(shape.d, {
       x: left,
@@ -281,6 +281,7 @@ async function drawElement(input: {
   photoAssignment: PhotoAssignment
   form: FormSchema
   fonts: EmbeddedFonts
+  emptySlotArt?: EmptySlotArt
   fillerPalette: FillerPalette
   assetResolutions: AssetResolutionMetadata[]
   specification: PageSpecification
@@ -376,7 +377,7 @@ async function drawElement(input: {
   const images = framePhotos(input.photoAssignment, element.id)
   // Filler art only appears where a photo frame stays empty, which a standalone page cannot have;
   // the page id keeps the seed stable if one ever does.
-  const seed = fillerSeed(input.submission?.id ?? input.pageId, element.id)
+  const pageSeed = input.submission?.id ?? input.pageId
   if (element.type === "image-frame") {
     const image = images[0]
     if (!image) {
@@ -386,8 +387,7 @@ async function drawElement(input: {
           geometry,
           specification: input.specification,
           palette: input.fillerPalette,
-          seed,
-          slotIndex: 0,
+          motif: resolveEmptySlotArt(element, pageSeed, 0, input.emptySlotArt),
           opacity: element.opacity,
         })
       )
@@ -446,8 +446,7 @@ async function drawElement(input: {
           geometry: slotGeometry,
           specification: input.specification,
           palette: input.fillerPalette,
-          seed,
-          slotIndex: index,
+          motif: resolveEmptySlotArt(element, pageSeed, index, input.emptySlotArt),
           opacity: element.opacity,
         })
         return
@@ -697,6 +696,7 @@ async function renderPdf(input: BookRenderInput, pages: BookPage[]): Promise<Uin
         form: input.form,
         fonts,
         fillerPalette: palette,
+        emptySlotArt: bookPage.emptySlotArt,
         assetResolutions,
         specification,
       })
