@@ -14,6 +14,7 @@ function gallery() {
 describe("empty slot artwork", () => {
   it("keeps legacy layouts enabled and resolves explicit choices before the layout switch", () => {
     const { schema, element } = gallery()
+    delete element.fillEmptySlots
     const parsed = layoutSchemaValidator.parse(schema).elements[0]!
     expect(parsed).toHaveProperty("fillEmptySlots", true)
     const automatic = resolveEmptySlotArt(element, "page", 0)
