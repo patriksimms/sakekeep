@@ -1,3 +1,4 @@
+import type { EmptySlotArt } from "./empty-slot-art.ts"
 import { type Locale } from "#/lib/locale.ts"
 import { type FontFamily } from "./fonts.ts"
 
@@ -66,6 +67,7 @@ export interface ImageAnswer {
   sizeBytes: number
   previewUrl?: string
   masterUrl?: string
+  fillEmptySlots?: boolean
   focalPoint?: { x: number; y: number }
 }
 
@@ -156,6 +158,7 @@ export interface ImageFrameElement extends LayoutElementBase {
   type: "image-frame"
   questionId: string
   cornerRadius: number
+  fillEmptySlots?: boolean
   focalPoint?: { x: number; y: number }
 }
 
@@ -166,6 +169,7 @@ export interface GalleryFrameElement extends LayoutElementBase {
   questionId: string
   arrangement: GalleryArrangement
   gap: number
+  fillEmptySlots?: boolean
   focalPoint?: { x: number; y: number }
 }
 
@@ -253,6 +257,7 @@ export interface SubmissionBookPage {
   kind: "submission"
   submissionId: string
   layoutId: string
+  emptySlotArt?: EmptySlotArt
   problems: PageProblem[]
 }
 
@@ -260,6 +265,7 @@ export interface StandaloneBookPage {
   id: string
   kind: "standalone"
   layoutId: string
+  emptySlotArt?: EmptySlotArt
   problems: PageProblem[]
 }
 

@@ -77,6 +77,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
     type: z.literal("image-frame"),
     questionId: z.string().min(1),
     cornerRadius: finite.min(0).max(500),
+    fillEmptySlots: z.boolean().default(true),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
@@ -89,6 +90,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
       z.literal("three-column"),
     ]),
     gap: finite.min(0).max(500),
+    fillEmptySlots: z.boolean().default(true),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({

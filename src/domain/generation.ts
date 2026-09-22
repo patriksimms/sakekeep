@@ -1,3 +1,4 @@
+import { retainEmptySlotArt } from "./empty-slot-art.ts"
 import * as m from "#/paraglide/messages.js"
 import { type Locale } from "#/lib/locale.ts"
 import {
@@ -576,6 +577,11 @@ export function generateBook(input: {
     ...bodyPages,
     ...coverPages(layouts, "back-cover", inspection),
   ]
+
+  for (const page of allPages) {
+    const previous = input.previousBook?.pages.find((candidate) => candidate.id === page.id)
+    page.emptySlotArt = retainEmptySlotArt(previous?.emptySlotArt, layoutById.get(page.layoutId)!.schema)
+  }
 
   const now = input.now ?? new Date().toISOString()
   const sourceFingerprint = fingerprintBookSource({
