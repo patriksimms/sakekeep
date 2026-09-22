@@ -233,20 +233,20 @@ function ProjectWorkspace() {
       : (search.tab ?? defaultWorkspaceStep(project.state))
 
   return (
-    <main id="main-content" className="mx-auto max-w-[1540px] px-4 py-8 sm:px-6">
+    <main id="main-content" className="mx-auto max-w-[1540px] px-4 py-3 sm:px-6">
       <Link
         data-testid="link-all-projects"
         to="/projects"
         className={buttonVariants({
           variant: "ghost",
-          className: "mb-4",
+          className: "mb-1",
         })}
       >
         <ArrowLeftIcon data-icon="inline-start" />
         {m.ui_all_projects()}{" "}
       </Link>
 
-      <Card className="mb-6 bg-card/90" inert={bookBusy}>
+      <Card className="mb-3 bg-card/90 [--card-spacing:--spacing(3)]" inert={bookBusy}>
         <CardHeader>
           {editingTitle && canManage ? (
             <form
@@ -285,7 +285,7 @@ function ProjectWorkspace() {
             <>
               <CardTitle
                 data-testid="heading-rename-project"
-                className="flex items-center gap-2 text-3xl"
+                className="flex items-center gap-2 text-xl"
               >
                 {project.title}
                 {canManage && !project.archivedAt && (
