@@ -27,6 +27,7 @@ type RegenerationProperties = {
 }
 
 interface AnalyticsEvents {
+  "book_review:empty_slot_art_change": { choice: string }
   "workspace:tool_failed": { tool: "layouts" | "book" }
   "collaborators:changed": {
     action: "invite" | "link" | "change" | "revoke" | "transfer"

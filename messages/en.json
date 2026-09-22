@@ -948,5 +948,11 @@
   "ui_workspace_tool_failed": "This tool could not load. Reload the page to try again.",
   "ui_reload_page": "Reload page",
   "export_print_specifications": "Print specifications",
-  "export_check_details": "Print check details"
+  "export_check_details": "Print check details",
+  "fill_empty_slots_with_art": "Fill empty slots with art",
+  "empty_slot_art": "Empty slot artwork",
+  "choose_empty_slot_art": "Choose artwork for empty slot {slot}",
+  "artwork_option": "Artwork {number}",
+  "blank_slot": "Blank",
+  "use_layout_default": "Use layout default"
 }

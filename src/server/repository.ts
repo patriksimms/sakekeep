@@ -1,3 +1,4 @@
+import { retainEmptySlotArt } from "../domain/empty-slot-art.ts"
 import * as m from "#/paraglide/messages.js"
 import { type Locale } from "#/lib/locale.ts"
 import {
@@ -993,6 +994,40 @@ export async function updateLayout(input: {
         409,
         m.ui_a_newer_layout_revision_was_saved_first_reload_before_continuing()
       )
+    }
+    if (input.schema) {
+      const [book] = await tx
+        .select()
+        .from(books)
+        .where(eq(books.projectId, input.projectId))
+        .for("update")
+      if (book) {
+        let removedChoices = false
+        const pages = book.generatedBook.pages.map((page) => {
+          if (page.layoutId !== input.layoutId || !page.emptySlotArt) return page
+          const emptySlotArt = retainEmptySlotArt(page.emptySlotArt, updated.schema)
+          if (JSON.stringify(emptySlotArt) === JSON.stringify(page.emptySlotArt)) return page
+          removedChoices = true
+          return { ...page, emptySlotArt }
+        })
+        // Persist removal now: undoing a later layout edit must not resurrect a deleted slot's
+        // choice. Bump the revision so an in-flight book save cannot restore those choices either.
+        if (removedChoices) {
+          const now = new Date()
+          await tx
+            .update(books)
+            .set({
+              generatedBook: {
+                ...book.generatedBook,
+                pages,
+                revision: book.generatedBook.revision + 1,
+                updatedAt: now.toISOString(),
+              },
+              updatedAt: now,
+            })
+            .where(eq(books.projectId, input.projectId))
+        }
+      }
     }
     await tx
       .update(projects)

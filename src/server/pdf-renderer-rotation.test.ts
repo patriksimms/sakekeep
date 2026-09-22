@@ -1,3 +1,4 @@
+import type { EmptySlotArt } from "../domain/empty-slot-art.ts"
 import { PDFArray, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib"
 import { describe, expect, it, vi } from "vitest"
 
@@ -229,7 +230,8 @@ function photoAnswers(...assetIds: string[]) {
 
 async function renderElements(
   elements: LayoutElement[],
-  submission: SubmissionSummary
+  submission: SubmissionSummary,
+  emptySlotArt?: EmptySlotArt
 ): Promise<Uint8Array> {
   const { renderBookPdf } = await import("./pdf-renderer.ts")
   const layout: LayoutRecord = layoutFixture()
@@ -245,6 +247,7 @@ async function renderElements(
           submissionId: submission.id,
           layoutId: layout.id,
           problems: [],
+          emptySlotArt,
         },
       ],
       sourceFingerprint: "rotation-test",
@@ -372,4 +375,33 @@ describe("rotated frames in the exported PDF", () => {
       "rotated decorative image"
     )
   })
+})
+
+it("prints no art for blank slots, explicit motifs over disabled defaults, and keeps photos", async () => {
+  const submission = submissionFixture("10000000-0000-4000-8000-000000000002", 1)
+  submission.answers.photos = []
+  const frame = imageFrame(0)
+  if (frame.type !== "image-frame") throw new Error("Expected image frame")
+  const automatic = await drawnContent(await renderElements([frame], submission), 0)
+  expect(automatic.pathTransforms.length).toBeGreaterThan(0)
+  const blank = await drawnContent(
+    await renderElements([frame], submission, { [frame.id]: { 0: "blank" } }),
+    0
+  )
+  expect(blank.pathTransforms).toHaveLength(0)
+  frame.fillEmptySlots = false
+  const disabled = await drawnContent(await renderElements([frame], submission), 0)
+  expect(disabled.pathTransforms).toHaveLength(0)
+  const explicit = await drawnContent(
+    await renderElements([frame], submission, { [frame.id]: { 0: "single-bloom" } }),
+    0
+  )
+  expect(explicit.pathTransforms.length).toBeGreaterThan(0)
+  submission.answers.photos = photoAnswers("kept-photo")
+  const photo = await drawnContent(
+    await renderElements([frame], submission, { [frame.id]: { 0: "blank" } }),
+    0
+  )
+  expect(photo.images).toHaveLength(1)
+  expect(photo.pathTransforms).toHaveLength(0)
 })

@@ -25,6 +25,7 @@ import {
   setAssetFocalPoint,
   setProjectPageFormat,
   unarchiveProject,
+  updateLayout,
   updateProject,
   updateProjectBook,
   updateSubmissionTextAnswers,
@@ -35,6 +36,7 @@ import { and, eq, inArray, sql } from "drizzle-orm"
 import { photoFocalPoint } from "../domain/photo-focus.ts"
 import { FORM_SCHEMA_VERSION, type ExportReport, type FormSchema } from "../domain/types.ts"
 import { shareTokenForProject } from "./share-token.ts"
+import { addElement } from "../domain/layout.ts"
 import { completeForm } from "../test/fixtures.ts"
 
 const createdProjectIds = new Set<string>()
@@ -1408,4 +1410,99 @@ describe("book language", () => {
     await generateProjectBook(project.id, book.settings)
     expect((await getProject(project.id)).bookStatus).toBe("current")
   })
+})
+
+it("discards slot choices on saved layout removal before regeneration and rejects stale book writes", async () => {
+  const project = await createProject({ title: "Empty-slot removal" })
+  createdProjectIds.add(project.id)
+  await updateProject({ projectId: project.id, formSchema: completeForm, expectedRevision: 0 })
+  await publishProject(project.id)
+  await createSubmissionRecord({
+    projectId: project.id,
+    idempotencyKey: crypto.randomUUID(),
+    answers: {
+      name: "Nora",
+      website: "https://example.com",
+      memory: "A memory",
+      role: ["friend"],
+      traits: ["kind"],
+      photos: [],
+    },
+    pendingAssets: [],
+  })
+  await closeProject(project.id)
+  const layout = await createLayout(project.id)
+  const schema = addElement(layout.schema, "gallery-frame", "photos")
+  const frame = schema.elements.at(-1)!
+  if (frame.type !== "gallery-frame") throw new Error("Expected gallery")
+  let saved = await updateLayout({
+    projectId: project.id,
+    layoutId: layout.id,
+    expectedRevision: layout.revision,
+    schema,
+  })
+  const settings = {
+    mode: "cycle" as const,
+    seed: "art",
+    manualAssignments: {},
+    resolutionOverrides: [],
+  }
+  const generated = await generateProjectBook(project.id, settings)
+  generated.pages[0]!.emptySlotArt = { [frame.id]: { 0: "single-bloom", 3: "blank" } }
+  const chosen = await updateProjectBook({
+    projectId: project.id,
+    expectedRevision: generated.revision,
+    pages: generated.pages,
+  })
+  frame.arrangement = "two-portrait"
+  saved = await updateLayout({
+    projectId: project.id,
+    layoutId: layout.id,
+    expectedRevision: saved.revision,
+    schema,
+  })
+  const narrowed = (await getProject(project.id))!.book!
+  expect(narrowed.pages[0]!.emptySlotArt).toEqual({ [frame.id]: { 0: "single-bloom" } })
+  expect(narrowed.revision).toBe(chosen.revision + 1)
+  for (const emptySlotArt of [{ missing: { 0: "blank" } }, { [frame.id]: { 3: "blank" } }]) {
+    await expect(
+      updateProjectBook({
+        projectId: project.id,
+        expectedRevision: narrowed.revision,
+        pages: narrowed.pages.map((page) => ({ ...page, emptySlotArt })),
+      })
+    ).rejects.toMatchObject({ status: 422 })
+  }
+
+  await expect(
+    updateProjectBook({
+      projectId: project.id,
+      expectedRevision: chosen.revision,
+      pages: chosen.pages,
+    })
+  ).rejects.toMatchObject({ status: 409 })
+  frame.arrangement = "four-square"
+  saved = await updateLayout({
+    projectId: project.id,
+    layoutId: layout.id,
+    expectedRevision: saved.revision,
+    schema,
+  })
+  const regenerated = await generateProjectBook(project.id, settings)
+  expect(regenerated.pages[0]!.emptySlotArt).toEqual({ [frame.id]: { 0: "single-bloom" } })
+  schema.elements = schema.elements.filter((element) => element.id !== frame.id)
+  saved = await updateLayout({
+    projectId: project.id,
+    layoutId: layout.id,
+    expectedRevision: saved.revision,
+    schema,
+  })
+  schema.elements.push(frame)
+  await updateLayout({
+    projectId: project.id,
+    layoutId: layout.id,
+    expectedRevision: saved.revision,
+    schema,
+  })
+  expect((await generateProjectBook(project.id, settings)).pages[0]!.emptySlotArt).toBeUndefined()
 })

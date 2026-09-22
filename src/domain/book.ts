@@ -1,3 +1,4 @@
+import { emptySlotArtSchema } from "./empty-slot-art.ts"
 import { z } from "zod"
 
 const problemSchema = z.object({
@@ -33,12 +34,14 @@ export const bookPageValidator = z.discriminatedUnion("kind", [
     kind: z.literal("submission"),
     submissionId: z.string().uuid(),
     layoutId: z.string().uuid(),
+    emptySlotArt: emptySlotArtSchema.optional(),
     problems: z.array(problemSchema),
   }),
   z.object({
     id: z.string().min(1),
     kind: z.literal("standalone"),
     layoutId: z.string().uuid(),
+    emptySlotArt: emptySlotArtSchema.optional(),
     problems: z.array(problemSchema),
   }),
 ])

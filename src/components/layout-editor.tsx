@@ -794,6 +794,19 @@ function ElementInspector({
           />
         </>
       )}
+      {(element.type === "image-frame" || element.type === "gallery-frame") && (
+        <Field orientation="horizontal">
+          <Switch
+            id={`fill-empty-${element.id}`}
+            checked={element.fillEmptySlots !== false}
+            onCheckedChange={(checked) => onChange({ ...element, fillEmptySlots: checked })}
+          />
+          <FieldLabel htmlFor={`fill-empty-${element.id}`}>
+            {m.fill_empty_slots_with_art()}
+          </FieldLabel>
+        </Field>
+      )}
+
       {element.type === "gallery-frame" && (
         <>
           <Field>

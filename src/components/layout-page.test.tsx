@@ -386,3 +386,31 @@ describe("photo distribution in the preview", () => {
     expect(markup).not.toContain("data-filler-motif")
   })
 })
+
+describe("page-specific empty artwork", () => {
+  it("keeps blank gallery slots in place and applies explicit art without editing controls", () => {
+    const schema = addElement(emptyLayoutSchema(), "gallery-frame", "photos")
+    const frame = schema.elements[0]!
+    if (frame.type !== "gallery-frame") throw new Error("Expected gallery")
+    frame.fillEmptySlots = false
+    const submission: SubmissionSummary = {
+      id: "page",
+      sequence: 1,
+      revision: 1,
+      submittedAt: "2026-01-01",
+      edits: [],
+      answers: { photos: [] },
+    }
+    const markup = renderToStaticMarkup(
+      <LayoutPageElements
+        schema={schema}
+        content={{ submission, emptySlotArt: { [frame.id]: { 0: "blank", 1: "single-bloom" } } }}
+      />
+    )
+    expect(markup.match(/data-filler-motif=/g)).toHaveLength(1)
+    expect(markup).toContain('data-filler-motif="single-bloom"')
+    expect(markup.match(/position:absolute/g)).toHaveLength(5)
+    expect(markup).not.toContain("button")
+    expect(markup).not.toContain("border-dashed")
+  })
+})
