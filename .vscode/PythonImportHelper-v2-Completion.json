@@ -1,98 +1,5 @@
 [
     {
-        "label": "hashlib",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "hashlib",
-        "description": "hashlib",
-        "detail": "hashlib",
-        "documentation": {}
-    },
-    {
-        "label": "io",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "io",
-        "description": "io",
-        "detail": "io",
-        "documentation": {}
-    },
-    {
-        "label": "json",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "json",
-        "description": "json",
-        "detail": "json",
-        "documentation": {}
-    },
-    {
-        "label": "urllib.parse",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "urllib.parse",
-        "description": "urllib.parse",
-        "detail": "urllib.parse",
-        "documentation": {}
-    },
-    {
-        "label": "urllib.request",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "urllib.request",
-        "description": "urllib.request",
-        "detail": "urllib.request",
-        "documentation": {}
-    },
-    {
-        "label": "Path",
-        "importPath": "pathlib",
-        "description": "pathlib",
-        "isExtraImport": true,
-        "detail": "pathlib",
-        "documentation": {}
-    },
-    {
-        "label": "Path",
-        "importPath": "pathlib",
-        "description": "pathlib",
-        "isExtraImport": true,
-        "detail": "pathlib",
-        "documentation": {}
-    },
-    {
-        "label": "TTFont",
-        "importPath": "fontTools.ttLib",
-        "description": "fontTools.ttLib",
-        "isExtraImport": true,
-        "detail": "fontTools.ttLib",
-        "documentation": {}
-    },
-    {
-        "label": "TTFont",
-        "importPath": "fontTools.ttLib",
-        "description": "fontTools.ttLib",
-        "isExtraImport": true,
-        "detail": "fontTools.ttLib",
-        "documentation": {}
-    },
-    {
-        "label": "instantiateVariableFont",
-        "importPath": "fontTools.varLib.instancer",
-        "description": "fontTools.varLib.instancer",
-        "isExtraImport": true,
-        "detail": "fontTools.varLib.instancer",
-        "documentation": {}
-    },
-    {
-        "label": "instantiateVariableFont",
-        "importPath": "fontTools.varLib.instancer",
-        "description": "fontTools.varLib.instancer",
-        "isExtraImport": true,
-        "detail": "fontTools.varLib.instancer",
-        "documentation": {}
-    },
-    {
         "label": "annotations",
         "importPath": "__future__",
         "description": "__future__",
@@ -184,6 +91,15 @@
         "documentation": {}
     },
     {
+        "label": "json",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "json",
+        "description": "json",
+        "detail": "json",
+        "documentation": {}
+    },
+    {
         "label": "re",
         "kind": 6,
         "isExtraImport": true,
@@ -243,84 +159,63 @@
         "documentation": {}
     },
     {
-        "label": "fetch",
-        "kind": 2,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "def fetch(url: str) -> bytes:\n    with urllib.request.urlopen(url) as response:\n        return response.read()\ndef build_cut(source: bytes, weight: int, print_path: Path, web_path: Path) -> None:\n    # updateFontNames keeps the instance named after its own weight, so the\n    # embedded PDF fonts stay distinguishable in print workflows.\n    font = instantiateVariableFont(\n        TTFont(io.BytesIO(source)), {\"wght\": weight}, inplace=False, updateFontNames=True\n    )\n    font[\"OS/2\"].usWeightClass = weight",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "hashlib",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "hashlib",
+        "description": "hashlib",
+        "detail": "hashlib",
         "documentation": {}
     },
     {
-        "label": "build_cut",
-        "kind": 2,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "def build_cut(source: bytes, weight: int, print_path: Path, web_path: Path) -> None:\n    # updateFontNames keeps the instance named after its own weight, so the\n    # embedded PDF fonts stay distinguishable in print workflows.\n    font = instantiateVariableFont(\n        TTFont(io.BytesIO(source)), {\"wght\": weight}, inplace=False, updateFontNames=True\n    )\n    font[\"OS/2\"].usWeightClass = weight\n    # Our line breaking sums plain advance widths, so kerning and ligature\n    # substitution would make the rendered PDF drift from the measured layout.\n    for table in (\"GSUB\", \"GPOS\", \"kern\"):",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "io",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "io",
+        "description": "io",
+        "detail": "io",
         "documentation": {}
     },
     {
-        "label": "main",
-        "kind": 2,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "def main() -> None:\n    PRINT_DIR.mkdir(parents=True, exist_ok=True)\n    WEB_DIR.mkdir(parents=True, exist_ok=True)\n    checksums: dict[str, str] = {}\n    for entry in FAMILIES:\n        family, slug = entry[\"family\"], entry[\"slug\"]\n        licence = fetch(f\"{RAW}/{entry['dir']}/OFL.txt\")\n        (PRINT_DIR / f\"{family}-OFL.txt\").write_bytes(licence)\n        for style, upstream in ((\"normal\", entry[\"upright\"]), (\"italic\", entry[\"italic\"])):\n            if upstream is None:",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "urllib.parse",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "urllib.parse",
+        "description": "urllib.parse",
+        "detail": "urllib.parse",
         "documentation": {}
     },
     {
-        "label": "UPSTREAM_COMMIT",
-        "kind": 5,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "UPSTREAM_COMMIT = \"e1118da94a8cb00cf6d06cdac9ef13eb1e5c6ab7\"\nRAW = f\"https://raw.githubusercontent.com/google/fonts/{UPSTREAM_COMMIT}\"\nPRINT_DIR = Path(\"assets/fonts\")\nWEB_DIR = Path(\"public/fonts\")\n# family -> upstream directory, source programs, and the web family slug.\nFAMILIES = [\n    {\n        \"family\": \"PlayfairDisplay\",\n        \"slug\": \"playfair-display\",\n        \"dir\": \"ofl/playfairdisplay\",",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "urllib.request",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "urllib.request",
+        "description": "urllib.request",
+        "detail": "urllib.request",
         "documentation": {}
     },
     {
-        "label": "RAW",
-        "kind": 5,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "RAW = f\"https://raw.githubusercontent.com/google/fonts/{UPSTREAM_COMMIT}\"\nPRINT_DIR = Path(\"assets/fonts\")\nWEB_DIR = Path(\"public/fonts\")\n# family -> upstream directory, source programs, and the web family slug.\nFAMILIES = [\n    {\n        \"family\": \"PlayfairDisplay\",\n        \"slug\": \"playfair-display\",\n        \"dir\": \"ofl/playfairdisplay\",\n        \"upright\": \"PlayfairDisplay[wght].ttf\",",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
         "documentation": {}
     },
     {
-        "label": "PRINT_DIR",
-        "kind": 5,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "PRINT_DIR = Path(\"assets/fonts\")\nWEB_DIR = Path(\"public/fonts\")\n# family -> upstream directory, source programs, and the web family slug.\nFAMILIES = [\n    {\n        \"family\": \"PlayfairDisplay\",\n        \"slug\": \"playfair-display\",\n        \"dir\": \"ofl/playfairdisplay\",\n        \"upright\": \"PlayfairDisplay[wght].ttf\",\n        \"italic\": \"PlayfairDisplay-Italic[wght].ttf\",",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "TTFont",
+        "importPath": "fontTools.ttLib",
+        "description": "fontTools.ttLib",
+        "isExtraImport": true,
+        "detail": "fontTools.ttLib",
         "documentation": {}
     },
     {
-        "label": "WEB_DIR",
-        "kind": 5,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "WEB_DIR = Path(\"public/fonts\")\n# family -> upstream directory, source programs, and the web family slug.\nFAMILIES = [\n    {\n        \"family\": \"PlayfairDisplay\",\n        \"slug\": \"playfair-display\",\n        \"dir\": \"ofl/playfairdisplay\",\n        \"upright\": \"PlayfairDisplay[wght].ttf\",\n        \"italic\": \"PlayfairDisplay-Italic[wght].ttf\",\n    },",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "documentation": {}
-    },
-    {
-        "label": "FAMILIES",
-        "kind": 5,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "FAMILIES = [\n    {\n        \"family\": \"PlayfairDisplay\",\n        \"slug\": \"playfair-display\",\n        \"dir\": \"ofl/playfairdisplay\",\n        \"upright\": \"PlayfairDisplay[wght].ttf\",\n        \"italic\": \"PlayfairDisplay-Italic[wght].ttf\",\n    },\n    {\n        \"family\": \"Lora\",",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "documentation": {}
-    },
-    {
-        "label": "CUTS",
-        "kind": 5,
-        "importPath": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "description": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
-        "peekOfCode": "CUTS = [(400, \"Regular\", \"Italic\"), (700, \"Bold\", \"BoldItalic\")]\ndef fetch(url: str) -> bytes:\n    with urllib.request.urlopen(url) as response:\n        return response.read()\ndef build_cut(source: bytes, weight: int, print_path: Path, web_path: Path) -> None:\n    # updateFontNames keeps the instance named after its own weight, so the\n    # embedded PDF fonts stay distinguishable in print workflows.\n    font = instantiateVariableFont(\n        TTFont(io.BytesIO(source)), {\"wght\": weight}, inplace=False, updateFontNames=True\n    )",
-        "detail": ".local.worktrees.export-despite-problems.scripts.build-print-fonts",
+        "label": "instantiateVariableFont",
+        "importPath": "fontTools.varLib.instancer",
+        "description": "fontTools.varLib.instancer",
+        "isExtraImport": true,
+        "detail": "fontTools.varLib.instancer",
         "documentation": {}
     },
     {
