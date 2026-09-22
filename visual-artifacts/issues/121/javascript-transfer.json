@@ -1,0 +1,542 @@
+{
+  "before": {
+    "resources": [
+      {
+        "name": "index-BLhybr-w.js",
+        "transferSize": 85242,
+        "encodedBodySize": 84942,
+        "decodedBodySize": 297181
+      },
+      {
+        "name": "useStore-C3QVVNXW.js",
+        "transferSize": 6568,
+        "encodedBodySize": 6268,
+        "decodedBodySize": 17381
+      },
+      {
+        "name": "dist-D9tV8xEu.js",
+        "transferSize": 82152,
+        "encodedBodySize": 81852,
+        "decodedBodySize": 280668
+      },
+      {
+        "name": "link-DZbXm5EW.js",
+        "transferSize": 6930,
+        "encodedBodySize": 6630,
+        "decodedBodySize": 17852
+      },
+      {
+        "name": "lazyRouteComponent-Bhtb9roX.js",
+        "transferSize": 1838,
+        "encodedBodySize": 1538,
+        "decodedBodySize": 4325
+      },
+      {
+        "name": "useParams-CQS_GTdO.js",
+        "transferSize": 1099,
+        "encodedBodySize": 799,
+        "decodedBodySize": 799
+      },
+      {
+        "name": "useNavigate-BjderTQH.js",
+        "transferSize": 488,
+        "encodedBodySize": 188,
+        "decodedBodySize": 188
+      },
+      {
+        "name": "internal-CcoIcOnC.js",
+        "transferSize": 720,
+        "encodedBodySize": 420,
+        "decodedBodySize": 420
+      },
+      {
+        "name": "preload-helper-CzkjGsDE.js",
+        "transferSize": 19933,
+        "encodedBodySize": 19633,
+        "decodedBodySize": 71767
+      },
+      {
+        "name": "useOpenInteractionType-Dr4nOL4g.js",
+        "transferSize": 14724,
+        "encodedBodySize": 14424,
+        "decodedBodySize": 42421
+      },
+      {
+        "name": "s._token-Bf5TJVUs.js",
+        "transferSize": 1018,
+        "encodedBodySize": 718,
+        "decodedBodySize": 1183
+      },
+      {
+        "name": "QueryClientProvider-DVzjY176.js",
+        "transferSize": 682,
+        "encodedBodySize": 382,
+        "decodedBodySize": 382
+      },
+      {
+        "name": "types-BJE3JmLG.js",
+        "transferSize": 3993,
+        "encodedBodySize": 3693,
+        "decodedBodySize": 9556
+      },
+      {
+        "name": "button-xoQ1agPC.js",
+        "transferSize": 14081,
+        "encodedBodySize": 13781,
+        "decodedBodySize": 41007
+      },
+      {
+        "name": "book-heart-3jAiCwZb.js",
+        "transferSize": 617,
+        "encodedBodySize": 317,
+        "decodedBodySize": 317
+      },
+      {
+        "name": "circle-check-5ra8lp52.js",
+        "transferSize": 468,
+        "encodedBodySize": 168,
+        "decodedBodySize": 168
+      },
+      {
+        "name": "CompositeList-BMSzIjtm.js",
+        "transferSize": 1614,
+        "encodedBodySize": 1314,
+        "decodedBodySize": 2860
+      },
+      {
+        "name": "CompositeItem-CwStj8jK.js",
+        "transferSize": 932,
+        "encodedBodySize": 632,
+        "decodedBodySize": 1028
+      },
+      {
+        "name": "projects._projectId-Cjql288v.js",
+        "transferSize": 10199,
+        "encodedBodySize": 9899,
+        "decodedBodySize": 28666
+      },
+      {
+        "name": "dist-DpYuN44u.js",
+        "transferSize": 22784,
+        "encodedBodySize": 22484,
+        "decodedBodySize": 69066
+      },
+      {
+        "name": "layout-parity-C7rbTAQw.js",
+        "transferSize": 921,
+        "encodedBodySize": 621,
+        "decodedBodySize": 1105
+      },
+      {
+        "name": "invitations._token-DgPncg0J.js",
+        "transferSize": 844,
+        "encodedBodySize": 544,
+        "decodedBodySize": 544
+      },
+      {
+        "name": "projects._projectId-CB93OuQ1.js",
+        "transferSize": 42862,
+        "encodedBodySize": 42562,
+        "decodedBodySize": 153523
+      },
+      {
+        "name": "serializeValue-CiXdByIz.js",
+        "transferSize": 4169,
+        "encodedBodySize": 3869,
+        "decodedBodySize": 10691
+      },
+      {
+        "name": "useMutation-BwechC07.js",
+        "transferSize": 1377,
+        "encodedBodySize": 1077,
+        "decodedBodySize": 2575
+      },
+      {
+        "name": "textarea-DAcTgtpM.js",
+        "transferSize": 4709,
+        "encodedBodySize": 4409,
+        "decodedBodySize": 12084
+      },
+      {
+        "name": "layout-backgrounds-BsoRYFTA.js",
+        "transferSize": 336751,
+        "encodedBodySize": 336451,
+        "decodedBodySize": 1030268
+      },
+      {
+        "name": "select-ChLkcSnG.js",
+        "transferSize": 11829,
+        "encodedBodySize": 11529,
+        "decodedBodySize": 32140
+      },
+      {
+        "name": "dialog-FjpThJC3.js",
+        "transferSize": 4917,
+        "encodedBodySize": 4617,
+        "decodedBodySize": 12627
+      },
+      {
+        "name": "skeleton-9VHD-zDH.js",
+        "transferSize": 1216,
+        "encodedBodySize": 916,
+        "decodedBodySize": 916
+      },
+      {
+        "name": "useQuery-C1h3IuBf.js",
+        "transferSize": 1359,
+        "encodedBodySize": 1059,
+        "decodedBodySize": 2125
+      },
+      {
+        "name": "arrow-left-Cs8lTmsy.js",
+        "transferSize": 455,
+        "encodedBodySize": 155,
+        "decodedBodySize": 155
+      },
+      {
+        "name": "layout-template-MPd14mdO.js",
+        "transferSize": 576,
+        "encodedBodySize": 276,
+        "decodedBodySize": 276
+      },
+      {
+        "name": "CompositeRoot-BXDvwWEF.js",
+        "transferSize": 2588,
+        "encodedBodySize": 2288,
+        "decodedBodySize": 5139
+      },
+      {
+        "name": "workspace-tabs-D-lJMmnL.js",
+        "transferSize": 689,
+        "encodedBodySize": 389,
+        "decodedBodySize": 389
+      },
+      {
+        "name": "badge-D5mmHql6.js",
+        "transferSize": 950,
+        "encodedBodySize": 650,
+        "decodedBodySize": 1410
+      },
+      {
+        "name": "card-DMJQDAzH.js",
+        "transferSize": 963,
+        "encodedBodySize": 663,
+        "decodedBodySize": 1834
+      },
+      {
+        "name": "queryObserver-Dr8SYTVF.js",
+        "transferSize": 7277,
+        "encodedBodySize": 6977,
+        "decodedBodySize": 21456
+      },
+      {
+        "name": "mutation-DRcUwNob.js",
+        "transferSize": 1429,
+        "encodedBodySize": 1129,
+        "decodedBodySize": 3383
+      }
+    ],
+    "totals": {
+      "transferSize": 701963,
+      "encodedBodySize": 690263,
+      "decodedBodySize": 2179875
+    }
+  },
+  "after": {
+    "resources": [
+      {
+        "name": "index-D46LcpmA.js",
+        "transferSize": 85316,
+        "encodedBodySize": 85016,
+        "decodedBodySize": 297438
+      },
+      {
+        "name": "with-selector-C4fpQyQq.js",
+        "transferSize": 5045,
+        "encodedBodySize": 4745,
+        "decodedBodySize": 13452
+      },
+      {
+        "name": "dist-Bizr02sW.js",
+        "transferSize": 82149,
+        "encodedBodySize": 81849,
+        "decodedBodySize": 280668
+      },
+      {
+        "name": "useStore-DsUCKSZs.js",
+        "transferSize": 2103,
+        "encodedBodySize": 1803,
+        "decodedBodySize": 3999
+      },
+      {
+        "name": "link-FV1XmkJr.js",
+        "transferSize": 6945,
+        "encodedBodySize": 6645,
+        "decodedBodySize": 17893
+      },
+      {
+        "name": "lazyRouteComponent-DZ0MWfHy.js",
+        "transferSize": 1853,
+        "encodedBodySize": 1553,
+        "decodedBodySize": 4361
+      },
+      {
+        "name": "useParams-f0qi140j.js",
+        "transferSize": 1140,
+        "encodedBodySize": 840,
+        "decodedBodySize": 840
+      },
+      {
+        "name": "useNavigate-C8Mwu-UT.js",
+        "transferSize": 524,
+        "encodedBodySize": 224,
+        "decodedBodySize": 224
+      },
+      {
+        "name": "internal-DHIH9sUQ.js",
+        "transferSize": 725,
+        "encodedBodySize": 425,
+        "decodedBodySize": 425
+      },
+      {
+        "name": "preload-helper-CzkjGsDE.js",
+        "transferSize": 19933,
+        "encodedBodySize": 19633,
+        "decodedBodySize": 71767
+      },
+      {
+        "name": "useOpenInteractionType-Cx9XX8ZS.js",
+        "transferSize": 14722,
+        "encodedBodySize": 14422,
+        "decodedBodySize": 42421
+      },
+      {
+        "name": "s._token-BdCLEw5T.js",
+        "transferSize": 1102,
+        "encodedBodySize": 802,
+        "decodedBodySize": 1356
+      },
+      {
+        "name": "QueryClientProvider-ok76HBAp.js",
+        "transferSize": 687,
+        "encodedBodySize": 387,
+        "decodedBodySize": 387
+      },
+      {
+        "name": "types-BuLUIJSO.js",
+        "transferSize": 3994,
+        "encodedBodySize": 3694,
+        "decodedBodySize": 9561
+      },
+      {
+        "name": "button-BJnvAZ0n.js",
+        "transferSize": 14082,
+        "encodedBodySize": 13782,
+        "decodedBodySize": 41012
+      },
+      {
+        "name": "book-heart-DNAaRVej.js",
+        "transferSize": 617,
+        "encodedBodySize": 317,
+        "decodedBodySize": 317
+      },
+      {
+        "name": "circle-check-BS8SPDdE.js",
+        "transferSize": 468,
+        "encodedBodySize": 168,
+        "decodedBodySize": 168
+      },
+      {
+        "name": "CompositeList-DFrbNyRI.js",
+        "transferSize": 1618,
+        "encodedBodySize": 1318,
+        "decodedBodySize": 2865
+      },
+      {
+        "name": "useCompositeItem-BYUeaW7R.js",
+        "transferSize": 1049,
+        "encodedBodySize": 749,
+        "decodedBodySize": 749
+      },
+      {
+        "name": "tooltip-DVpBPNUk.js",
+        "transferSize": 9525,
+        "encodedBodySize": 9225,
+        "decodedBodySize": 27189
+      },
+      {
+        "name": "dist-vm1LXQIS.js",
+        "transferSize": 22794,
+        "encodedBodySize": 22494,
+        "decodedBodySize": 69071
+      },
+      {
+        "name": "CompositeItem-CEMsxar9.js",
+        "transferSize": 682,
+        "encodedBodySize": 382,
+        "decodedBodySize": 382
+      },
+      {
+        "name": "layout-parity-DXKT5U4d.js",
+        "transferSize": 1095,
+        "encodedBodySize": 795,
+        "decodedBodySize": 1466
+      },
+      {
+        "name": "projects._projectId-B_E2sN-8.js",
+        "transferSize": 1203,
+        "encodedBodySize": 903,
+        "decodedBodySize": 1708
+      },
+      {
+        "name": "invitations._token-5tsBAssx.js",
+        "transferSize": 849,
+        "encodedBodySize": 549,
+        "decodedBodySize": 549
+      },
+      {
+        "name": "serializeValue-aQDbCzBM.js",
+        "transferSize": 3775,
+        "encodedBodySize": 3475,
+        "decodedBodySize": 9092
+      },
+      {
+        "name": "projects._projectId-DQRha9_i.js",
+        "transferSize": 25300,
+        "encodedBodySize": 25000,
+        "decodedBodySize": 87022
+      },
+      {
+        "name": "useMutation-BeV-SWVl.js",
+        "transferSize": 1380,
+        "encodedBodySize": 1080,
+        "decodedBodySize": 2580
+      },
+      {
+        "name": "form-Cu2q-7mF.js",
+        "transferSize": 3932,
+        "encodedBodySize": 3632,
+        "decodedBodySize": 10422
+      },
+      {
+        "name": "api-DIbUUdc_.js",
+        "transferSize": 4921,
+        "encodedBodySize": 4621,
+        "decodedBodySize": 12636
+      },
+      {
+        "name": "project-labels-ChQmn6Kj.js",
+        "transferSize": 846,
+        "encodedBodySize": 546,
+        "decodedBodySize": 546
+      },
+      {
+        "name": "submission-label-BwbY0PJ4.js",
+        "transferSize": 1199,
+        "encodedBodySize": 899,
+        "decodedBodySize": 899
+      },
+      {
+        "name": "skeleton-CLc1OX--.js",
+        "transferSize": 1221,
+        "encodedBodySize": 921,
+        "decodedBodySize": 921
+      },
+      {
+        "name": "page-format-V3FwzlN2.js",
+        "transferSize": 2110,
+        "encodedBodySize": 1810,
+        "decodedBodySize": 4700
+      },
+      {
+        "name": "tabs-DmOL4ajr.js",
+        "transferSize": 6158,
+        "encodedBodySize": 5858,
+        "decodedBodySize": 15805
+      },
+      {
+        "name": "useQuery-D_lamWmN.js",
+        "transferSize": 1362,
+        "encodedBodySize": 1062,
+        "decodedBodySize": 2130
+      },
+      {
+        "name": "arrow-left-DfTsnW2P.js",
+        "transferSize": 455,
+        "encodedBodySize": 155,
+        "decodedBodySize": 155
+      },
+      {
+        "name": "select-Bec1IMhe.js",
+        "transferSize": 11566,
+        "encodedBodySize": 11266,
+        "decodedBodySize": 31516
+      },
+      {
+        "name": "layout-template-A_cz6T4t.js",
+        "transferSize": 576,
+        "encodedBodySize": 276,
+        "decodedBodySize": 276
+      },
+      {
+        "name": "textarea-_SaKTOYV.js",
+        "transferSize": 1097,
+        "encodedBodySize": 797,
+        "decodedBodySize": 1406
+      },
+      {
+        "name": "CompositeRoot-C5ymN8eH.js",
+        "transferSize": 2594,
+        "encodedBodySize": 2294,
+        "decodedBodySize": 5144
+      },
+      {
+        "name": "workspace-tabs-B2-QBccg.js",
+        "transferSize": 689,
+        "encodedBodySize": 389,
+        "decodedBodySize": 389
+      },
+      {
+        "name": "badge-CEolriuk.js",
+        "transferSize": 951,
+        "encodedBodySize": 651,
+        "decodedBodySize": 1410
+      },
+      {
+        "name": "card-BJd7_pKx.js",
+        "transferSize": 963,
+        "encodedBodySize": 663,
+        "decodedBodySize": 1839
+      },
+      {
+        "name": "empty-BGqdgFrX.js",
+        "transferSize": 917,
+        "encodedBodySize": 617,
+        "decodedBodySize": 1563
+      },
+      {
+        "name": "queryObserver-Dr8SYTVF.js",
+        "transferSize": 7277,
+        "encodedBodySize": 6977,
+        "decodedBodySize": 21456
+      },
+      {
+        "name": "mutation-DRcUwNob.js",
+        "transferSize": 1429,
+        "encodedBodySize": 1129,
+        "decodedBodySize": 3383
+      },
+      {
+        "name": "ui_draft-DmOGNoYo.js",
+        "transferSize": 917,
+        "encodedBodySize": 617,
+        "decodedBodySize": 617
+      }
+    ],
+    "totals": {
+      "transferSize": 361855,
+      "encodedBodySize": 347455,
+      "decodedBodySize": 1106175
+    }
+  }
+}
