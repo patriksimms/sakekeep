@@ -177,6 +177,37 @@ function asErrors(messages: string[] | undefined) {
   return messages?.length ? messages.map((message) => ({ message })) : undefined
 }
 
+/**
+ * Holds the typed text locally so the organizer can clear the field and type a new number.
+ * Only whole numbers from 1 to 10 are saved; leaving the field restores the saved value.
+ */
+function MaxImagesInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: number
+  onChange: (value: number) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  return (
+    <Input
+      id={id}
+      type="number"
+      min={1}
+      max={10}
+      value={draft ?? value}
+      onChange={(event) => {
+        setDraft(event.target.value)
+        const next = Number(event.target.value)
+        if (Number.isInteger(next) && next >= 1 && next <= 10) onChange(next)
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  )
+}
+
 interface QuestionEditorProps {
   locale: Locale
   question: FormQuestion
@@ -419,17 +450,10 @@ function QuestionEditor({
           {question.type === "images" && (
             <Field>
               <FieldLabel htmlFor={`max-images-${question.id}`}>{m.ui_maximum_images()}</FieldLabel>
-              <Input
+              <MaxImagesInput
                 id={`max-images-${question.id}`}
-                type="number"
-                min={1}
-                max={10}
                 value={question.maxImages}
-                onChange={(event) =>
-                  update({
-                    maxImages: Math.min(10, Math.max(1, Number(event.target.value))),
-                  })
-                }
+                onChange={(maxImages) => update({ maxImages })}
               />
               <FieldDescription>
                 {m.ui_jpeg_png_webp_heif_and_heic_up_to_15_mb_per_source_image()}{" "}
