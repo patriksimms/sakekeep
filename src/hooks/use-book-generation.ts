@@ -12,6 +12,7 @@ export type RegenerationCause =
   | "manual_assignment"
   | "resolution_override"
   | "page_order"
+  | "empty_slot_art"
   | "standalone_page"
 
 type Trigger = "review_open" | "book_change" | "retry"

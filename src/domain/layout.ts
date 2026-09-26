@@ -77,6 +77,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
     type: z.literal("image-frame"),
     questionId: z.string().min(1),
     cornerRadius: finite.min(0).max(500),
+    fillEmptySlots: z.boolean().default(true),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
@@ -89,6 +90,7 @@ export const layoutElementSchema = z.discriminatedUnion("type", [
       z.literal("three-column"),
     ]),
     gap: finite.min(0).max(500),
+    fillEmptySlots: z.boolean().default(true),
     focalPoint: focalPointSchema.optional(),
   }),
   baseElement.extend({
@@ -430,6 +432,7 @@ export function addElement(
         opacity: 1,
         questionId: questionId ?? "",
         cornerRadius: 2,
+        fillEmptySlots: true,
         focalPoint: { x: 0.5, y: 0.5 },
       }
       break
@@ -441,6 +444,7 @@ export function addElement(
         opacity: 1,
         questionId: questionId ?? "",
         arrangement: "four-square",
+        fillEmptySlots: true,
         gap: 3,
         focalPoint: { x: 0.5, y: 0.5 },
       }

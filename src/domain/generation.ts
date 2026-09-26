@@ -1,3 +1,4 @@
+import { retainEmptySlotArt } from "./empty-slot-art.ts"
 import * as m from "#/paraglide/messages.js"
 import { type Locale } from "#/lib/locale.ts"
 import {
@@ -20,6 +21,7 @@ import { pageSpecificationForLayout, type PageSpecification } from "./page-forma
 import {
   assignPhotosToFrames,
   framePhotos,
+  frameSlotCount,
   isPhotoFrame,
   type PhotoFrameElement,
 } from "./photo-assignment.ts"
@@ -461,6 +463,16 @@ export function invalidBookPages(
       issues.push({ pageId: page.id, reason: "is a standalone page on a response layout" })
       continue
     }
+    for (const [elementId, choices] of Object.entries(page.emptySlotArt ?? {})) {
+      const element = layout.schema.elements.find((candidate) => candidate.id === elementId)
+      if (
+        !element ||
+        !isPhotoFrame(element) ||
+        Object.keys(choices).some((index) => Number(index) >= frameSlotCount(element))
+      ) {
+        issues.push({ pageId: page.id, reason: "has artwork choices for a missing photo slot" })
+      }
+    }
     if (!isCoverRole(layout.role)) continue
     const seen = (coverPageCounts.get(layout.id) ?? 0) + 1
     coverPageCounts.set(layout.id, seen)
@@ -576,6 +588,15 @@ export function generateBook(input: {
     ...bodyPages,
     ...coverPages(layouts, "back-cover", inspection),
   ]
+
+  const previousPages = new Map(input.previousBook?.pages.map((page) => [page.id, page]))
+  for (const page of allPages) {
+    const previous = previousPages.get(page.id)
+    page.emptySlotArt = retainEmptySlotArt(
+      previous?.emptySlotArt,
+      layoutById.get(page.layoutId)!.schema
+    )
+  }
 
   const now = input.now ?? new Date().toISOString()
   const sourceFingerprint = fingerprintBookSource({

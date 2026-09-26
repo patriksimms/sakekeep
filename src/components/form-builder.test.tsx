@@ -162,6 +162,26 @@ describe("FormBuilder inline validation errors", () => {
   })
 })
 
+describe("FormBuilder maximum images", () => {
+  it("lets the organizer clear the field and type a new limit", async () => {
+    const withImages = project()
+    withImages.formSchema.questions = [
+      { id: "q0", type: "images", prompt: "Photos", required: false, maxImages: 10 },
+    ]
+    update.mockResolvedValue({ ...withImages, formRevision: 1 })
+    render(<FormBuilder project={withImages} onProjectChange={vi.fn()} />)
+
+    const input = screen.getByLabelText<HTMLInputElement>("Maximum images")
+    fireEvent.change(input, { target: { value: "" } })
+    expect(input.value).toBe("")
+    fireEvent.change(input, { target: { value: "8" } })
+    await vi.advanceTimersByTimeAsync(800)
+
+    expect(input.value).toBe("8")
+    expect(update.mock.lastCall?.[1].formSchema.questions[0].maxImages).toBe(8)
+  })
+})
+
 describe("FormBuilder pre-publish panel", () => {
   it("says which question blocks publishing when the message alone cannot", async () => {
     update.mockResolvedValue({ ...project(), formRevision: 1 })
