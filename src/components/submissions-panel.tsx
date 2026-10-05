@@ -6,6 +6,7 @@ import {
   CheckIcon,
   ClockIcon,
   CopyIcon,
+  DownloadIcon,
   ImageIcon,
   InboxIcon,
   LoaderCircleIcon,
@@ -110,12 +111,15 @@ export function SubmissionsPanel({
   onProjectChange,
   onRefresh,
   canManage = true,
+  bookBusy = false,
 }: {
   project: Project
   onProjectChange: (project: Project) => void
   onRefresh: () => void
   canManage?: boolean
+  bookBusy?: boolean
 }) {
+  const [exporting, setExporting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [editStart, setEditStart] = useState<{
     submissionId: string
@@ -164,6 +168,27 @@ export function SubmissionsPanel({
     setConfirmingSubmission(submission)
   }
 
+  const exportResponses = async () => {
+    setExporting(true)
+    try {
+      const blob = await projectApi.exportResponses(project.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `responses-${project.id}.xlsx`
+      document.body.append(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      captureAnalyticsEvent("responses:export_completed", { format: "xlsx" })
+    } catch (error) {
+      captureAnalyticsEvent("responses:export_failed", { format: "xlsx" })
+      toast.error(error instanceof Error ? error.message : m.ui_export_failed())
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -175,10 +200,30 @@ export function SubmissionsPanel({
             {m.ui_responses_remain_in_arrival_order_text_answers_can_be_corrected_a()}{" "}
           </p>
         </div>
-        <Button data-testid="button-refresh" variant="outline" onClick={onRefresh}>
-          <RefreshCwIcon data-icon="inline-start" />
-          {m.ui_refresh()}{" "}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            data-testid="button-refresh"
+            variant="outline"
+            onClick={onRefresh}
+            disabled={bookBusy}
+          >
+            <RefreshCwIcon data-icon="inline-start" />
+            {m.ui_refresh()}{" "}
+          </Button>
+          <Button
+            data-testid="button-export-responses"
+            variant="outline"
+            onClick={exportResponses}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <DownloadIcon data-icon="inline-start" />
+            )}
+            {exporting ? m.response_export_preparing() : m.response_export_excel()}
+          </Button>
+        </div>
       </div>
 
       {project.state === "draft" ? (
@@ -292,7 +337,7 @@ export function SubmissionsPanel({
           </EmptyHeader>
         </Empty>
       ) : (
-        <Accordion className="rounded-xl border bg-card/80 px-4">
+        <Accordion className="rounded-xl border bg-card/80 px-4" inert={bookBusy}>
           {submissions.map((submission) => (
             <AccordionItem
               key={submission.id}
@@ -481,7 +526,7 @@ export function SubmissionsPanel({
           if (!open && !saving) setConfirmingSubmission(null)
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent inert={bookBusy}>
           <AlertDialogHeader>
             <AlertDialogTitle data-testid="heading-change-this-submitted-response">
               {m.ui_change_this_submitted_response()}
@@ -553,12 +598,12 @@ export function SubmissionsPanel({
           <AlertDialog>
             <AlertDialogTrigger
               data-testid="button-lock-collection"
-              render={<Button variant="outline" />}
+              render={<Button variant="outline" disabled={bookBusy} />}
             >
               <LockIcon data-icon="inline-start" />
               {m.ui_lock_collection()}{" "}
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent inert={bookBusy}>
               <AlertDialogHeader>
                 <AlertDialogTitle data-testid="heading-lock-collection-permanently">
                   {m.ui_lock_collection_permanently()}

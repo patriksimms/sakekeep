@@ -38,6 +38,69 @@ function project(): Project {
 }
 
 describe("SubmissionsPanel", () => {
+  it.each(["draft", "collecting", "closed", "archived", "generating"] as const)(
+    "keeps Excel export available while %s, including empty projects",
+    (state) => {
+      const current = project()
+      current.state = state === "draft" || state === "collecting" ? state : "closed"
+      current.archivedAt = state === "archived" ? "2026-08-23T12:00:00.000Z" : null
+      current.submissions = []
+      current.submissionCount = 0
+      render(
+        <SubmissionsPanel
+          project={current}
+          onProjectChange={() => undefined}
+          onRefresh={() => undefined}
+          bookBusy={state === "generating"}
+        />
+      )
+      const button = screen.getByRole("button", { name: "Export Excel" }) as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+      expect(button.closest("[inert]")).toBeNull()
+    }
+  )
+
+  it("recovers a failed export and downloads successfully on retry", async () => {
+    const blob = new Blob(["workbook"])
+    const request = vi
+      .spyOn(projectApi, "exportResponses")
+      .mockRejectedValueOnce(new Error("Unavailable"))
+      .mockResolvedValueOnce(blob)
+    const createUrl = vi.fn(() => "blob:workbook")
+    vi.stubGlobal(
+      "URL",
+      Object.assign(class extends URL {}, { createObjectURL: createUrl, revokeObjectURL: vi.fn() })
+    )
+    let filename: string | undefined
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        filename = this.download
+      })
+    try {
+      render(
+        <SubmissionsPanel
+          project={project()}
+          onProjectChange={() => undefined}
+          onRefresh={() => undefined}
+        />
+      )
+      fireEvent.click(screen.getByRole("button", { name: "Export Excel" }))
+      await waitFor(() =>
+        expect(
+          (screen.getByRole("button", { name: "Export Excel" }) as HTMLButtonElement).disabled
+        ).toBe(false)
+      )
+      fireEvent.click(screen.getByRole("button", { name: "Export Excel" }))
+      await waitFor(() => expect(click).toHaveBeenCalledOnce())
+      expect(request).toHaveBeenCalledTimes(2)
+      expect(createUrl).toHaveBeenCalledWith(blob)
+      expect(filename).toBe("responses-project-id.xlsx")
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it("shows the contributor name in the response list", () => {
     render(
       <SubmissionsPanel

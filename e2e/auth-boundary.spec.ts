@@ -14,6 +14,7 @@ const organizerRequests = [
   ["GET", "/api/projects"],
   ["POST", "/api/projects"],
   ["GET", `/api/projects/${missingProjectId}`],
+  ["GET", `/api/projects/${missingProjectId}/responses/xlsx`],
   ["PATCH", `/api/projects/${missingProjectId}`],
   ["DELETE", `/api/projects/${missingProjectId}`],
   ["POST", `/api/projects/${missingProjectId}/close`],

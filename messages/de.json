@@ -954,5 +954,9 @@
   "choose_empty_slot_art": "Motiv für leeres Fotofeld {slot} wählen",
   "artwork_option": "Motiv {number}",
   "blank_slot": "Leer",
-  "use_layout_default": "Layout-Vorgabe verwenden"
+  "use_layout_default": "Layout-Vorgabe verwenden",
+  "response_export_excel": "Excel exportieren",
+  "response_export_preparing": "Excel wird erstellt…",
+  "response_export_submitted_at": "Eingereicht am (UTC)",
+  "response_export_number": "Antwort"
 }

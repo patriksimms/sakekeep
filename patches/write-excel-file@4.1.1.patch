@@ -1,0 +1,102 @@
+diff --git a/commonjs/xlsx/files/sharedStrings.xml.js b/commonjs/xlsx/files/sharedStrings.xml.js
+index d5edeb8e70153fca134c1c6ae502700153a2ba89..5de49ef4dc7c57877fb127c0d454c92a5b08b706 100644
+--- a/commonjs/xlsx/files/sharedStrings.xml.js
++++ b/commonjs/xlsx/files/sharedStrings.xml.js
+@@ -13,7 +13,12 @@ function generateSharedStringsXml(sharedStrings) {
+   var xml = '<?xml version="1.0"?>';
+   xml += '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+   for (var _iterator = _createForOfIteratorHelperLoose(sharedStrings), _step; !(_step = _iterator()).done;) {
+-    var string = _step.value;
++    // Escape literal OOXML sequences before encoding XML-invalid characters.
++    var string = _step.value
++      .replace(/_(?=x[0-9a-fA-F]{4}_)/g, '_x005F_')
++      .replace(/[\0-\x08\x0B-\x1F\uFFFE\uFFFF]/g, function (character) {
++        return '_x' + character.charCodeAt(0).toString(16).padStart(4, '0') + '_';
++      });
+     var attributes = string.trim().length === string.length ? '' : ' xml:space="preserve"';
+     xml += "<si><t".concat(attributes, ">");
+     xml += (0, _sanitizeTextContent["default"])(string);
+diff --git a/commonjs/xlsx/initializeSharedStrings.js b/commonjs/xlsx/initializeSharedStrings.js
+index 19b4014611ec63eddd834948f9fdbcd975a358db..574356a983590360b79e200c19851637ea7ae7b2 100644
+--- a/commonjs/xlsx/initializeSharedStrings.js
++++ b/commonjs/xlsx/initializeSharedStrings.js
+@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", {
+ exports["default"] = initializeSharedStrings;
+ function initializeSharedStrings() {
+   var sharedStrings = [];
+-  var sharedStringIdByString = {};
++  var sharedStringIdByString = Object.create(null);
+   return {
+     getSharedStrings: function getSharedStrings() {
+       return sharedStrings;
+diff --git a/commonjs/xml/removeInvalidXmlCharacters.js b/commonjs/xml/removeInvalidXmlCharacters.js
+index 77f623a54c22c259bd1084f6f9f1a0894892587a..402a08607776a99a845b7a75ad664335b21b91b1 100644
+--- a/commonjs/xml/removeInvalidXmlCharacters.js
++++ b/commonjs/xml/removeInvalidXmlCharacters.js
+@@ -4,7 +4,7 @@ Object.defineProperty(exports, "__esModule", {
+   value: true
+ });
+ exports["default"] = removeInvalidXmlCharacters;
+-var INVALID_CHARACTERS = /((?:[\0-\x08\x0B\f\x0E-\x1F\uFFFD\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]))/g;
++var INVALID_CHARACTERS = /((?:[\0-\x08\x0B\f\x0E-\x1F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]))/g;
+ var DISCOURAGED_CHARACTERS = new RegExp("([\\x7F-\\x84]|[\\x86-\\x9F]|[\\uFDD0-\\uFDEF]|(?:\\uD83F[\\uDFFE\\uDFFF])|(?:\\uD87F[\\uDFFE\\uDFFF])|(?:\\uD8BF[\\uDFFE\\uDFFF])|(?:\\uD8FF[\\uDFFE\\uDFFF])|(?:\\uD93F[\\uDFFE\\uDFFF])|(?:\\uD97F[\\uDFFE\\uDFFF])|(?:\\uD9BF[\\uDFFE\\uDFFF])|(?:\\uD9FF[\\uDFFE\\uDFFF])|(?:\\uDA3F[\\uDFFE\\uDFFF])|(?:\\uDA7F[\\uDFFE\\uDFFF])|(?:\\uDABF[\\uDFFE\\uDFFF])|(?:\\uDAFF[\\uDFFE\\uDFFF])|(?:\\uDB3F[\\uDFFE\\uDFFF])|(?:\\uDB7F[\\uDFFE\\uDFFF])|(?:\\uDBBF[\\uDFFE\\uDFFF])|(?:\\uDBFF[\\uDFFE\\uDFFF])(?:[\\0-\\t\\x0B\\f\\x0E-\\u2027\\u202A-\\uD7FF\\uE000-\\uFFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]|[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?:[^\\uD800-\\uDBFF]|^)[\\uDC00-\\uDFFF]))", 'g');
+ 
+ /**
+@@ -16,7 +16,7 @@ var DISCOURAGED_CHARACTERS = new RegExp("([\\x7F-\\x84]|[\\x86-\\x9F]|[\\uFDD0-\
+  */
+ function removeInvalidXmlCharacters(string) {
+   // Remove everything forbidden by XML 1.0 specification,
+-  // plus the unicode replacement character U+FFFD.
++  // Preserve the valid unicode replacement character U+FFFD.
+   string = string.replace(INVALID_CHARACTERS, '');
+ 
+   // Remove everything discouraged by XML 1.0 specification.
+diff --git a/modules/xlsx/files/sharedStrings.xml.js b/modules/xlsx/files/sharedStrings.xml.js
+index 4eec606244d4374f408937bb5d2a2db8707d7400..1512c08a1f9864ec217fa9241e8c4e4360f485c2 100644
+--- a/modules/xlsx/files/sharedStrings.xml.js
++++ b/modules/xlsx/files/sharedStrings.xml.js
+@@ -6,7 +6,12 @@ export default function generateSharedStringsXml(sharedStrings) {
+   var xml = '<?xml version="1.0"?>';
+   xml += '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+   for (var _iterator = _createForOfIteratorHelperLoose(sharedStrings), _step; !(_step = _iterator()).done;) {
+-    var string = _step.value;
++    // Escape literal OOXML sequences before encoding XML-invalid characters.
++    var string = _step.value
++      .replace(/_(?=x[0-9a-fA-F]{4}_)/g, '_x005F_')
++      .replace(/[\0-\x08\x0B-\x1F\uFFFE\uFFFF]/g, function (character) {
++        return '_x' + character.charCodeAt(0).toString(16).padStart(4, '0') + '_';
++      });
+     var attributes = string.trim().length === string.length ? '' : ' xml:space="preserve"';
+     xml += "<si><t".concat(attributes, ">");
+     xml += sanitizeTextContent(string);
+diff --git a/modules/xlsx/initializeSharedStrings.js b/modules/xlsx/initializeSharedStrings.js
+index 89ac339866da7f62e733b9823fcf061d17e47d42..43e05ea09288a8c31e8c31554021900fa16e3331 100644
+--- a/modules/xlsx/initializeSharedStrings.js
++++ b/modules/xlsx/initializeSharedStrings.js
+@@ -1,6 +1,6 @@
+ export default function initializeSharedStrings() {
+   var sharedStrings = [];
+-  var sharedStringIdByString = {};
++  var sharedStringIdByString = Object.create(null);
+   return {
+     getSharedStrings: function getSharedStrings() {
+       return sharedStrings;
+diff --git a/modules/xml/removeInvalidXmlCharacters.js b/modules/xml/removeInvalidXmlCharacters.js
+index f8a97c8fd0d9a4bd849be52d9295f4d0a86261ee..9f06ba5965b73d7dbe27f2c83c19cedf9cf5eab1 100644
+--- a/modules/xml/removeInvalidXmlCharacters.js
++++ b/modules/xml/removeInvalidXmlCharacters.js
+@@ -1,4 +1,4 @@
+-var INVALID_CHARACTERS = /((?:[\0-\x08\x0B\f\x0E-\x1F\uFFFD\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]))/g;
++var INVALID_CHARACTERS = /((?:[\0-\x08\x0B\f\x0E-\x1F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]))/g;
+ var DISCOURAGED_CHARACTERS = new RegExp("([\\x7F-\\x84]|[\\x86-\\x9F]|[\\uFDD0-\\uFDEF]|(?:\\uD83F[\\uDFFE\\uDFFF])|(?:\\uD87F[\\uDFFE\\uDFFF])|(?:\\uD8BF[\\uDFFE\\uDFFF])|(?:\\uD8FF[\\uDFFE\\uDFFF])|(?:\\uD93F[\\uDFFE\\uDFFF])|(?:\\uD97F[\\uDFFE\\uDFFF])|(?:\\uD9BF[\\uDFFE\\uDFFF])|(?:\\uD9FF[\\uDFFE\\uDFFF])|(?:\\uDA3F[\\uDFFE\\uDFFF])|(?:\\uDA7F[\\uDFFE\\uDFFF])|(?:\\uDABF[\\uDFFE\\uDFFF])|(?:\\uDAFF[\\uDFFE\\uDFFF])|(?:\\uDB3F[\\uDFFE\\uDFFF])|(?:\\uDB7F[\\uDFFE\\uDFFF])|(?:\\uDBBF[\\uDFFE\\uDFFF])|(?:\\uDBFF[\\uDFFE\\uDFFF])(?:[\\0-\\t\\x0B\\f\\x0E-\\u2027\\u202A-\\uD7FF\\uE000-\\uFFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]|[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?:[^\\uD800-\\uDBFF]|^)[\\uDC00-\\uDFFF]))", 'g');
+ 
+ /**
+@@ -10,7 +10,7 @@ var DISCOURAGED_CHARACTERS = new RegExp("([\\x7F-\\x84]|[\\x86-\\x9F]|[\\uFDD0-\
+  */
+ export default function removeInvalidXmlCharacters(string) {
+   // Remove everything forbidden by XML 1.0 specification,
+-  // plus the unicode replacement character U+FFFD.
++  // Preserve the valid unicode replacement character U+FFFD.
+   string = string.replace(INVALID_CHARACTERS, '');
+ 
+   // Remove everything discouraged by XML 1.0 specification.

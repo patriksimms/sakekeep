@@ -62,6 +62,7 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
     ).not.toContain(id)
     for (const [method, suffix] of [
       ["GET", ""],
+      ["GET", "/responses/xlsx"],
       ["PATCH", ""],
       ["DELETE", ""],
       ["POST", "/publish"],
@@ -92,6 +93,13 @@ test("separate Clerk accounts enforce privacy, roles, invitations, and ownership
     expect((await stranger.get(path)).status()).toBe(404)
     expect((await editor.post(`/api/invitations/${editorToken}`)).status()).toBe(200)
     expect((await editor.post(`/api/invitations/${editorToken}`)).status()).toBe(200)
+    const workbook = await editor.get(`${path}/responses/xlsx`)
+    expect(workbook.status()).toBe(200)
+    expect(workbook.headers()["content-type"]).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    expect(workbook.headers()["cache-control"]).toBe("no-store")
+    expect(workbook.headers()["content-disposition"]).toContain(`responses-${id}.xlsx`)
     const orgToken = await invite(owner, id!, "user_organizer", "organizer")
     expect((await organizer.post(`/api/invitations/${orgToken}`)).status()).toBe(200)
     const badToken = await invite(owner, id!, "user_unverified", "editor")

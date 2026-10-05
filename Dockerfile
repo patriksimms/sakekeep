@@ -7,6 +7,7 @@ WORKDIR /app
 
 FROM base AS production-dependencies
 COPY package.json bun.lock ./
+COPY patches ./patches
 COPY scripts/compile-messages.ts ./scripts/compile-messages.ts
 COPY project.inlang ./project.inlang
 COPY messages ./messages

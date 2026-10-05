@@ -43,6 +43,11 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const projectApi = {
+  exportResponses: async (projectId: string) => {
+    const response = await fetch(`/api/projects/${projectId}/responses/xlsx`)
+    if (!response.ok) throw new ApiError(response.status, m.ui_export_failed())
+    return response.blob()
+  },
   list: () => api<{ projects: ProjectSummary[] }>("/api/projects"),
   create: (input: { bookLanguage: Locale; title: string; occasion?: string | null }) =>
     api<Project>("/api/projects", {
