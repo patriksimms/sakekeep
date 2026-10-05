@@ -115,5 +115,8 @@
       "esbuild",
       "lightningcss"
     ]
+  },
+  "patchedDependencies": {
+    "write-excel-file@4.1.1": "patches/write-excel-file@4.1.1.patch"
   }
 }

@@ -12,8 +12,10 @@ async function readWorkbook(submissions = [submissionFixture("first", 1)]) {
   )
   const parse = (path: string) =>
     new DOMParser().parseFromString(new TextDecoder().decode(files[path]), "text/xml")
-  const strings = [...parse("xl/sharedStrings.xml").querySelectorAll("si")].map(
-    (entry) => entry.textContent
+  const strings = [...parse("xl/sharedStrings.xml").querySelectorAll("si")].map((entry) =>
+    entry.textContent.replace(/_x([0-9a-f]{4})_/gi, (_, code: string) =>
+      String.fromCharCode(parseInt(code, 16))
+    )
   )
   const sheet = parse("xl/worksheets/sheet1.xml")
   const rows = [...sheet.querySelectorAll("row")].map((row) =>
@@ -91,5 +93,21 @@ describe("response workbook", () => {
         "Photos",
       ],
     ])
+  })
+
+  it.each([
+    "constructor",
+    "__proto__",
+    "toString",
+    "hasOwnProperty",
+    "_x0041_",
+    "_x005F_x0041_",
+    "A�B",
+    "line\r\nnext",
+  ])("preserves the literal answer %s in a valid workbook cell", async (answer) => {
+    const submission = submissionFixture("first", 1)
+    submission.answers.name = answer
+    const { rows } = await readWorkbook([submission])
+    expect(rows[1]?.[2]).toBe(answer)
   })
 })
