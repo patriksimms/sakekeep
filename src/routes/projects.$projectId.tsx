@@ -503,8 +503,9 @@ function ProjectWorkspace() {
         <TabsContent value="form" inert={bookBusy}>
           {canManage && <FormBuilder project={project} onProjectChange={setProject} />}
         </TabsContent>
-        <TabsContent value="responses" inert={bookBusy}>
+        <TabsContent value="responses">
           <SubmissionsPanel
+            bookBusy={bookBusy}
             canManage={canManage}
             project={project}
             onProjectChange={setProject}

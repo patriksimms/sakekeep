@@ -39,6 +39,7 @@ import { Route as ApiProjectsProjectIdPublishRouteImport } from './routes/api.pr
 import { Route as ApiProjectsProjectIdUnarchiveRouteImport } from './routes/api.projects.$projectId.unarchive'
 import { Route as ApiProjectsProjectIdAssetsAssetIdRouteImport } from './routes/api.projects.$projectId.assets.$assetId'
 import { Route as ApiProjectsProjectIdLayoutsLayoutIdRouteImport } from './routes/api.projects.$projectId.layouts.$layoutId'
+import { Route as ApiProjectsProjectIdResponsesXlsxRouteImport } from './routes/api.projects.$projectId.responses.xlsx'
 import { Route as ApiProjectsProjectIdSubmissionsSubmissionIdRouteImport } from './routes/api.projects.$projectId.submissions.$submissionId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -203,6 +204,12 @@ const ApiProjectsProjectIdLayoutsLayoutIdRoute =
     path: '/$layoutId',
     getParentRoute: () => ApiProjectsProjectIdLayoutsRoute,
   } as any)
+const ApiProjectsProjectIdResponsesXlsxRoute =
+  ApiProjectsProjectIdResponsesXlsxRouteImport.update({
+    id: '/responses/xlsx',
+    path: '/responses/xlsx',
+    getParentRoute: () => ApiProjectsProjectIdRoute,
+  } as any)
 const ApiProjectsProjectIdSubmissionsSubmissionIdRoute =
   ApiProjectsProjectIdSubmissionsSubmissionIdRouteImport.update({
     id: '/submissions/$submissionId',
@@ -241,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/assets/$assetId': typeof ApiProjectsProjectIdAssetsAssetIdRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
+  '/api/projects/$projectId/responses/xlsx': typeof ApiProjectsProjectIdResponsesXlsxRoute
   '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 export interface FileRoutesByTo {
@@ -274,6 +282,7 @@ export interface FileRoutesByTo {
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/assets/$assetId': typeof ApiProjectsProjectIdAssetsAssetIdRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
+  '/api/projects/$projectId/responses/xlsx': typeof ApiProjectsProjectIdResponsesXlsxRoute
   '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 export interface FileRoutesById {
@@ -308,6 +317,7 @@ export interface FileRoutesById {
   '/api/projects/$projectId/unarchive': typeof ApiProjectsProjectIdUnarchiveRoute
   '/api/projects/$projectId/assets/$assetId': typeof ApiProjectsProjectIdAssetsAssetIdRoute
   '/api/projects/$projectId/layouts/$layoutId': typeof ApiProjectsProjectIdLayoutsLayoutIdRoute
+  '/api/projects/$projectId/responses/xlsx': typeof ApiProjectsProjectIdResponsesXlsxRoute
   '/api/projects/$projectId/submissions/$submissionId': typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 export interface FileRouteTypes {
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/assets/$assetId'
     | '/api/projects/$projectId/layouts/$layoutId'
+    | '/api/projects/$projectId/responses/xlsx'
     | '/api/projects/$projectId/submissions/$submissionId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -376,6 +387,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/assets/$assetId'
     | '/api/projects/$projectId/layouts/$layoutId'
+    | '/api/projects/$projectId/responses/xlsx'
     | '/api/projects/$projectId/submissions/$submissionId'
   id:
     | '__root__'
@@ -409,6 +421,7 @@ export interface FileRouteTypes {
     | '/api/projects/$projectId/unarchive'
     | '/api/projects/$projectId/assets/$assetId'
     | '/api/projects/$projectId/layouts/$layoutId'
+    | '/api/projects/$projectId/responses/xlsx'
     | '/api/projects/$projectId/submissions/$submissionId'
   fileRoutesById: FileRoutesById
 }
@@ -644,6 +657,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsProjectIdLayoutsLayoutIdRouteImport
       parentRoute: typeof ApiProjectsProjectIdLayoutsRoute
     }
+    '/api/projects/$projectId/responses/xlsx': {
+      id: '/api/projects/$projectId/responses/xlsx'
+      path: '/responses/xlsx'
+      fullPath: '/api/projects/$projectId/responses/xlsx'
+      preLoaderRoute: typeof ApiProjectsProjectIdResponsesXlsxRouteImport
+      parentRoute: typeof ApiProjectsProjectIdRoute
+    }
     '/api/projects/$projectId/submissions/$submissionId': {
       id: '/api/projects/$projectId/submissions/$submissionId'
       path: '/submissions/$submissionId'
@@ -695,6 +715,7 @@ interface ApiProjectsProjectIdRouteChildren {
   ApiProjectsProjectIdLayoutsRoute: typeof ApiProjectsProjectIdLayoutsRouteWithChildren
   ApiProjectsProjectIdPublishRoute: typeof ApiProjectsProjectIdPublishRoute
   ApiProjectsProjectIdUnarchiveRoute: typeof ApiProjectsProjectIdUnarchiveRoute
+  ApiProjectsProjectIdResponsesXlsxRoute: typeof ApiProjectsProjectIdResponsesXlsxRoute
   ApiProjectsProjectIdSubmissionsSubmissionIdRoute: typeof ApiProjectsProjectIdSubmissionsSubmissionIdRoute
 }
 
@@ -711,6 +732,8 @@ const ApiProjectsProjectIdRouteChildren: ApiProjectsProjectIdRouteChildren = {
     ApiProjectsProjectIdLayoutsRouteWithChildren,
   ApiProjectsProjectIdPublishRoute: ApiProjectsProjectIdPublishRoute,
   ApiProjectsProjectIdUnarchiveRoute: ApiProjectsProjectIdUnarchiveRoute,
+  ApiProjectsProjectIdResponsesXlsxRoute:
+    ApiProjectsProjectIdResponsesXlsxRoute,
   ApiProjectsProjectIdSubmissionsSubmissionIdRoute:
     ApiProjectsProjectIdSubmissionsSubmissionIdRoute,
 }

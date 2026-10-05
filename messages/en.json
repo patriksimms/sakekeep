@@ -954,5 +954,9 @@
   "choose_empty_slot_art": "Choose artwork for empty slot {slot}",
   "artwork_option": "Artwork {number}",
   "blank_slot": "Blank",
-  "use_layout_default": "Use layout default"
+  "use_layout_default": "Use layout default",
+  "response_export_excel": "Export Excel",
+  "response_export_preparing": "Preparing Excel…",
+  "response_export_submitted_at": "Submitted at (UTC)",
+  "response_export_number": "Response"
 }
