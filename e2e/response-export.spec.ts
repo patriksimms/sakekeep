@@ -10,7 +10,7 @@ test("Excel download stays available throughout collection and exports newly sav
     data: { title: "Excel export journey", bookLanguage: "en" },
   })
   expect(created.status()).toBe(201)
-  const { id } = await created.json()
+  const { id, formRevision } = await created.json()
   const path = `/api/projects/${id}`
   const download = async () => {
     const pending = page.waitForEvent("download")
@@ -25,6 +25,7 @@ test("Excel download stays available throughout collection and exports newly sav
       (
         await request.patch(path, {
           data: {
+            expectedRevision: formRevision,
             formSchema: {
               version: 1,
               questions: [{ id: "name", prompt: "Name", type: "single-line", required: true }],
