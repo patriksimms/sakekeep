@@ -219,11 +219,12 @@ function Privacy() {
             <PrivacyLink href="https://posthog.com/dpa">Data Processing Agreement</PrivacyLink>.
           </p>
           <p>
-            Independently of your consent, technical errors and operational server logs are sent to
-            PostHog so that we can detect and fix faults. Logs include request routes, status codes,
-            durations, and export outcomes. These server reports do not contain user IDs, email
-            addresses, or IP addresses. The legal basis is Art. 6(1)(f) GDPR; our legitimate
-            interest lies in the reliable operation of the service.
+            When configured, we report technical server errors to PostHog to detect and fix faults.
+            Operational logs are also sent when server log export is configured and enabled. This
+            reporting runs independently of your analytics consent. Logs include request routes,
+            status codes, durations, and export outcomes. These server reports do not contain user
+            IDs, email addresses, or client IP addresses. The legal basis is Art. 6(1)(f) GDPR; our
+            legitimate interest lies in the reliable operation of the service.
           </p>
         </PrivacySection>
 
