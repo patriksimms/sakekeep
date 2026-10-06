@@ -1,8 +1,13 @@
+import Logger from "./src/server/logger.ts"
+import { initializeLogging, shutdownLogging } from "./src/server/logging.ts"
+
 import { relative, resolve, sep } from "node:path"
 
 // Relative, not the "#/" alias: this file runs from source inside the runtime image, which
 // has no tsconfig.json, and Bun resolves "#/" through tsconfig paths rather than package.json.
 import { validateProductionAuthConfiguration } from "./src/server/auth-config.ts"
+
+const logger = new Logger("server")
 
 const clientDirectory = resolve("dist/client")
 const serverEntryPoint = resolve("dist/server/server.js")
@@ -91,10 +96,6 @@ async function staticResponse(request: Request): Promise<Response | undefined> {
   return new Response(request.method === "HEAD" ? null : body, { headers })
 }
 
-function messageFor(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error"
-}
-
 const exportPath = /^\/api\/projects\/[^/]+\/export$/
 
 export function isExportRequest(method: string, pathname: string): boolean {
@@ -124,6 +125,7 @@ export function idleTimeoutSeconds(value: string | undefined): number {
 }
 
 export async function startServer() {
+  initializeLogging()
   if (process.env.NODE_ENV === "production") {
     validateProductionAuthConfiguration(process.env)
   }
@@ -152,12 +154,12 @@ export async function startServer() {
         }
         return (await staticResponse(request)) ?? (await handler.fetch(request))
       } catch (error) {
-        console.error(`[server] request failed: ${messageFor(error)}`)
+        logger.error("Request failed", { error })
         return new Response("Internal Server Error", { status: 500 })
       }
     },
     error(error) {
-      console.error(`[server] uncaught error: ${messageFor(error)}`)
+      logger.error("Uncaught server error", { error })
       return new Response("Internal Server Error", { status: 500 })
     },
   })
@@ -166,20 +168,22 @@ export async function startServer() {
   const stop = async (signal: string) => {
     if (stopping) return
     stopping = true
-    console.log(`[server] received ${signal}; stopping`)
-    await server.stop()
+    logger.info("Server stopping", { signal })
+    await server.stop(false)
+    await shutdownLogging()
     process.exit(0)
   }
   process.once("SIGTERM", () => void stop("SIGTERM"))
   process.once("SIGINT", () => void stop("SIGINT"))
 
-  console.log(`[server] listening on http://${hostname}:${server.port}`)
+  logger.info("Server listening", { port: server.port })
   return server
 }
 
 if (import.meta.main) {
-  startServer().catch((error: unknown) => {
-    console.error(`[server] fatal startup error: ${messageFor(error)}`)
+  startServer().catch(async (error: unknown) => {
+    logger.fatal("Server startup failed", { error })
+    await shutdownLogging()
     process.exit(1)
   })
 }

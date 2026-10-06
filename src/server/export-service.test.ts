@@ -1,6 +1,8 @@
 import { unzipSync } from "fflate"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { configureLogger } from "./logger.ts"
+
 import { type Project } from "#/domain/types.ts"
 import { completeForm, cycleSettings, layoutFixture, submissionFixture } from "#/test/fixtures.ts"
 
@@ -132,7 +134,10 @@ describe("export page bundles", () => {
 
   it("records duration, size and outcome for every export, finished or not", async () => {
     const lines: string[] = []
-    const log = vi.spyOn(console, "log").mockImplementation((line: string) => void lines.push(line))
+    configureLogger({
+      nodeEnvironment: "production",
+      destination: { write: (line) => lines.push(line) },
+    })
     const aborted = AbortSignal.abort()
     try {
       await exportProject("99999999-9999-4999-8999-999999999999", options, aborted)
@@ -141,12 +146,10 @@ describe("export page bundles", () => {
         "insert failed"
       )
     } finally {
-      log.mockRestore()
+      configureLogger({ nodeEnvironment: "test" })
     }
 
-    const entries = lines
-      .filter((line) => line.startsWith("[export] "))
-      .map((line) => JSON.parse(line.slice("[export] ".length)) as Record<string, unknown>)
+    const entries = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
     expect(entries).toHaveLength(2)
     // The organizer had already given up, but the export finished and was stored anyway.
     expect(entries[0]).toMatchObject({

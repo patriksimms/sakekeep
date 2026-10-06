@@ -1,3 +1,5 @@
+import Logger from "./logger.ts"
+
 import * as m from "#/paraglide/messages.js"
 import { createPreflightReport, hasFailedPreflight, reportAsText } from "../domain/preflight"
 import { blockingProblems } from "../domain/generation"
@@ -9,6 +11,8 @@ import { pageJpegs } from "./page-raster"
 import { bookPagePdfs, inspectPdf, renderBookPdf } from "./pdf-renderer"
 import { getProject, recordExport, reserveObjects } from "./repository"
 import { pageEntryName, zipEntries, type ZipEntry } from "./zip"
+
+const logger = new Logger("export")
 
 /** Names each produced page in book order without collecting the pages first. */
 async function* bundleEntries(
@@ -41,7 +45,8 @@ function logExport(fields: {
   outcome: "completed" | "rejected" | "failed"
   clientDisconnected: boolean
 }): void {
-  console.log(`[export] ${JSON.stringify(fields)}`)
+  if (fields.outcome === "failed") logger.error("Export completed", fields)
+  else logger.info("Export completed", fields)
 }
 
 export async function exportProject(

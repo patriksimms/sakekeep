@@ -14,9 +14,11 @@ export VITE_CLERK_PUBLISHABLE_KEY=
 export CLERK_SECRET_KEY=
 
 # Optional PostHog analytics. Leave the token unset to disable every PostHog
-# feature (consent banner, ingest proxy, server error reporting).
+# feature (consent banner, ingest proxy, server error reporting, server logs).
 export VITE_POSTHOG_PROJECT_TOKEN=
 export POSTHOG_HOST=https://eu.i.posthog.com
+# Set false to retain stdout logs without sending them to PostHog.
+export POSTHOG_LOGS_ENABLED=true
 
 # Optional. Integration and browser tests default to these targets, derived from
 # the values above with a `-test` suffix. Set them to move the tests elsewhere.

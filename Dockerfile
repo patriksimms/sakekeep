@@ -44,9 +44,8 @@ COPY --from=build --chown=bun:bun /app/.local/icc ./.local/icc
 COPY --from=build --chown=bun:bun /app/assets/fonts ./assets/fonts
 COPY --chown=bun:bun package.json server.ts ./
 COPY --chown=bun:bun scripts/backfill-project-owners.ts ./scripts/backfill-project-owners.ts
-# server.ts runs from source, so its imports must exist here too. auth-config.ts has no
-# imports of its own; keep it that way or extend this COPY.
-COPY --chown=bun:bun src/server/auth-config.ts ./src/server/auth-config.ts
+# server.ts runs from source, so its bootstrap imports must exist here too.
+COPY --chown=bun:bun src/server/auth-config.ts src/server/logger.ts src/server/logging.ts ./src/server/
 USER bun
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \

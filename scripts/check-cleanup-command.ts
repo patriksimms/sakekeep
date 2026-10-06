@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { isBuiltin } from "node:module"
 import { spawnSync } from "node:child_process"
 import { cpSync, mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -71,7 +72,7 @@ assert.ok(
 const bundle = readFileSync(join(root, entry), "utf8")
 for (const match of bundle.matchAll(/(?:from|require\()\s*["']([^"'.][^"']*)["']/g)) {
   const specifier = match[1]!
-  if (specifier.startsWith("node:") || specifier.startsWith("#/")) continue
+  if (isBuiltin(specifier) || specifier.startsWith("#/")) continue
   const name = specifier.startsWith("@")
     ? specifier.split("/").slice(0, 2).join("/")
     : specifier.split("/")[0]!
