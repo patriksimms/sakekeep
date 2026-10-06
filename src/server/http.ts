@@ -4,7 +4,11 @@ import de from "zod/v4/locales/de.js"
 import en from "zod/v4/locales/en.js"
 import { getLocale } from "#/paraglide/runtime.js"
 
+import Logger from "./logger.ts"
+
 import { captureServerException } from "#/server/error-tracking.ts"
+
+const logger = new Logger("http")
 
 const validationLocales = { de: de(), en: en() }
 // Resolve inside the callback so concurrent requests keep their own language.
@@ -42,7 +46,7 @@ export function jsonError(error: unknown): Response {
       { status: 422 }
     )
   }
-  console.error(error)
+  logger.error("Unexpected server error", { error })
   captureServerException(error)
   return Response.json({ error: m.ui_an_unexpected_local_server_error_occurred() }, { status: 500 })
 }

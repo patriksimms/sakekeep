@@ -210,3 +210,29 @@ uploads and clears them when it records the export row. `storage:cleanup` only
 goes after tombstones older than an hour, and an export that somehow runs past
 that fails with a conflict instead of being recorded against files the sweep
 already removed.
+
+## Server logs
+
+Server requests and exports emit structured logs with generated request IDs, normalized
+route templates, outcomes, and durations. Healthy probes and successful PostHog ingestion
+requests are excluded. Production writes JSON Lines to stdout; development uses readable
+colored output, honoring `NO_COLOR`; tests stay silent by default.
+
+With `VITE_POSTHOG_PROJECT_TOKEN` configured at runtime, logs also go to PostHog's
+`POSTHOG_HOST` at `/i/v1/logs` using batched OTLP export. The token is the existing
+`phc_` project token, never a personal API key. Set `POSTHOG_LOGS_ENABLED=false` to
+keep stdout logging without exporting. Demo mode disables log export.
+
+In PostHog Logs, filter by `service.name = sakekeep`, then `requestId`, `route`,
+`status`, or `outcome`. Book generation requests use `POST` and
+`/api/projects/:id/book`; exports also record page count and client disconnection.
+No request bodies, headers, query strings, user IDs, or raw contributor URLs are
+logged. Error reports preserve stacks and redact database query parameters, URLs,
+common credentials, and emails. Logs are operational diagnostics and do not depend
+on browser analytics consent.
+
+Deployment needs the existing PostHog project token in the app's runtime environment
+and outbound HTTPS access to its configured ingestion host. The Coolify Compose
+configuration already passes these variables through. Shutdown drains active requests
+and flushes pending log batches. Verify ingestion after deployment by making an
+ordinary application request and checking PostHog Logs for the service.

@@ -110,6 +110,8 @@ describe("native Bun server", () => {
       cwd: directory,
       env: {
         ...process.env,
+        NODE_ENV: "development",
+        POSTHOG_LOGS_ENABLED: "false",
         HOST: "127.0.0.1",
         PORT: String(port),
         // Two seconds instead of ten keeps the timeout test quick and its outcome unambiguous.
@@ -127,7 +129,7 @@ describe("native Bun server", () => {
         reject(new Error(`Server exited with ${code}. ${stderr}`))
       })
       child.stdout?.on("data", (chunk: Buffer) => {
-        if (chunk.toString().includes("[server] listening")) {
+        if (chunk.toString().includes("Server listening")) {
           clearTimeout(timer)
           resolveStarted()
         }
