@@ -27,14 +27,18 @@ describe("request logs", () => {
     const logger = new Logger("operation")
     await Promise.all(
       [
-        "https://example.test/api/invitations/private-token?email=person@example.test",
-        "https://example.test/api/projects/project-id/book",
-      ].map((url) =>
+        {
+          url: "https://example.test/api/invitations/private-token?email=person@example.test",
+          method: "POST",
+        },
+        { url: "https://example.test/api/projects/project-id/book", method: "POST" },
+        { url: "https://example.test/api/projects/project-id/responses/xlsx", method: "GET" },
+      ].map(({ url, method }) =>
         logRequest(
           new Request(url, {
-            method: "POST",
+            method,
             headers: { Authorization: "Bearer private-secret" },
-            body: "private contributor answer",
+            ...(method === "POST" ? { body: "private contributor answer" } : {}),
           }),
           async () => {
             await new Promise((resolve) => setTimeout(resolve, 1))
@@ -46,14 +50,16 @@ describe("request logs", () => {
     )
     const entries = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
     const completed = entries.filter((entry) => entry.message === "Request completed")
-    expect(completed).toHaveLength(2)
-    expect(new Set(completed.map((entry) => entry.requestId)).size).toBe(2)
+    expect(completed).toHaveLength(3)
+    expect(new Set(completed.map((entry) => entry.requestId)).size).toBe(3)
     expect(completed.map((entry) => entry.route)).toEqual([
       "/api/invitations/:id",
       "/api/projects/:id/book",
+      "/api/projects/:id/responses/xlsx",
     ])
+    expect(completed.map((entry) => entry.method)).toEqual(["POST", "POST", "GET"])
     for (const entry of completed) {
-      expect(entry).toMatchObject({ status: 201, method: "POST", clientDisconnected: false })
+      expect(entry).toMatchObject({ status: 201, clientDisconnected: false })
       expect(entry.durationMs).toBeTypeOf("number")
       expect(
         entries.find(

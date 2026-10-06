@@ -8,7 +8,7 @@ const routes = [
   /^\/(?:invitations|s)\/[^/]+$/,
   /^\/(?:sign-in|sign-up)(?:\/.*)?$/,
   /^\/api\/projects$/,
-  /^\/api\/projects\/[^/]+(?:\/(?:duplicate|export|collaborators|close|book|publish|archive|unarchive|responses\.xlsx))?$/,
+  /^\/api\/projects\/[^/]+(?:\/(?:duplicate|export|collaborators|close|book|publish|archive|unarchive|responses\/xlsx))?$/,
   /^\/api\/projects\/[^/]+\/(?:assets|layouts)(?:\/[^/]+)?$/,
   /^\/api\/projects\/[^/]+\/submissions\/[^/]+$/,
   /^\/api\/(?:assets|exports|invitations|share)\/[^/]+$/,
