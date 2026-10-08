@@ -1,7 +1,11 @@
 import * as m from "#/paraglide/messages.js"
+import decodeHeic from "heic-decode"
+import { crc32, deflateSync } from "node:zlib"
 import sharp from "sharp"
 
 import { acceptedImageExtensions, acceptedImageMimeTypes } from "../domain/form"
+
+const PIXEL_LIMIT = 200_000_000
 
 export interface NormalizedImage {
   master: Uint8Array
@@ -19,15 +23,56 @@ export function isAcceptedImage(file: { name: string; type: string }): boolean {
   )
 }
 
+// sharp can attach a profile only by converting the pixels into it. These pixels are already in
+// the photo's own colour space, so the profile goes into the PNG unchanged.
+function withIccProfileChunk(png: Buffer, icc: Buffer): Buffer {
+  const type = Buffer.from("iCCP", "latin1")
+  const data = Buffer.concat([Buffer.from("icc\0\0", "latin1"), deflateSync(icc)])
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length)
+  const checksum = Buffer.alloc(4)
+  checksum.writeUInt32BE(crc32(Buffer.concat([type, data])))
+  const afterHeader = 8 + 25
+  return Buffer.concat([
+    png.subarray(0, afterHeader),
+    length,
+    type,
+    data,
+    checksum,
+    png.subarray(afterHeader),
+  ])
+}
+
+/**
+ * iPhones save photos as HEVC-coded HEIC. The prebuilt sharp binaries read their metadata but
+ * cannot decode the pixels, so every such photo failed the submission. libheif's WebAssembly build
+ * decodes them instead, and a lossless PNG with the photo's own profile hands them to the normal
+ * pipeline.
+ */
+async function decodeHevcHeic(source: Uint8Array, icc: Buffer | undefined): Promise<Uint8Array> {
+  const { width, height, data } = await decodeHeic({ buffer: source })
+  const png = await sharp(data, { raw: { width, height, channels: 4 } })
+    .removeAlpha()
+    .png({ compressionLevel: 0 })
+    .toBuffer()
+  return icc ? withIccProfileChunk(png, icc) : png
+}
+
 export async function normalizeImage(
   source: Uint8Array,
   sourceMimeType: string
 ): Promise<NormalizedImage> {
   const inputOptions = {
     failOn: "error",
-    limitInputPixels: 200_000_000,
+    limitInputPixels: PIXEL_LIMIT,
   } as const
   const sourceMetadata = await sharp(source, inputOptions).metadata()
+  if (sourceMetadata.format === "heif" && sourceMetadata.compression === "hevc") {
+    if ((sourceMetadata.width ?? 0) * (sourceMetadata.height ?? 0) > PIXEL_LIMIT) {
+      throw new Error("The HEIC image exceeds the pixel limit.")
+    }
+    source = await decodeHevcHeic(source, sourceMetadata.icc)
+  }
   const preserveSourceProfile = sourceMetadata.icc !== undefined && sourceMetadata.space !== "cmyk"
   const oriented = sharp(source, inputOptions).rotate()
 
