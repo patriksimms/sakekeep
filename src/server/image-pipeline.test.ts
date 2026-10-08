@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+
 import sharp from "sharp"
 import { describe, expect, it } from "vitest"
 
@@ -33,6 +35,20 @@ describe("image processing", () => {
     await expect(
       normalizeImage(new TextEncoder().encode("not an image"), "image/jpeg")
     ).rejects.toThrow()
+  })
+
+  it("decodes HEVC-coded HEIC photos and keeps their colour profile", async () => {
+    const source = readFileSync(new URL("../test/fixtures/display-p3.heic", import.meta.url))
+    const sourceMetadata = await sharp(source).metadata()
+    expect(sourceMetadata.compression).toBe("hevc")
+
+    const normalized = await normalizeImage(source, "image/heic")
+    const masterMetadata = await sharp(normalized.master).metadata()
+
+    expect(normalized.masterMimeType).toBe("image/jpeg")
+    expect([normalized.width, normalized.height]).toEqual([64, 48])
+    expect(masterMetadata.icc).toEqual(sourceMetadata.icc)
+    expect(normalized.preview.byteLength).toBeGreaterThan(0)
   })
 
   it("preserves a safe embedded RGB profile while normalizing browser previews to sRGB", async () => {

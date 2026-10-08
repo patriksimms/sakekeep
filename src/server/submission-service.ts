@@ -3,8 +3,10 @@ import { z } from "zod"
 
 import { type UploadedImageDescriptor, validateSubmission } from "../domain/form"
 import { type SubmissionAnswers } from "../domain/types"
+import { captureServerException } from "./error-tracking"
 import { HttpError } from "./http"
 import { isAcceptedImage, normalizeImage } from "./image-pipeline"
+import Logger from "./logger"
 import { putObject } from "./object-store"
 import {
   createSubmissionRecord,
@@ -14,6 +16,8 @@ import {
   reserveObjects,
   type PendingAsset,
 } from "./repository"
+
+const logger = new Logger("submission")
 
 const payloadSchema = z.object({
   idempotencyKey: z.string().uuid(),
@@ -165,6 +169,8 @@ export async function submitContribution(
   } catch (error) {
     await discardReservedObjects(reservedKeys)
     if (error instanceof HttpError) throw error
+    logger.error("Contribution images could not be processed", { error })
+    captureServerException(error)
     throw new HttpError(
       422,
       m.ui_one_or_more_images_could_not_be_processed_no_response_was_saved({}, { locale })
