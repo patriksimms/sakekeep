@@ -1,11 +1,11 @@
 import * as m from "#/paraglide/messages.js"
-import decodeHeic from "heic-decode"
 import { crc32, deflateSync } from "node:zlib"
 import sharp from "sharp"
 
 import { acceptedImageExtensions, acceptedImageMimeTypes } from "../domain/form"
 
 const PIXEL_LIMIT = 200_000_000
+const PNG_SIGNATURE_AND_HEADER_BYTES = 8 + 25
 
 export interface NormalizedImage {
   master: Uint8Array
@@ -31,25 +31,22 @@ function withIccProfileChunk(png: Buffer, icc: Buffer): Buffer {
   const length = Buffer.alloc(4)
   length.writeUInt32BE(data.length)
   const checksum = Buffer.alloc(4)
-  checksum.writeUInt32BE(crc32(Buffer.concat([type, data])))
-  const afterHeader = 8 + 25
+  checksum.writeUInt32BE(crc32(data, crc32(type)))
   return Buffer.concat([
-    png.subarray(0, afterHeader),
+    png.subarray(0, PNG_SIGNATURE_AND_HEADER_BYTES),
     length,
     type,
     data,
     checksum,
-    png.subarray(afterHeader),
+    png.subarray(PNG_SIGNATURE_AND_HEADER_BYTES),
   ])
 }
 
-/**
- * iPhones save photos as HEVC-coded HEIC. The prebuilt sharp binaries read their metadata but
- * cannot decode the pixels, so every such photo failed the submission. libheif's WebAssembly build
- * decodes them instead, and a lossless PNG with the photo's own profile hands them to the normal
- * pipeline.
- */
+// iPhones save photos as HEVC-coded HEIC, which the prebuilt sharp binaries cannot decode.
+// libheif's WebAssembly build decodes them, and a lossless PNG with the photo's own profile hands
+// them to the normal pipeline.
 async function decodeHevcHeic(source: Uint8Array, icc: Buffer | undefined): Promise<Uint8Array> {
+  const { default: decodeHeic } = await import("heic-decode")
   const { width, height, data } = await decodeHeic({ buffer: source })
   const png = await sharp(data, { raw: { width, height, channels: 4 } })
     .removeAlpha()
