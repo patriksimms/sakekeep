@@ -147,6 +147,26 @@ or delete the project. Organizers manage settings and collaborators; editors wor
 on contributions, photos, layouts, and book composition. Contribution links stay
 account-free. Copies belong to their creator and do not inherit collaborators.
 
+## Photo formats
+
+JPEG, PNG, WebP, AVIF, and HEIC/HEIF uploads are accepted. HEVC-coded HEIC
+photos use the lazily loaded `heic-decode` WebAssembly dependency because the
+prebuilt Sharp binaries have no HEVC decoder. `bun install` supplies the codec;
+no system libheif installation or custom Docker image is required. Other formats,
+including AVIF, continue through Sharp.
+
+For multi-image HEIC files, only the designated primary photo is saved. HEIF
+rotation and mirroring are applied during decoding. Transparent photos retain
+alpha in PNG masters. Embedded RGB ICC profiles stay on the print master;
+previews are converted to sRGB. EXIF metadata is removed. Decoding produces
+8-bit RGBA, so HDR/10-bit source precision is not retained. Photos without an
+embedded ICC profile use the existing sRGB normalization path.
+
+Uploads are limited to 200 megapixels before pixel decoding. HEIC decoding runs
+on the server's main thread and adds processing time; large batches can reach
+the submission request timeout, which defaults to ten seconds. Worker decoding
+and submission timeout changes are outside this implementation.
+
 ## Architecture
 
 - TanStack Start, React, TypeScript, TanStack Query, Tailwind CSS, and shadcn

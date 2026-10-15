@@ -1,7 +1,11 @@
 import * as m from "#/paraglide/messages.js"
-import sharp from "sharp"
+import { crc32, deflateSync } from "node:zlib"
+import sharp, { type Metadata } from "sharp"
 
 import { acceptedImageExtensions, acceptedImageMimeTypes } from "../domain/form"
+
+const PIXEL_LIMIT = 200_000_000
+const PNG_SIGNATURE_AND_HEADER_BYTES = 8 + 25
 
 export interface NormalizedImage {
   master: Uint8Array
@@ -19,15 +23,67 @@ export function isAcceptedImage(file: { name: string; type: string }): boolean {
   )
 }
 
+// sharp can attach a profile only by converting the pixels into it. These pixels are already in
+// the photo's own colour space, so the profile goes into the PNG unchanged.
+function withIccProfileChunk(png: Buffer, icc: Buffer): Buffer {
+  const type = Buffer.from("iCCP", "latin1")
+  const data = Buffer.concat([Buffer.from("icc\0\0", "latin1"), deflateSync(icc)])
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length)
+  const checksum = Buffer.alloc(4)
+  checksum.writeUInt32BE(crc32(data, crc32(type)))
+  return Buffer.concat([
+    png.subarray(0, PNG_SIGNATURE_AND_HEADER_BYTES),
+    length,
+    type,
+    data,
+    checksum,
+    png.subarray(PNG_SIGNATURE_AND_HEADER_BYTES),
+  ])
+}
+
+// iPhones save photos as HEVC-coded HEIC, which the prebuilt sharp binaries cannot decode.
+// libheif's WebAssembly build decodes them, and a lossless PNG with the photo's own profile hands
+// them to the normal pipeline.
+async function decodeHevcHeic(
+  source: Uint8Array,
+  metadata: Pick<Metadata, "icc" | "pagePrimary" | "hasAlpha">
+): Promise<Uint8Array> {
+  const { default: decodeHeic } = await import("heic-decode")
+  // The package's declarations omit dispose(), which releases every image handle and context.
+  const images = (await decodeHeic.all({ buffer: source })) as Awaited<
+    ReturnType<typeof decodeHeic.all>
+  > & { dispose(): void }
+  try {
+    // sharp and libheif enumerate the top-level images in the same order. The default decoder
+    // chooses index zero even when the file designates another image as its primary photo.
+    const primary = images[metadata.pagePrimary ?? 0]
+    if (!primary) throw new Error("The HEIC image has no primary photo.")
+    const { width, height, data } = await primary.decode()
+    const pipeline = sharp(data, { raw: { width, height, channels: 4 } })
+    if (!metadata.hasAlpha) pipeline.removeAlpha()
+    const png = await pipeline.png({ compressionLevel: 0 }).toBuffer()
+    return metadata.icc ? withIccProfileChunk(png, metadata.icc) : png
+  } finally {
+    images.dispose()
+  }
+}
+
 export async function normalizeImage(
   source: Uint8Array,
   sourceMimeType: string
 ): Promise<NormalizedImage> {
   const inputOptions = {
     failOn: "error",
-    limitInputPixels: 200_000_000,
+    limitInputPixels: PIXEL_LIMIT,
   } as const
   const sourceMetadata = await sharp(source, inputOptions).metadata()
+  if (sourceMetadata.format === "heif" && sourceMetadata.compression === "hevc") {
+    if ((sourceMetadata.width ?? 0) * (sourceMetadata.height ?? 0) > PIXEL_LIMIT) {
+      throw new Error("The HEIC image exceeds the pixel limit.")
+    }
+    source = await decodeHevcHeic(source, sourceMetadata)
+  }
   const preserveSourceProfile = sourceMetadata.icc !== undefined && sourceMetadata.space !== "cmyk"
   const oriented = sharp(source, inputOptions).rotate()
 
