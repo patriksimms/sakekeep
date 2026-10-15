@@ -1,6 +1,6 @@
 import * as m from "#/paraglide/messages.js"
 import { crc32, deflateSync } from "node:zlib"
-import sharp from "sharp"
+import sharp, { type Metadata } from "sharp"
 
 import { acceptedImageExtensions, acceptedImageMimeTypes } from "../domain/form"
 
@@ -45,14 +45,28 @@ function withIccProfileChunk(png: Buffer, icc: Buffer): Buffer {
 // iPhones save photos as HEVC-coded HEIC, which the prebuilt sharp binaries cannot decode.
 // libheif's WebAssembly build decodes them, and a lossless PNG with the photo's own profile hands
 // them to the normal pipeline.
-async function decodeHevcHeic(source: Uint8Array, icc: Buffer | undefined): Promise<Uint8Array> {
+async function decodeHevcHeic(
+  source: Uint8Array,
+  metadata: Pick<Metadata, "icc" | "pagePrimary" | "hasAlpha">
+): Promise<Uint8Array> {
   const { default: decodeHeic } = await import("heic-decode")
-  const { width, height, data } = await decodeHeic({ buffer: source })
-  const png = await sharp(data, { raw: { width, height, channels: 4 } })
-    .removeAlpha()
-    .png({ compressionLevel: 0 })
-    .toBuffer()
-  return icc ? withIccProfileChunk(png, icc) : png
+  // The package's declarations omit dispose(), which releases every image handle and context.
+  const images = (await decodeHeic.all({ buffer: source })) as Awaited<
+    ReturnType<typeof decodeHeic.all>
+  > & { dispose(): void }
+  try {
+    // sharp and libheif enumerate the top-level images in the same order. The default decoder
+    // chooses index zero even when the file designates another image as its primary photo.
+    const primary = images[metadata.pagePrimary ?? 0]
+    if (!primary) throw new Error("The HEIC image has no primary photo.")
+    const { width, height, data } = await primary.decode()
+    const pipeline = sharp(data, { raw: { width, height, channels: 4 } })
+    if (!metadata.hasAlpha) pipeline.removeAlpha()
+    const png = await pipeline.png({ compressionLevel: 0 }).toBuffer()
+    return metadata.icc ? withIccProfileChunk(png, metadata.icc) : png
+  } finally {
+    images.dispose()
+  }
 }
 
 export async function normalizeImage(
@@ -68,7 +82,7 @@ export async function normalizeImage(
     if ((sourceMetadata.width ?? 0) * (sourceMetadata.height ?? 0) > PIXEL_LIMIT) {
       throw new Error("The HEIC image exceeds the pixel limit.")
     }
-    source = await decodeHevcHeic(source, sourceMetadata.icc)
+    source = await decodeHevcHeic(source, sourceMetadata)
   }
   const preserveSourceProfile = sourceMetadata.icc !== undefined && sourceMetadata.space !== "cmyk"
   const oriented = sharp(source, inputOptions).rotate()

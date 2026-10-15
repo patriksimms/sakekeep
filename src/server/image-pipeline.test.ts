@@ -51,6 +51,39 @@ describe("image processing", () => {
     expect(normalized.preview.byteLength).toBeGreaterThan(0)
   })
 
+  it("keeps the primary HEIC photo and its transparency", async () => {
+    const source = readFileSync(new URL("../test/fixtures/primary-alpha.heic", import.meta.url))
+    const normalized = await normalizeImage(source, "image/heic")
+
+    expect([normalized.width, normalized.height]).toEqual([80, 60])
+    expect(normalized.masterMimeType).toBe("image/png")
+    for (const output of [normalized.master, normalized.preview]) {
+      const { data, info } = await sharp(output)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      expect([info.width, info.height]).toEqual([80, 60])
+      expect(data[3]).toBe(0)
+      const opaquePixel = (30 * info.width + 60) * 4
+      expect(data[opaquePixel + 2]).toBeGreaterThan(240)
+      expect(data[opaquePixel]).toBeLessThan(15)
+      expect(data[opaquePixel + 3]).toBe(255)
+    }
+  })
+
+  it("applies HEIC rotation and removes orientation metadata", async () => {
+    const source = readFileSync(new URL("../test/fixtures/rotated-p3.heic", import.meta.url))
+    const normalized = await normalizeImage(source, "image/heic")
+
+    for (const output of [normalized.master, normalized.preview]) {
+      const metadata = await sharp(output).metadata()
+      expect([metadata.width, metadata.height]).toEqual([48, 64])
+      expect(metadata.orientation).toBeUndefined()
+      expect(metadata.exif).toBeUndefined()
+      await expect(sharp(output).raw().toBuffer()).resolves.toHaveLength(48 * 64 * 3)
+    }
+  })
+
   it("preserves a safe embedded RGB profile while normalizing browser previews to sRGB", async () => {
     const source = await sharp({
       create: {

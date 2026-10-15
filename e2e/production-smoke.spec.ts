@@ -1,5 +1,6 @@
 import { expect, request, test, type APIRequestContext } from "@playwright/test"
 import { readFile, writeFile } from "node:fs/promises"
+import sharp from "sharp"
 
 import { type ImageAnswer, type Project } from "../src/domain/types"
 import { shareTokenForProject } from "../src/server/share-token"
@@ -55,7 +56,7 @@ test("creates persistent production data before app recreation", async ({ page }
   await page.getByTestId("answer-memory").fill(submissionMarker)
   await page.getByRole("radio", { name: "Making chaos feel calm" }).click()
   await page.getByRole("checkbox", { name: "A little travel" }).click()
-  await page.locator('input[type="file"]').setInputFiles("public/logo512.png")
+  await page.locator('input[type="file"]').setInputFiles("src/test/fixtures/primary-alpha.heic")
   // Consent is required, and without it the submit button stays disabled.
   await page.getByTestId("contribution-consent").click()
   const submit = page.getByTestId("submit-contribution")
@@ -98,8 +99,15 @@ test("retrieves production data after app recreation", async () => {
     )
   expect(image?.previewUrl).toBeTruthy()
   expect(image?.masterUrl).toBeTruthy()
-  expect((await api.get(image!.previewUrl!)).ok()).toBe(true)
-  expect((await api.get(image!.masterUrl!)).ok()).toBe(true)
+  for (const url of [image!.previewUrl!, image!.masterUrl!]) {
+    const response = await api.get(url)
+    expect(response.ok()).toBe(true)
+    const bytes = await response.body()
+    const metadata = await sharp(bytes).metadata()
+    expect([metadata.width, metadata.height]).toEqual([80, 60])
+    expect(metadata.hasAlpha).toBe(true)
+    await expect(sharp(bytes).raw().toBuffer()).resolves.toHaveLength(80 * 60 * 4)
+  }
 
   const { exportId } = JSON.parse(await readFile(statePath!, "utf8")) as { exportId: string }
   const download = await api.get(`/api/exports/${exportId}`)
