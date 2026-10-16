@@ -9,7 +9,7 @@ const logger = new Logger("health")
  */
 export const HEALTH_CHECK_TIMEOUT_MS = 3_000
 
-export type CheckStatus = "ok" | "error"
+type CheckStatus = "ok" | "error"
 
 export async function runHealthCheck(
   name: string,

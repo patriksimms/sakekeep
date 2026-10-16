@@ -9,8 +9,8 @@ export const Route = createFileRoute("/api/health")({
     handlers: {
       GET: async () => {
         const [database, objectStore] = await Promise.all([
-          runHealthCheck("database", () => checkDatabase()),
-          runHealthCheck("objectStore", (signal) => checkObjectStore(signal)),
+          runHealthCheck("database", checkDatabase),
+          runHealthCheck("objectStore", checkObjectStore),
         ])
         const checks = { database: { status: database }, objectStore: { status: objectStore } }
         const healthy = database === "ok" && objectStore === "ok"
