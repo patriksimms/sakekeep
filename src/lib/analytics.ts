@@ -121,6 +121,7 @@ async function startAnalytics() {
     defaults: "2025-05-24",
     capture_pageview: "history_change",
     capture_exceptions: true,
+    capture_performance: { web_vitals: true },
     // Invitation URLs are bearer credentials, including in referrer/initial URL properties.
     before_send: (event) =>
       event && /(?:\/|%2f)invitations(?:\/|%2f)/i.test(JSON.stringify(event)) ? null : event,
