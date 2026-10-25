@@ -52,9 +52,9 @@ export async function ensureBucket(): Promise<void> {
   }
 }
 
-export async function checkObjectStore(): Promise<void> {
+export async function checkObjectStore(abortSignal?: AbortSignal): Promise<void> {
   await ensureBucket()
-  await s3.send(new HeadBucketCommand({ Bucket: configuration.S3_BUCKET }))
+  await s3.send(new HeadBucketCommand({ Bucket: configuration.S3_BUCKET }), { abortSignal })
 }
 
 export async function putObject(input: {
