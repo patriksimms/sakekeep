@@ -26,7 +26,7 @@ services:
     command: ["sh", "-c", "chown -R 10001:10001 /fix/data /fix/logs"]
 
   rustfs:
-    image: rustfs/rustfs:latest@sha256:3c2d55977829620284ece8593901bf776bcfc0fc9972784352de4dcffdb92416
+    image: rustfs/rustfs:latest@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
     depends_on:
       rustfs-permissions:
         condition: service_completed_successfully
