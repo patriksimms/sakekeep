@@ -72,11 +72,11 @@ describe("SubmissionsPanel", () => {
       Object.assign(class extends URL {}, { createObjectURL: createUrl, revokeObjectURL: vi.fn() })
     )
     let filename: string | undefined
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(function (this: HTMLAnchorElement) {
-        filename = this.download
-      })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement
+    ) {
+      filename = this.download
+    })
     try {
       render(
         <SubmissionsPanel
