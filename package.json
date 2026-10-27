@@ -109,7 +109,7 @@
     "drizzle-kit": "^0.31.10",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^28.1.0",
-    "oxfmt": "^0.59.0",
+    "oxfmt": "^0.75.0",
     "oxlint": "^1.74.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
