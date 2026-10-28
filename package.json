@@ -108,7 +108,7 @@
     "axe-core": "^4.12.1",
     "drizzle-kit": "^0.31.10",
     "fake-indexeddb": "^6.2.5",
-    "jsdom": "^28.1.0",
+    "jsdom": "^30.0.0",
     "oxfmt": "^0.75.0",
     "oxlint": "^1.74.0",
     "typescript": "^6.0.2",
