@@ -48,7 +48,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/source-serif-4": "^5.2.9",
-    "@hyzyla/pdfium": "^2.1.13",
+    "@hyzyla/pdfium": "^3.0.0",
     "@inlang/paraglide-js": "^2.25.0",
     "@logtape/logtape": "^2.3.11",
     "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
