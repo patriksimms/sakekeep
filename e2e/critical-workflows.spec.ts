@@ -343,8 +343,9 @@ test.describe.serial("critical local prototype workflows", () => {
     const clearSelection = async () => {
       const bounds = await renderedCanvas.boundingBox()
       expect(bounds).not.toBeNull()
+      // Stay inside the canvas' rounded corner, which Chromium excludes from pointer hits.
       await renderedCanvas.click({
-        position: { x: bounds!.width - 2, y: bounds!.height - 2 },
+        position: { x: bounds!.width - 12, y: bounds!.height - 12 },
       })
     }
     const canvasDocumentBounds = async () => {
@@ -661,8 +662,9 @@ test.describe.serial("critical local prototype workflows", () => {
 
       const canvasBounds = await renderedCanvas.boundingBox()
       expect(canvasBounds).not.toBeNull()
+      // Stay inside the canvas' rounded corner, which Chromium excludes from pointer hits.
       await renderedCanvas.click({
-        position: { x: canvasBounds!.width - 2, y: canvasBounds!.height - 2 },
+        position: { x: canvasBounds!.width - 12, y: canvasBounds!.height - 12 },
       })
       await expect(
         page.getByTestId("text-ui_select_an_element_on_the_canvas_or_in_the_layers_list")
