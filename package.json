@@ -51,7 +51,7 @@
     "@hyzyla/pdfium": "^3.0.0",
     "@inlang/paraglide-js": "^2.25.0",
     "@logtape/logtape": "^2.3.11",
-    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/api": "~1.10.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.300.0",
     "@opentelemetry/resources": "^3.0.0",
     "@opentelemetry/sdk-logs": "^3.0.0",
