@@ -57,7 +57,8 @@ for (const viewport of [
       expect(afterEdit.y + afterEdit.height).toBeLessThanOrEqual(viewport.height + 1)
 
       // Pointer selection, then keyboard entry into the bound-text label.
-      await canvas.click({ position: { x: canvasBox.width - 2, y: canvasBox.height - 2 } })
+      // Stay inside the canvas' rounded corner, which Chromium excludes from pointer hits.
+      await canvas.click({ position: { x: canvasBox.width - 12, y: canvasBox.height - 12 } })
       await expect(inspector.getByTestId("button-delete-selected-element")).toBeHidden()
       const textBox = (await page.locator('[data-layout-element-id="warm-memory"]').boundingBox())!
       await page.mouse.click(textBox.x + textBox.width / 2, textBox.y + textBox.height / 2)
