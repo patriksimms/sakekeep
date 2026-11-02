@@ -32,6 +32,12 @@
       "groupName": "Tailwind ecosystem"
     },
     {
+      "description": "Upgrade all OpenTelemetry packages in one PR, majors included. Its 0.x and 1.x/2.x/3.x lines depend on each other, so split PRs fail on their own",
+      "matchPackageNames": ["/^@opentelemetry\\//"],
+      "groupName": "OpenTelemetry",
+      "separateMajorMinor": false
+    },
+    {
       "description": "Automerge patch updates",
       "matchUpdateTypes": ["patch"],
       "automerge": true
