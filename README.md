@@ -1,34 +1,29 @@
 # Sakekeep
 
-Sakekeep is a private shared organizer workspace for collecting anonymous
-memories and photos, composing a friend book, and exporting a print-ready DIN
-A4, A5, or A6 PDF in portrait or landscape.
+sakekeep is for creating personal farewell books by collecting messages and photos through shareable forms, designing page layouts, and exporting print-ready PDFs.
 
-This README describes the current product workflows and constraints.
 
-Clerk authentication protects every organizer page and API. Contributor links
-remain anonymous and token-based.
+# Local Development
 
 ## Requirements
 
-- Bun 1.3.9
-- Docker with Compose v2
-- A Chromium-compatible system for Playwright (run
-  `bunx playwright install chromium`)
-- Optional for independent PDF inspection: Poppler (`pdfinfo` and `pdftoppm`)
+* Bun >= 1.3.10
+* docker compose
+* playwright installed (`bunx playwright install chromium`)
+* optional for independent PDF inspection: Poppler (`pdfinfo` and `pdftoppm`)
+* optional: [direnv](https://direnv.net/) for loading environment variables
 
-Clerk is required outside explicit local/test demo mode. PostgreSQL and an
-S3-compatible object store are required for application data.
+* [Clerk](https://clerk.com/) is required outside explicit local/test demo mode
 
 ## Fresh setup
 
 ```sh
-git clone <repository-url>
+git clone git@github.com:patriksimms/sakekeep.git
 cd sakekeep
 cp .envrc.example .envrc
 # Add development Clerk keys to .envrc, or set VITE_SAKEKEEP_DEMO_MODE=true for
 # local-only exploration.
-direnv allow
+direnv allow # when using direnv. Otherwise expose the env vars from .envrc differently to your system
 bun run setup
 bun run dev
 ```
@@ -256,3 +251,6 @@ and outbound HTTPS access to its configured ingestion host. The Coolify Compose
 configuration already passes these variables through. Shutdown drains active requests
 and flushes pending log batches. Verify ingestion after deployment by making an
 ordinary application request and checking PostHog Logs for the service.
+
+Clerk authentication protects every organizer page and API. Contributor links
+remain anonymous and token-based.
