@@ -22,14 +22,17 @@ const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 function sessionToken(userId: string): string {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url")
   const now = Math.floor(Date.now() / 1000)
-  const input = `${encode({ alg: "RS256", typ: "JWT", kid: "sakekeep-smoke" })}.${encode({
-    sub: userId,
-    sid: `sess_${userId}`,
-    azp: origin,
-    exp: now + 4 * 60 * 60,
-    iat: now,
-    nbf: now - 1,
-  })}`
+  // Clerk only accepts session tokens whose header carries its session-token `cat` value.
+  const input = `${encode({ alg: "RS256", typ: "JWT", kid: "sakekeep-smoke", cat: "cl_B7d4PD111AAA" })}.${encode(
+    {
+      sub: userId,
+      sid: `sess_${userId}`,
+      azp: origin,
+      exp: now + 4 * 60 * 60,
+      iat: now,
+      nbf: now - 1,
+    }
+  )}`
   return `${input}.${sign("RSA-SHA256", Buffer.from(input), privateKey).toString("base64url")}`
 }
 

@@ -26,7 +26,13 @@ function createTestClerkConfiguration() {
   }
 
   const now = Math.floor(Date.now() / 1000)
-  const header = encodeJson({ alg: "RS256", typ: "JWT", kid: "sakekeep-e2e" })
+  // Clerk only accepts session tokens whose header carries its session-token `cat` value.
+  const header = encodeJson({
+    alg: "RS256",
+    typ: "JWT",
+    kid: "sakekeep-e2e",
+    cat: "cl_B7d4PD111AAA",
+  })
   const payload = encodeJson({
     azp: authBaseUrl,
     exp: now + 60 * 60,

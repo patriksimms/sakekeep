@@ -7,7 +7,8 @@ const baseURL = process.env.SAKEKEEP_E2E_AUTH_BASE_URL!
 function token(userId: string) {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url")
   const now = Math.floor(Date.now() / 1000)
-  const input = `${encode({ alg: "RS256", typ: "JWT", kid: "sakekeep-e2e" })}.${encode({ sub: userId, sid: `sess_${userId}`, azp: baseURL, exp: now + 3600, iat: now, nbf: now - 1 })}`
+  // Clerk only accepts session tokens whose header carries its session-token `cat` value.
+  const input = `${encode({ alg: "RS256", typ: "JWT", kid: "sakekeep-e2e", cat: "cl_B7d4PD111AAA" })}.${encode({ sub: userId, sid: `sess_${userId}`, azp: baseURL, exp: now + 3600, iat: now, nbf: now - 1 })}`
   return `${input}.${sign("RSA-SHA256", Buffer.from(input), process.env.SAKEKEEP_E2E_CLERK_PRIVATE_KEY!).toString("base64url")}`
 }
 async function account(userId: string) {
