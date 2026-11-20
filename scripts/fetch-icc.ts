@@ -2,6 +2,8 @@ import { createHash } from "node:crypto"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 
+// PSO Coated is a standardized ICC color profile for printing
+
 const destination = resolve(".local/icc/PSOcoated_v3.icc")
 const expectedMd5 = "2ecf5bdfbd55f6725d15a668afde8a00"
 const source = "https://registry.color.org/profile-registry/profiles/PSOcoated_v3.icc"
